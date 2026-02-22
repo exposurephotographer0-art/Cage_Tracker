@@ -1114,7 +1114,9 @@ async function api(path, method = 'GET', body = null) {
 async function loadState() {
   try {
     showLoadingOverlay(true);
+    console.log('[CageTracker] Fetching state from API...');
     const data = await api('/api/state');
+    console.log('[CageTracker] API response:', data);
     STATE = {
       ...initState(),
       cages: data.cages.map(normaliseCage),
@@ -1124,8 +1126,9 @@ async function loadState() {
       shipments: data.shipments,
       settings: { movementsPerDay: parseInt(data.settings?.movementsPerDay) || MAX_MOVES }
     };
+    console.log('[CageTracker] State loaded:', STATE.cages.length, 'cages');
   } catch(e) {
-    console.error('Failed to load state from API:', e);
+    console.error('[CageTracker] Failed to load state from API:', e);
     showError('Could not connect to database: ' + e.message);
     STATE = initState();
   } finally {
@@ -1151,6 +1154,7 @@ function saveState() {}
 
 // ── UI helpers ───────────────────────────────────────────────────────────────
 function showLoadingOverlay(show) {
+  if (!document.body) return; // DOM not ready yet
   let el = document.getElementById('api-loading');
   if (!el) {
     el = document.createElement('div');
