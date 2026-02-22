@@ -489,11 +489,20 @@ async function api(path, method = 'GET', body = null) {
 
 // ── Load all state from D1 on startup ───────────────────────────────────────
 async function loadState() {
+  // Load from embedded PRELOAD_STATE immediately so the UI is never blocked
+  STATE = {
+    ...initState(),
+    cages: (PRELOAD_STATE.cages || []).map(normaliseCage),
+    frames: PRELOAD_STATE.frames || [],
+    rmdSlots: PRELOAD_STATE.rmdSlots || [],
+    plannedMovements: PRELOAD_STATE.plannedMovements || [],
+    shipments: PRELOAD_STATE.shipments || [],
+    settings: PRELOAD_STATE.settings || { movementsPerDay: MAX_MOVES },
+  };
+
+  // Then try to refresh from the API in the background
   try {
-    showLoadingOverlay(true);
-    console.log('[CageTracker] Fetching state from API...');
     const data = await api('/api/state');
-    console.log('[CageTracker] API response:', data);
     STATE = {
       ...initState(),
       cages: data.cages.map(normaliseCage),
@@ -503,21 +512,10 @@ async function loadState() {
       shipments: data.shipments,
       settings: { movementsPerDay: parseInt(data.settings?.movementsPerDay) || MAX_MOVES }
     };
-    console.log('[CageTracker] State loaded:', STATE.cages.length, 'cages');
+    console.log('[CageTracker] State synced from API:', STATE.cages.length, 'cages');
+    render();
   } catch(e) {
-    console.error('[CageTracker] Failed to load state from API:', e);
-    showError('Could not connect to server — running with local data. Changes may not be saved.');
-    STATE = {
-      ...initState(),
-      cages: (PRELOAD_STATE.cages || []).map(normaliseCage),
-      frames: PRELOAD_STATE.frames || [],
-      rmdSlots: PRELOAD_STATE.rmdSlots || [],
-      plannedMovements: PRELOAD_STATE.plannedMovements || [],
-      shipments: PRELOAD_STATE.shipments || [],
-      settings: PRELOAD_STATE.settings || { movementsPerDay: MAX_MOVES },
-    };
-  } finally {
-    showLoadingOverlay(false);
+    console.warn('[CageTracker] API unavailable, using local data:', e.message);
   }
 }
 
