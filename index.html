@@ -483,55 +483,50 @@ function initState() {
 let STATE = initState();
 let activeTab = 'dashboard';
 
-const STORAGE_KEY = 'cage-tracker-v4';
-const hasCloudStorage = typeof window.storage !== 'undefined' && window.storage && typeof window.storage.set === 'function';
+// ── Worker API URL ─────────────────────────────────────────────────────────────
+// Replace this with your actual Cloudflare Worker URL
+const WORKER_URL = 'https://cage-tracker-api.YOUR-SUBDOMAIN.workers.dev';
 
-async function saveState() {
-  try {
-    const data = JSON.stringify(STATE);
-    if (hasCloudStorage) {
-      await window.storage.set(STORAGE_KEY, data);
-    } else {
-      localStorage.setItem(STORAGE_KEY, data);
-    }
-  } catch(e) { console.warn('Save error:', e); }
+// ── API helpers ────────────────────────────────────────────────────────────────
+async function apiGet(path) {
+  const r = await fetch(WORKER_URL + path);
+  if (!r.ok) throw new Error('API error: ' + r.status);
+  return r.json();
 }
+async function apiPost(path, data) {
+  return fetch(WORKER_URL + path, {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data)
+  });
+}
+async function apiPut(path, data) {
+  return fetch(WORKER_URL + path, {
+    method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data)
+  });
+}
+async function apiDelete(path, data) {
+  return fetch(WORKER_URL + path, {
+    method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data)
+  });
+}
+
+// ── Save/Load ──────────────────────────────────────────────────────────────────
+// saveState() is now a no-op — each action saves directly via its own API call
+async function saveState() { /* replaced by per-action API calls below */ }
 
 async function loadState() {
   try {
-    let raw = null;
-    if (hasCloudStorage) {
-      const r = await window.storage.get(STORAGE_KEY);
-      if (r && r.value) raw = r.value;
-    } else {
-      raw = localStorage.getItem(STORAGE_KEY);
-    }
-    if (raw) {
-      const saved = JSON.parse(raw);
-      STATE = {...initState(), ...saved};
-      if (!STATE.frames || STATE.frames.length===0) STATE.frames = initState().frames;
-      if (!STATE.rmdSlots || STATE.rmdSlots.length===0) STATE.rmdSlots = initState().rmdSlots;
-    } else if (typeof PRELOAD_STATE !== 'undefined' && PRELOAD_STATE.cages && PRELOAD_STATE.cages.length > 0) {
-      STATE = {...initState(), ...PRELOAD_STATE};
-      await saveState();
+    const data = await apiGet('/api/state');
+    if (data && (data.cages || data.frames)) {
+      STATE = {...initState(), ...data};
+      if (!STATE.frames || STATE.frames.length === 0) STATE.frames = initState().frames;
+      if (!STATE.rmdSlots || STATE.rmdSlots.length === 0) STATE.rmdSlots = initState().rmdSlots;
+      return;
     }
   } catch(e) {
-    // No saved state - use preloaded data from Excel import
-    if (typeof PRELOAD_STATE !== 'undefined' && PRELOAD_STATE.cages && PRELOAD_STATE.cages.length > 0) {
-      STATE = {...initState(), ...PRELOAD_STATE};
-    } else {
-      STATE = initState();
-    }
+    console.warn('Could not load from worker, using defaults:', e);
   }
+  STATE = initState();
 }
-
-// Save when closing/navigating away
-window.addEventListener('beforeunload', () => {
-  try {
-    const data = JSON.stringify(STATE);
-    localStorage.setItem(STORAGE_KEY, data);
-  } catch(e) {}
-});
 
 function getCage(id) { return STATE.cages.find(c=>c.id===id); }
 function getFrame(id) { return STATE.frames.find(f=>f.id===id); }
@@ -970,9 +965,11 @@ function addCage() {
   const wt = parseFloat(document.getElementById('cf-wt').value);
   const notes = document.getElementById('cf-notes').value.trim();
   if (!name||isNaN(h)||isNaN(w)||isNaN(l)||isNaN(wt)) return alert('Please fill all required fields.');
-  STATE.cages.push({id:uid(),name,height:h,width:w,length:l,weight:wt,notes,departureDate:null,location:'facility',locationDetail:'',createdAt:new Date().toISOString()});
+  const newCage = {id:uid(),name,height:h,width:w,length:l,weight:wt,notes,departureDate:null,location:'facility',locationDetail:'',createdAt:new Date().toISOString()};
+  STATE.cages.push(newCage);
   cageFormOpen = false;
-  saveState(); render();
+  apiPost('/api/cages', newCage);
+  render();
 }
 function toggleCageSelect(id, checked) {
   if (checked) cageSelected.add(id);
@@ -999,9 +996,13 @@ function deleteSelectedCages() {
         if (r[s].cage2 === id) r[s].cage2 = null;
       });
     });
+    apiDelete('/api/cages', {id});
   });
+  // Sync frames and RMD after bulk delete
+  STATE.frames.forEach(f => apiPut('/api/frames', f));
+  apiPut('/api/rmd', STATE.rmdSlots);
   cageSelected.clear();
-  saveState(); render();
+  render();
 }
 
 function startInlineEdit(cageId, field, spanEl) {
@@ -1025,7 +1026,8 @@ function startInlineEdit(cageId, field, spanEl) {
     if (isNumber) { const n = parseFloat(raw); if (!isNaN(n)) c[field] = n; }
     else if (isDate) { c[field] = raw || null; }
     else { if (raw) c[field] = raw; }
-    saveState(); render();
+    apiPut('/api/cages', c);
+    render();
   };
   input.addEventListener('blur', save);
   input.addEventListener('keydown', e => {
@@ -1054,7 +1056,8 @@ function saveCageEdit(id) {
   c.departureDate = dep || null;
   c.proposedShipDay = ship || null;
   cageEditing = null;
-  saveState(); render();
+  apiPut('/api/cages', c);
+  render();
 }
 
 function deleteCage(id) {
@@ -1067,7 +1070,10 @@ function deleteCage(id) {
       if(r[s].cage2===id) r[s].cage2=null;
     });
   });
-  saveState(); render();
+  apiDelete('/api/cages', {id});
+  STATE.frames.forEach(f => apiPut('/api/frames', f));
+  apiPut('/api/rmd', STATE.rmdSlots);
+  render();
 }
 
 // Remove a cage from whatever frame/RMD it's currently in
@@ -1123,7 +1129,7 @@ function changeCageLocation(cid, target) {
         if (!confirm(`Height pairing ${hCat(cage.height)} + ${hCat(other.height)} not standard. Override?`)) {
           // Re-add to old location — just set facility as fallback
           cage.location = 'facility'; cage.locationDetail = '';
-          saveState(); render(); return;
+          apiPut('/api/cages', cage); render(); return;
         }
         r[side].overridden = true;
       }
@@ -1134,7 +1140,10 @@ function changeCageLocation(cid, target) {
     cage.departureDate = null; // in RMD — no longer "leaving facility"
   }
 
-  saveState(); render();
+  apiPut('/api/cages', cage);
+  STATE.frames.forEach(f => apiPut('/api/frames', f));
+  apiPut('/api/rmd', STATE.rmdSlots);
+  render();
 }
 
 function handleExcelImport(input) {
@@ -1235,7 +1244,9 @@ function handleExcelImport(input) {
       if (colWeight === -1) msg += `\n⚠ Weight column not found`;
       alert(msg);
 
-      saveState(); render();
+      // Save all cages to D1 (send each new one)
+      STATE.cages.forEach(c => apiPost('/api/cages', c).catch(()=>{}));
+      render();
     } catch(err) {
       alert('Error reading Excel file: ' + err.message);
       console.error(err);
@@ -1319,7 +1330,7 @@ function renderFrames() {
   `;
 }
 
-function updateFrameWidth(fid,w) { getFrame(fid).width=parseFloat(w); saveState(); render(); }
+function updateFrameWidth(fid,w) { const f=getFrame(fid); f.width=parseFloat(w); apiPut('/api/frames', f); render(); }
 function updateFrameLoc(fid,loc) {
   const f=getFrame(fid);
   f.location=loc;
@@ -1328,9 +1339,10 @@ function updateFrameLoc(fid,loc) {
     f.cages.forEach(cid=>{
       const c=getCage(cid);
       if(c) { c.location = loc==='boat'||loc==='client' ? 'shipped' : 'facility'; c.locationDetail = loc==='boat'?'In transit':loc==='client'?'With client':''; if (loc!=='facility') c.departureDate = null; }
+      if(c) apiPut('/api/cages', c);
     });
   }
-  saveState(); render();
+  apiPut('/api/frames', f); render();
 }
 function assignCageToFrame(fid,cid) {
   if(!cid) return;
@@ -1342,20 +1354,19 @@ function assignCageToFrame(fid,cid) {
   }
   f.cages.push(cid);
   c.location='frame'; c.locationDetail=f.name;
-  // Remove from any RMD slot
   STATE.rmdSlots.forEach(r=>{ SIDES.forEach(s=>{ if(r[s].cage1===cid) r[s].cage1=null; if(r[s].cage2===cid) r[s].cage2=null; }); });
-  saveState(); render();
+  apiPut('/api/frames', f); apiPut('/api/cages', c); apiPut('/api/rmd', STATE.rmdSlots); render();
 }
 function removeCageFromFrame(fid,cid) {
   const f=getFrame(fid), c=getCage(cid);
   f.cages=f.cages.filter(id=>id!==cid); f.fixedForShipping=false;
   if(c) { c.location='facility'; c.locationDetail=''; }
-  saveState(); render();
+  apiPut('/api/frames', f); if(c) apiPut('/api/cages', c); render();
 }
 function toggleWaler(fid) {
   const f=getFrame(fid);
   f.hasWaler = !f.hasWaler;
-  saveState(); render();
+  apiPut('/api/frames', f); render();
 }
 function toggleShipping(fid) {
   const f=getFrame(fid);
@@ -1367,7 +1378,7 @@ function toggleShipping(fid) {
     }
   }
   f.fixedForShipping = !f.fixedForShipping;
-  saveState(); render();
+  apiPut('/api/frames', f); render();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1472,15 +1483,15 @@ function assignToRMD(idx,side,slot,cid) {
   r[side][slot] = cid;
   cage.location = 'rmd';
   cage.locationDetail = `${r.number}${side}`;
-  saveState(); render();
+  apiPut('/api/rmd', STATE.rmdSlots); apiPut('/api/cages', cage); render();
 }
 function removeFromRMD(idx,side,slot) {
   const cid = STATE.rmdSlots[idx][side][slot];
   if(!cid) return;
   STATE.rmdSlots[idx][side][slot] = null;
   const c = getCage(cid);
-  if(c) { c.location='facility'; c.locationDetail=''; }
-  saveState(); render();
+  if(c) { c.location='facility'; c.locationDetail=''; apiPut('/api/cages', c); }
+  apiPut('/api/rmd', STATE.rmdSlots); render();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1835,7 +1846,8 @@ function addMovement() {
     date, shift, notes, completed:false, description:desc, createdAt:new Date().toISOString()
   });
   planFormOpen = false;
-  saveState(); render();
+  apiPost('/api/movements', STATE.plannedMovements[STATE.plannedMovements.length-1]);
+  render();
 }
 function completeMove(id) {
   const m = STATE.plannedMovements.find(x=>x.id===id);
@@ -1917,7 +1929,11 @@ function completeMove(id) {
 
   m.completed = true;
   m.completedAt = new Date().toISOString();
-  saveState(); render();
+  apiPut('/api/movements', m);
+  if (cage) apiPut('/api/cages', cage);
+  if (frame) apiPut('/api/frames', frame);
+  apiPut('/api/rmd', STATE.rmdSlots);
+  render();
 }
 function autoplanDepartures() {
   // Find all cages in 'facility' that have a departureDate set
@@ -2087,7 +2103,8 @@ function autoplanDepartures() {
   if (skipped > 0) msg += ` ${skipped} cage${skipped !== 1 ? 's' : ''} already had planned movements (skipped).`;
   if (warnings.length > 0) msg += '\n\n' + warnings.join('\n');
 
-  saveState(); render();
+  newMovements.forEach(m => apiPost('/api/movements', m));
+  render();
   alert(msg);
 }
 
@@ -2096,13 +2113,16 @@ function blankCanvasPlanner() {
   if (count === 0) return alert('No planned movements to clear.');
   if (!confirm(`Clear all ${count} planned movement${count!==1?'s':''}? This cannot be undone.`)) return;
   STATE.plannedMovements = [];
-  planWeekStart = (() => { const d=new Date(); d.setDate(d.getDate()-d.getDay()+1); return toISO(d); })(); // reset to current week
-  saveState(); render();
+  planWeekStart = (() => { const d=new Date(); d.setDate(d.getDate()-d.getDay()+1); return toISO(d); })();
+  // Delete all movements one by one
+  fetch(WORKER_URL + '/api/movements', {method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({deleteAll: true})});
+  render();
 }
 
 function deleteMove(id) {
   STATE.plannedMovements = STATE.plannedMovements.filter(m=>m.id!==id);
-  saveState(); render();
+  apiDelete('/api/movements', {id});
+  render();
 }
 function shiftWeek(dir) {
   const d = new Date(planWeekStart+'T12:00:00');
@@ -2197,27 +2217,31 @@ function createShipment() {
   if(shipSelected.length===0) return alert('Select frames to ship.');
   const date = document.getElementById('sf-date').value;
   const notes = document.getElementById('sf-notes').value.trim();
-  STATE.shipments.push({id:uid(), date, notes, frameIds:[...shipSelected], status:'in-transit', createdAt:new Date().toISOString()});
+  const newShipment = {id:uid(), date, notes, frameIds:[...shipSelected], status:'in-transit', createdAt:new Date().toISOString()};
+  STATE.shipments.push(newShipment);
   shipSelected.forEach(fid=>{
     const f=getFrame(fid);
     f.location='boat';
-    f.cages.forEach(cid=>{ const c=getCage(cid); if(c){c.location='shipped';c.locationDetail='In transit';} });
+    f.cages.forEach(cid=>{ const c=getCage(cid); if(c){c.location='shipped';c.locationDetail='In transit'; apiPut('/api/cages', c);} });
+    apiPut('/api/frames', f);
   });
+  apiPost('/api/shipments', newShipment);
   shipFormOpen=false; shipSelected=[];
-  saveState(); render();
+  render();
 }
 function markDelivered(sid) {
   const sh = STATE.shipments.find(s=>s.id===sid);
   sh.status = 'delivered';
-  sh.frameIds.forEach(fid=>{ const f=getFrame(fid); if(f) f.location='client'; });
-  saveState(); render();
+  sh.frameIds.forEach(fid=>{ const f=getFrame(fid); if(f) { f.location='client'; apiPut('/api/frames', f); } });
+  apiPut('/api/shipments', sh); render();
 }
 function clearShipmentHistory() {
   const count = STATE.shipments.length;
   if (count === 0) return;
   if (!confirm(`Clear all ${count} shipment record${count!==1?'s':''}? This cannot be undone.`)) return;
+  STATE.shipments.forEach(s => apiDelete('/api/shipments', {id: s.id}));
   STATE.shipments = [];
-  saveState(); render();
+  render();
 }
 
 function returnFrames(sid) {
@@ -2225,9 +2249,9 @@ function returnFrames(sid) {
   sh.status = 'frames-returned';
   sh.frameIds.forEach(fid=>{
     const f=getFrame(fid);
-    if(f){ f.location='facility'; f.cages=[]; f.fixedForShipping=false; f.hasWaler=false; }
+    if(f){ f.location='facility'; f.cages=[]; f.fixedForShipping=false; f.hasWaler=false; apiPut('/api/frames', f); }
   });
-  saveState(); render();
+  apiPut('/api/shipments', sh); render();
 }
 
 function returnFromClient(fid) {
@@ -2241,8 +2265,8 @@ function returnFromClient(fid) {
   f.cages = [];
   f.fixedForShipping = false;
   f.hasWaler = false;
-  f.location = 'boat'; // frame goes back to "on the boat" status
-  saveState(); render();
+  f.location = 'boat';
+  apiPut('/api/frames', f); render();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2358,8 +2382,9 @@ function clearReportMovements() {
   const inRange = STATE.plannedMovements.filter(m => m.date >= reportFrom && m.date <= reportTo);
   if (inRange.length === 0) return alert('No movements in the selected date range.');
   if (!confirm(`Clear ${inRange.length} movement${inRange.length!==1?'s':''} between ${fmt(reportFrom)} and ${fmt(reportTo)}? This cannot be undone.`)) return;
+  inRange.forEach(m => apiDelete('/api/movements', {id: m.id}));
   STATE.plannedMovements = STATE.plannedMovements.filter(m => !(m.date >= reportFrom && m.date <= reportTo));
-  saveState(); render();
+  render();
 }
 
 function renderReport() {
@@ -2787,7 +2812,8 @@ function commitBoatPlan() {
   alert(`${added} movements added across ${days.size} working day${days.size!==1?'s':''} leading up to ${fmt(bpBoatDate)}!`);
   bpSelectedCages.clear();
   bpGeneratedMovements = null;
-  saveState(); render();
+  STATE.plannedMovements.slice(-added).forEach(m => apiPost('/api/movements', m));
+  render();
 }
 
 function renderBoatPlanner() {
