@@ -664,14 +664,35 @@ function renderDashboard() {
   const todayMoves = STATE.plannedMovements.filter(m=>m.date===todayStr()&&!m.completed).length;
   const pending = STATE.plannedMovements.filter(m=>!m.completed).length;
 
+  // Compute next two shipment dates across RMD + frame cages
+  const rmdShipDays = [...new Set(
+    STATE.cages
+      .filter(c => (c.location === 'rmd' || c.location === 'frame') && c.proposedShipDay)
+      .map(c => c.proposedShipDay)
+  )].sort();
+  const rmdNextShip = rmdShipDays[0] || null;
+  const rmdSecondShip = rmdShipDays[1] || null;
+
   function renderRMDSlot(side, slot, posLabel, r) {
     const cid = r[side][slot];
     const cage = cid ? getCage(cid) : null;
     if (cage) {
-      return `<div class="rmd-slot">
+      const shade = cage.proposedShipDay === rmdNextShip && rmdNextShip
+        ? 'next'
+        : cage.proposedShipDay === rmdSecondShip && rmdSecondShip
+        ? 'second'
+        : null;
+      const slotBg = shade === 'next'
+        ? 'background:#3b1d6e;border-radius:4px;padding:2px 4px;'
+        : shade === 'second'
+        ? 'background:#c8b8e8;border-radius:4px;padding:2px 4px;'
+        : '';
+      const nameColor = shade === 'next' ? 'color:#e0ccff;' : shade === 'second' ? 'color:#4a2a7a;' : '';
+      const detailColor = shade === 'next' ? 'color:#c0a8ee;' : shade === 'second' ? 'color:#6a4a9a;' : '';
+      return `<div class="rmd-slot" style="${slotBg}">
         <span class="rmd-slot-label">${posLabel}</span>
         <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">${esc(cage.name)}</span><span class="rmd-cage-detail">${cage.height}m ${hCat(cage.height)}</span></span>
+          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${nameColor}">${esc(cage.name)}</span><span class="rmd-cage-detail" style="${detailColor}">${cage.height}m ${hCat(cage.height)}</span></span>
         </div>
       </div>`;
     } else {
@@ -681,6 +702,13 @@ function renderDashboard() {
       </div>`;
     }
   }
+
+  // Legend for RMD shading
+  const rmdLegendHTML = (rmdNextShip || rmdSecondShip) ? `
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      ${rmdNextShip ? `<span style="background:#3b1d6e;color:#e0ccff;font:700 9px var(--font-mono);padding:2px 10px;border-radius:10px">&#9632; Next shipment: ${fmt(rmdNextShip)}</span>` : ''}
+      ${rmdSecondShip ? `<span style="background:#c8b8e8;color:#4a2a7a;font:700 9px var(--font-mono);padding:2px 10px;border-radius:10px">&#9632; 2nd shipment: ${fmt(rmdSecondShip)}</span>` : ''}
+    </div>` : '';
 
   let rmdMiniHTML = RMD_LAYOUT.map(row=>{
     let items = row.items.map(item=>{
@@ -732,6 +760,7 @@ function renderDashboard() {
     <div style="display:grid;grid-template-columns:1fr;gap:14px">
       <div class="card" style="overflow-x:auto">
         <div class="card-title">RMD Storage — Live View <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(click any bay to manage)</span></div>
+        ${rmdLegendHTML}
         <div class="rmd-site-layout" style="min-width:700px">${rmdMiniHTML}</div>
       </div>
       <div class="card">
@@ -744,16 +773,17 @@ function renderDashboard() {
 
 function renderNextDueDelivery() {
   const today = new Date();
-  const activeCages = STATE.cages.filter(c => c.location !== 'shipped' && c.departureDate);
+  // Use proposedShipDay as the primary sort/urgency field
+  const activeCages = STATE.cages.filter(c => c.location !== 'shipped' && c.proposedShipDay);
   if (activeCages.length === 0) return '';
 
-  const sorted = [...activeCages].sort((a, b) => a.departureDate.localeCompare(b.departureDate));
-  const earliestDate = sorted[0].departureDate;
+  const sorted = [...activeCages].sort((a, b) => a.proposedShipDay.localeCompare(b.proposedShipDay));
+  const earliestShipDay = sorted[0].proposedShipDay;
 
   const cageRows = sorted.map(c => {
-    const depDate = new Date(c.departureDate + 'T12:00:00');
-    const daysLeft = Math.ceil((depDate - today) / 86400000);
-    const isNext = c.departureDate === earliestDate;
+    const shipDate = new Date(c.proposedShipDay + 'T12:00:00');
+    const daysLeft = Math.ceil((shipDate - today) / 86400000);
+    const isNext = c.proposedShipDay === earliestShipDay;
     const isOverdue = daysLeft < 0;
     const isUrgent = !isOverdue && daysLeft <= 3;
     const isWarning = !isOverdue && !isUrgent && daysLeft <= 7;
@@ -785,19 +815,19 @@ function renderNextDueDelivery() {
       <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:var(--text-primary)">${esc(c.name)}</span></div>
       <div style="flex:1;font-size:11px;color:var(--text-muted)">${c.width}m × ${c.height}m × ${c.length}m · ${c.weight}t</div>
       <div style="min-width:80px"><span class="badge badge-${locBadge(c.location)}" style="font-size:9px">${esc(locLabel(c))}</span></div>
-      ${c.proposedShipDay ? `<div style="font:600 10px var(--font-mono);color:var(--purple);min-width:100px">🚢 ${fmt(c.proposedShipDay)}</div>` : '<div style="min-width:100px"></div>'}
-      <div style="font:600 11px var(--font-mono);color:var(--text-secondary);min-width:90px">${fmt(c.departureDate)}</div>
+      <div style="font:600 10px var(--font-mono);color:var(--purple);min-width:100px">🚢 ${fmt(c.proposedShipDay)}</div>
+      <div style="font:600 11px var(--font-mono);color:var(--text-secondary);min-width:90px">${c.departureDate ? fmt(c.departureDate) : '<span style="color:var(--text-muted)">—</span>'}</div>
       <div style="min-width:90px;text-align:right">${urgencyBadge}</div>
     </div>`;
   }).join('');
 
-  const overdueCount = sorted.filter(c => Math.ceil((new Date(c.departureDate+'T12:00:00') - today) / 86400000) < 0).length;
-  const urgentCount = sorted.filter(c => { const d = Math.ceil((new Date(c.departureDate+'T12:00:00') - today) / 86400000); return d >= 0 && d <= 3; }).length;
+  const overdueCount = sorted.filter(c => Math.ceil((new Date(c.proposedShipDay+'T12:00:00') - today) / 86400000) < 0).length;
+  const urgentCount = sorted.filter(c => { const d = Math.ceil((new Date(c.proposedShipDay+'T12:00:00') - today) / 86400000); return d >= 0 && d <= 3; }).length;
 
   return `<div class="card" style="margin-bottom:14px;border-color:${overdueCount > 0 ? 'var(--red)' : urgentCount > 0 ? '#e8c8a0' : 'var(--border)'}">
     <div class="flex-between" style="margin-bottom:10px">
       <div class="card-title" style="margin:0">
-        📦 Next Due for Delivery
+        🚢 Next Due for Delivery
         ${overdueCount > 0 ? `<span style="background:var(--red);color:#fff;font:700 10px var(--font-mono);padding:2px 7px;border-radius:10px;margin-left:8px">${overdueCount} OVERDUE</span>` : ''}
         ${urgentCount > 0 ? `<span style="background:var(--orange);color:#fff;font:700 10px var(--font-mono);padding:2px 7px;border-radius:10px;margin-left:8px">${urgentCount} URGENT</span>` : ''}
       </div>
@@ -816,6 +846,22 @@ function renderDashboardFrames() {
   const facilityFrames = STATE.frames.filter(f => f.location === 'facility');
   if (facilityFrames.length === 0) return '';
 
+  // Work out shipment order from proposedShipDay on cages in frames/RMD
+  const shipDays = [...new Set(
+    STATE.cages
+      .filter(c => (c.location === 'frame' || c.location === 'rmd') && c.proposedShipDay)
+      .map(c => c.proposedShipDay)
+  )].sort();
+  const nextShipDay = shipDays[0] || null;
+  const secondShipDay = shipDays[1] || null;
+
+  function shipmentShade(cage) {
+    if (!cage.proposedShipDay) return null;
+    if (cage.proposedShipDay === nextShipDay) return 'next';
+    if (cage.proposedShipDay === secondShipDay) return 'second';
+    return null;
+  }
+
   const frameCards = facilityFrames.map(f => {
     const fCages = f.cages.map(cid => getCage(cid)).filter(Boolean);
     const status = f.fixedForShipping ? 'ready' : f.cages.length === 0 ? 'empty' : 'loaded';
@@ -825,12 +871,23 @@ function renderDashboardFrames() {
 
     const cageList = fCages.length > 0
       ? fCages.map(c => {
+          const shade = shipmentShade(c);
+          const shadeBg = shade === 'next'
+            ? 'background:#3b1d6e;color:#e0ccff;border-radius:4px;padding:2px 6px;'
+            : shade === 'second'
+            ? 'background:#c8b8e8;color:#4a2a7a;border-radius:4px;padding:2px 6px;'
+            : '';
+          const shipLabel = shade === 'next'
+            ? `<span style="font:700 9px var(--font-mono);background:#5a2d9a;color:#e0ccff;padding:1px 5px;border-radius:3px;margin-left:4px">NEXT SHIP</span>`
+            : shade === 'second'
+            ? `<span style="font:700 9px var(--font-mono);background:#c8b8e8;color:#4a2a7a;padding:1px 5px;border-radius:3px;margin-left:4px">2ND SHIP</span>`
+            : '';
           const dep = c.departureDate;
           const daysLeft = dep ? Math.ceil((new Date(dep+'T12:00:00') - new Date()) / 86400000) : null;
           const depStr = dep ? ` · ${fmt(dep)} (${daysLeft}d)` : '';
           const depColor = daysLeft !== null && daysLeft <= 3 ? 'var(--red)' : 'var(--orange)';
-          return `<div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
-            <span style="font-weight:600;font-family:var(--font-mono)">${esc(c.name)}</span>
+          return `<div style="font-size:11px;padding:3px 0;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-weight:600;font-family:var(--font-mono);${shadeBg}">${esc(c.name)}${shipLabel}</span>
             <span style="color:${dep ? depColor : 'var(--text-muted)'}">${hCat(c.height)}${depStr}</span>
           </div>`;
         }).join('')
@@ -849,11 +906,16 @@ function renderDashboardFrames() {
     </div>`;
   }).join('');
 
+
   return `<div class="card" style="margin-bottom:14px">
     <div class="flex-between" style="margin-bottom:10px">
       <div class="card-title" style="margin:0">Frames at Facility (${facilityFrames.length})</div>
       <button class="btn btn-secondary btn-sm" onclick="switchTab('frames')">Manage Frames →</button>
     </div>
+    ${nextShipDay || secondShipDay ? `<div style="display:flex;gap:10px;font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:10px">
+      ${nextShipDay ? `<span style="background:#3b1d6e;color:#e0ccff;padding:2px 8px;border-radius:10px">&#9632; Next shipment: ${fmt(nextShipDay)}</span>` : ''}
+      ${secondShipDay ? `<span style="background:#c8b8e8;color:#4a2a7a;padding:2px 8px;border-radius:10px">&#9632; 2nd shipment: ${fmt(secondShipDay)}</span>` : ''}
+    </div>` : ''}
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
       ${frameCards}
     </div>
@@ -3050,7 +3112,7 @@ function renderBoatPlanner() {
           <span style="color:${urgColor};font-family:var(--font-mono);font-size:12px">${fmt(c.departureDate)} (${daysLeft < 0 ? 'OVERDUE' : daysLeft+'d'})</span>
         </div>`;
       }).join('')
-    : '<div class="empty-msg">No departure dates set. Edit cages to add expected departure dates.</div>';
+    : '<div class="empty-msg">No cages have a Leaves Facility date set.</div>';
 
   return `
     <h2 class="section-title" style="margin-bottom:4px">🚢 Boat Planner</h2>
@@ -3072,7 +3134,7 @@ function renderBoatPlanner() {
       </div>
       <div>
         <div class="card">
-          <div class="card-title">All Upcoming Departures</div>
+          <div class="card-title">Upcoming Cages Out of Facility</div>
           ${upcomingHTML}
         </div>
           <div class="card" style="margin-top:0">
