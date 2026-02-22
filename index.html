@@ -1033,7 +1033,7 @@ function renderCages() {
           <td><input id="ce-w-${c.id}" type="number" step="0.01" value="${c.width}" style="width:70px;font-size:12px"/></td>
           <td><input id="ce-l-${c.id}" type="number" step="0.01" value="${c.length}" style="width:70px;font-size:12px"/></td>
           <td><input id="ce-wt-${c.id}" type="number" step="0.01" value="${c.weight}" style="width:70px;font-size:12px"/></td>
-          <td><input id="ce-dep-${c.id}" type="date" value="${c.departureDate||''}" style="width:130px;font-size:12px"/></td>
+          <td><input id="ce-dep-${c.id}" type="date" value="${c.departureDate||''}" style="width:130px;font-size:12px" ${c.location !== 'facility' ? 'disabled title="Cage has left facility — cannot set departure date"' : ''}/></td>
           <td><input id="ce-ship-${c.id}" type="date" value="${c.proposedShipDay||''}" style="width:130px;font-size:12px"/></td>
           <td><span class="badge badge-${hBadge(c.height)}">${hCat(c.height)}</span></td>
           <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
@@ -1055,7 +1055,7 @@ function renderCages() {
         <td style="font-family:var(--font-mono)"><span class="editable-cell" onclick="startInlineEdit('${c.id}','width',this)">${c.width}</span></td>
         <td style="font-family:var(--font-mono)"><span class="editable-cell" onclick="startInlineEdit('${c.id}','length',this)">${c.length}</span></td>
         <td style="font-family:var(--font-mono)"><span class="editable-cell" onclick="startInlineEdit('${c.id}','weight',this)">${c.weight}</span></td>
-        <td style="font-size:11px"><span class="editable-cell" onclick="startInlineEdit('${c.id}','departureDate',this)" title="Click to edit departure date">${c.departureDate ? fmt(c.departureDate) : '<span style="color:var(--text-muted)">—</span>'}</span> ${depBadge}</td>
+        <td style="font-size:11px">${c.location === 'facility' ? `<span class="editable-cell" onclick="startInlineEdit('${c.id}','departureDate',this)" title="Click to edit departure date">${c.departureDate ? fmt(c.departureDate) : '<span style="color:var(--text-muted)">—</span>'}</span> ${depBadge}` : `<span title="Cage has left facility — cannot set departure date" style="color:var(--text-muted)">${c.departureDate ? fmt(c.departureDate) : '—'} 🔒</span>`}</td>
         <td style="font-size:11px"><span class="editable-cell" onclick="startInlineEdit('${c.id}','proposedShipDay',this)" title="Click to edit proposed ship day">${c.proposedShipDay ? `<span style="color:var(--purple);font-family:var(--font-mono)">${fmt(c.proposedShipDay)}</span>` : '<span style="color:var(--text-muted)">—</span>'}</span></td>
         <td><span class="badge badge-${hBadge(c.height)}">${hCat(c.height)}</span></td>
         <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
@@ -1185,7 +1185,26 @@ function startInlineEdit(cageId, field, spanEl) {
   const save = () => {
     const raw = input.value.trim();
     if (isNumber) { const n = parseFloat(raw); if (!isNaN(n)) c[field] = n; }
-    else if (isDate) { c[field] = raw || null; }
+    else if (isDate) {
+      if (raw) {
+        // Validate: proposedShipDay must be >= departureDate
+        if (field === 'proposedShipDay' && c.departureDate && raw < c.departureDate) {
+          alert(`Proposed Ship Day (${raw}) cannot be before Leaves Facility date (${c.departureDate}).`);
+          render(); return;
+        }
+        // Validate: departureDate must be <= proposedShipDay
+        if (field === 'departureDate' && c.proposedShipDay && raw > c.proposedShipDay) {
+          alert(`Leaves Facility date (${raw}) cannot be after Proposed Ship Day (${c.proposedShipDay}).`);
+          render(); return;
+        }
+        // Block setting departureDate if cage is no longer in facility
+        if (field === 'departureDate' && c.location !== 'facility') {
+          alert(`Cannot set a Leaves Facility date: cage ${c.name} has already left the facility (current location: ${locLabel(c)}).`);
+          render(); return;
+        }
+      }
+      c[field] = raw || null;
+    }
     else { if (raw) c[field] = raw; }
     render();
     saveCage(c);
@@ -1214,8 +1233,21 @@ function saveCageEdit(id) {
   if (!isNaN(w)) c.width = w;
   if (!isNaN(l)) c.length = l;
   if (!isNaN(wt)) c.weight = wt;
-  c.departureDate = dep || null;
-  c.proposedShipDay = ship || null;
+
+  const newDep = dep || null;
+  const newShip = ship || null;
+
+  // Validate: cannot set departureDate if cage is not in facility
+  if (newDep && c.location !== 'facility') {
+    return alert(`Cannot set a Leaves Facility date: cage ${c.name} has already left the facility (location: ${locLabel(c)}).`);
+  }
+  // Validate: proposedShipDay must be >= departureDate
+  if (newDep && newShip && newShip < newDep) {
+    return alert(`Proposed Ship Day cannot be before Leaves Facility date.`);
+  }
+
+  c.departureDate = newDep;
+  c.proposedShipDay = newShip;
   cageEditing = null;
   render();
   saveCage(c);
@@ -1441,6 +1473,7 @@ async function handleExcelImport(input) {
 // ═══════════════════════════════════════════════════════════════════════════════
 let frameFilter = 'all';
 let frameEditing = null;
+let frameSelected = new Set(); // for group location change
 
 function renderFrames() {
   const filtered = STATE.frames.filter(f=> frameFilter==='all' || f.location===frameFilter);
@@ -1451,6 +1484,7 @@ function renderFrames() {
     const fCages = f.cages.map(cid=>getCage(cid)).filter(Boolean);
     const isEditing = frameEditing===f.id;
     const locColors = {facility:'green',boat:'blue',client:'purple'};
+    const isSel = frameSelected.has(f.id);
 
     const _frmShipDays = getShipmentDays();
     let cageListHTML = fCages.map(c=>{
@@ -1488,20 +1522,36 @@ function renderFrames() {
       actionsHTML = `<button class="btn btn-primary btn-sm btn-block" style="margin-top:6px" onclick="returnFromClient('${f.id}')">🏭 Return to Facility (unload cage)</button>`;
     }
 
-    return `<div class="card frame-card ${f.fixedForShipping?'shipping-ready':''}">
-      <div class="flex-between" style="margin-bottom:4px">
-        <span class="frame-name">${esc(f.name)}</span>
-        <span class="badge badge-${locColors[f.location]||'accent'}">${f.location}</span>
+    return `<div class="card frame-card ${f.fixedForShipping?'shipping-ready':''}" style="${isSel?'border-color:var(--accent);background:var(--accent-dim)':''}">
+      <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:4px">
+        <input type="checkbox" ${isSel?'checked':''} onchange="toggleFrameSelect('${f.id}',this.checked)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent);margin-top:3px;flex-shrink:0" title="Select for group action"/>
+        <div style="flex:1">
+          <div class="flex-between" style="margin-bottom:4px">
+            <span class="frame-name">${esc(f.name)}</span>
+            <span class="badge badge-${locColors[f.location]||'accent'}">${f.location}</span>
+          </div>
+          <div class="frame-meta">
+            Width: <span style="color:var(--text-secondary);font-family:var(--font-mono)">${f.width}m</span>
+            ${f.hasWaler ? '<span class="badge badge-blue" style="margin-left:6px">🔩 WALER</span>' : '<span class="badge badge-yellow" style="margin-left:6px;opacity:0.5">NO WALER</span>'}
+            ${f.fixedForShipping ? '<span class="badge badge-accent" style="margin-left:6px">✓ SHIPPING</span>' : ''}
+          </div>
+          ${cageListHTML}
+          ${actionsHTML}
+        </div>
       </div>
-      <div class="frame-meta">
-        Width: <span style="color:var(--text-secondary);font-family:var(--font-mono)">${f.width}m</span>
-        ${f.hasWaler ? '<span class="badge badge-blue" style="margin-left:6px">🔩 WALER</span>' : '<span class="badge badge-yellow" style="margin-left:6px;opacity:0.5">NO WALER</span>'}
-        ${f.fixedForShipping ? '<span class="badge badge-accent" style="margin-left:6px">✓ SHIPPING</span>' : ''}
-      </div>
-      ${cageListHTML}
-      ${actionsHTML}
     </div>`;
   }).join('');
+
+  const selCount = frameSelected.size;
+  const groupActionBar = selCount > 0 ? `
+    <div style="display:flex;align-items:center;gap:12px;background:#fdf8ee;border:1px solid #e8c8a0;border-radius:8px;padding:8px 14px;margin-bottom:10px">
+      <span style="font-weight:600;font-size:13px;color:var(--orange)">${selCount} frame${selCount>1?'s':''} selected</span>
+      <span style="font-size:12px;color:var(--text-muted)">Move to:</span>
+      <button class="btn btn-secondary btn-sm" onclick="bulkMoveFrames('facility')">🏭 Facility</button>
+      <button class="btn btn-secondary btn-sm" onclick="bulkMoveFrames('boat')">🚢 Boat</button>
+      <button class="btn btn-secondary btn-sm" onclick="bulkMoveFrames('client')">👤 Client</button>
+      <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="frameSelected.clear();render()">✕ Clear Selection</button>
+    </div>` : '';
 
   const _framesTabShipDays = getShipmentDays();
   return `
@@ -1511,7 +1561,11 @@ function renderFrames() {
       ${['all','facility','boat','client'].map(f=>`
         <button class="filter-btn ${frameFilter===f?'active':''}" onclick="frameFilter='${f}';render()">${f==='all'?'All':f.charAt(0).toUpperCase()+f.slice(1)} (${counts[f]})</button>
       `).join('')}
+      ${filtered.length > 0 ? `<button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="toggleAllFrames(${filtered.length===selCount?'false':'true'},${JSON.stringify(filtered.map(f=>f.id))})">
+        ${filtered.length===selCount?'Deselect All':'Select All'}
+      </button>` : ''}
     </div>
+    ${groupActionBar}
     <div class="frame-grid">${cardsHTML}</div>
   `;
 }
@@ -1572,6 +1626,45 @@ function toggleShipping(fid) {
   }
   f.fixedForShipping = !f.fixedForShipping;
   render(); saveFrame(f);
+}
+
+function toggleFrameSelect(id, checked) {
+  if (checked) frameSelected.add(id);
+  else frameSelected.delete(id);
+  render();
+}
+function toggleAllFrames(checked, ids) {
+  if (checked) ids.forEach(id => frameSelected.add(id));
+  else ids.forEach(id => frameSelected.delete(id));
+  render();
+}
+async function bulkMoveFrames(loc) {
+  if (frameSelected.size === 0) return;
+  const ids = [...frameSelected];
+  if (!confirm(`Move ${ids.length} frame${ids.length>1?'s':''} to ${loc}?`)) return;
+  const updatedFrames = [];
+  const updatedCages = [];
+  for (const fid of ids) {
+    const f = getFrame(fid);
+    if (!f) continue;
+    f.location = loc;
+    if (loc !== 'facility') f.fixedForShipping = false;
+    updatedFrames.push(f);
+    if (loc !== 'facility') {
+      f.cages.forEach(cid => {
+        const c = getCage(cid);
+        if (c) {
+          c.location = (loc === 'boat' || loc === 'client') ? 'shipped' : 'facility';
+          c.locationDetail = loc === 'boat' ? 'In transit' : loc === 'client' ? 'With client' : '';
+          updatedCages.push(c);
+        }
+      });
+    }
+  }
+  frameSelected.clear();
+  render();
+  await Promise.all(updatedFrames.map(f => saveFrame(f)));
+  await Promise.all(updatedCages.map(c => saveCage(c)));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1753,7 +1846,53 @@ function updateFrameSuggestion(cageId) {
   }
 }
 
-function renderPlanner() {
+function updateRMDSlotOptions(cageId) {
+  const rmdEl = document.getElementById('pf-rmd');
+  if (!rmdEl) return;
+  const cage = getCage(cageId);
+
+  let rmdSlotOpts = '';
+  const seenSides = new Set();
+  const sortedRmd = [...STATE.rmdSlots].sort((a,b)=>a.number-b.number);
+  sortedRmd.forEach(r => {
+    [...SIDES].sort().forEach(side => {
+      const sideKey = r.number + side;
+      if (seenSides.has(sideKey)) return;
+      const hasFree = !r[side].cage1 || !r[side].cage2;
+      if (!hasFree) return;
+
+      // If we have a cage, only show compatible slots
+      if (cage) {
+        const otherCid = r[side].cage1 || r[side].cage2;
+        if (otherCid) {
+          const other = getCage(otherCid);
+          if (other && !canPairRMD(other, cage)) return; // incompatible pairing
+        }
+        // If empty side, any cage can go (no restriction)
+      }
+
+      seenSides.add(sideKey);
+      const occupiedCount = [r[side].cage1, r[side].cage2].filter(Boolean).length;
+      const otherCid = r[side].cage1 || r[side].cage2;
+      const other = otherCid ? getCage(otherCid) : null;
+      const pairNote = other ? ` — pairs with ${other.name} (${hCat(other.height)})` : ` — empty side`;
+      const freeSlots = occupiedCount === 0 ? '2 free' : '1 slot free';
+      rmdSlotOpts += `<option value="${sideKey}">RMD-${r.number}${side} (${freeSlots}${pairNote})</option>`;
+    });
+  });
+
+  rmdEl.innerHTML = rmdSlotOpts
+    ? `<option value="">Select RMD slot...</option>${rmdSlotOpts}`
+    : `<option value="" disabled>No compatible RMD slots for this cage</option>`;
+
+  // Highlight the dropdown
+  if (rmdSlotOpts) {
+    rmdEl.style.borderColor = 'var(--accent)';
+    setTimeout(() => { rmdEl.style.borderColor = ''; }, 2000);
+  }
+}
+
+
   const typeOpts = MOVE_TYPES.map(t=>`<option value="${t.value}" ${planFormType===t.value?'selected':''}>${t.label}</option>`).join('');
 
   // Build cage options based on movement type
@@ -1791,24 +1930,9 @@ function renderPlanner() {
   // Build RMD slot dropdown options for Frame→RMD
   let rmdSlotOpts = '';
   if (planFormType === 'frame-to-rmd') {
-    const seenSides = new Set();
-    const sortedRmd = [...STATE.rmdSlots].sort((a,b)=>a.number-b.number);
-    sortedRmd.forEach(r => {
-      [...SIDES].sort().forEach(side => {
-        const sideKey = r.number + side;
-        if (seenSides.has(sideKey)) return;
-        const hasFree = !r[side].cage1 || !r[side].cage2;
-        if (!hasFree) return;
-        seenSides.add(sideKey);
-        const occupiedCount = [r[side].cage1, r[side].cage2].filter(Boolean).length;
-        const otherCid = r[side].cage1 || r[side].cage2;
-        const other = otherCid ? getCage(otherCid) : null;
-        const pairNote = other ? ` — pairs with ${other.name} (${hCat(other.height)})` : ` — empty side`;
-        const freeSlots = occupiedCount === 0 ? '2 free' : '1 slot free';
-        rmdSlotOpts += `<option value="${sideKey}">RMD-${r.number}${side} (${freeSlots}${pairNote})</option>`;
-      });
-    });
-    if (!rmdSlotOpts) rmdSlotOpts = '<option value="" disabled>No free RMD slots</option>';
+    // We'll build options dynamically based on selected cage in updateRMDSlotOptions()
+    // Show all free slots initially; filtered after cage is selected
+    rmdSlotOpts = '<option value="">Select cage first to see compatible slots…</option>';
   }
 
   // For RMD→Frame, annotate frames with suitability note
@@ -1822,7 +1946,9 @@ function renderPlanner() {
 
   let formHTML = '';
   if (planFormOpen) {
-    const cageOnChange = planFormType === 'rmd-to-frame' ? 'onchange="updateFrameSuggestion(this.value)"' : '';
+    const cageOnChange = planFormType === 'rmd-to-frame' ? 'onchange="updateFrameSuggestion(this.value)"'
+      : planFormType === 'frame-to-rmd' ? 'onchange="updateRMDSlotOptions(this.value)"'
+      : '';
     formHTML = `<div class="card">
       <div class="form-grid form-grid-3">
         <div><label>Movement Type</label><select id="pf-type" onchange="onPlanTypeChange(this.value)">${typeOpts}</select></div>
@@ -1856,7 +1982,20 @@ function renderPlanner() {
 
   function renderWeekDay(day) {
     const dayMoves = STATE.plannedMovements.filter(m=>m.date===day);
-    const pending = dayMoves.filter(m=>!m.completed).length;
+    // For counting: rmd-to-frame and frame-to-rmd count together with any fix-for-shipping on same day
+    // as 1 movement. Find fix steps that are paired with rmd lifts.
+    const rmdLiftCageIds = new Set(dayMoves.filter(m=>!m.completed&&(m.typeKey==='rmd-to-frame'||m.typeKey==='frame-to-rmd')).map(m=>m.cageId).filter(Boolean));
+    const pendingMoves = dayMoves.filter(m=>!m.completed);
+    // Count: exclude fix-for-shipping steps if their cageId was involved in an rmd lift on the same day
+    const effectiveCount = pendingMoves.filter(m => {
+      if (m.typeKey === 'frame-fix-shipping' && m.frameId) {
+        // Check if this frame had an RMD lift today
+        const frameHadRMDLift = pendingMoves.some(m2 => (m2.typeKey==='rmd-to-frame'||m2.typeKey==='frame-to-rmd') && m2.frameId===m.frameId);
+        if (frameHadRMDLift) return false;
+      }
+      return true;
+    }).length;
+    const pending = effectiveCount;
     const isToday = day===todayStr();
     const dow = new Date(day+'T12:00:00').getDay();
     const isWeekend = dow===0||dow===6;
@@ -2230,7 +2369,27 @@ async function autoplanDepartures() {
     return null;
   }
 
-  // Helper: find a free working day on or before a target date, respecting daily limits
+  // Helper to find best RMD slot for a cage
+  function findRMDForCage(cage) {
+    const sortedRmd = [...STATE.rmdSlots].sort((a,b) => a.number - b.number);
+    for (const r of sortedRmd) {
+      for (const side of SIDES) {
+        const hasFree = !r[side].cage1 || !r[side].cage2;
+        if (!hasFree) continue;
+        const otherCid = r[side].cage1 || r[side].cage2;
+        if (otherCid) {
+          const other = getCage(otherCid);
+          if (other && !canPairRMD(other, cage)) continue;
+        }
+        // Found compatible slot
+        const slot = !r[side].cage1 ? 'cage1' : 'cage2';
+        return { rmdNum: r.number, side, slot, sideKey: `${r.number}${side}` };
+      }
+    }
+    return null;
+  }
+
+  // Helper to find a free working day on or before a target date, respecting daily limits
   function findWorkingDay(targetDateStr, lookBackDays = 7) {
     // Try from target date backwards
     let d = new Date(targetDateStr + 'T12:00:00');
@@ -2257,6 +2416,7 @@ async function autoplanDepartures() {
 
   let planned = 0;
   let skipped = 0;
+  const today = todayStr();
 
   for (const cage of dueToLeave) {
     // Check if this cage already has a planned facility-to-frame movement
@@ -2269,43 +2429,89 @@ async function autoplanDepartures() {
       continue;
     }
 
-    // Find a suitable frame
-    const frame = findFrameForCage(cage);
-    if (!frame) {
-      warnings.push(`⚠ No suitable frame found for cage ${cage.name} (${cage.width}m wide${needsWaler(cage) ? ' + needs waler' : ''}). Check frame availability.`);
-      continue;
-    }
-
-    // Schedule the movement on the departure date itself (or nearest working day)
+    // Determine if this cage has a "soon" shipping date (within 14 days from departure)
     const depDate = cage.departureDate;
-    const plannedDate = findWorkingDay(depDate, 10);
+    const depDateObj = new Date(depDate + 'T12:00:00');
+    const hasSoonShipDate = cage.proposedShipDay &&
+      (new Date(cage.proposedShipDay + 'T12:00:00') - depDateObj) <= 14 * 86400000;
 
-    // Register in existingCounts
-    existingCounts[plannedDate] = (existingCounts[plannedDate] || 0) + 1;
-    frameAssignments[cage.id] = frame.id;
+    if (hasSoonShipDate) {
+      // Go directly to a frame (to be loaded onto boat soon)
+      const frame = findFrameForCage(cage);
+      if (!frame) {
+        warnings.push(`⚠ No suitable frame found for cage ${cage.name} (${cage.width}m wide${needsWaler(cage) ? ' + needs waler' : ''}). Check frame availability.`);
+        continue;
+      }
 
-    const walerNote = needsWaler(cage) && !frame.hasWaler ? ' [⚠ waler may be needed]' : '';
-    const desc = `${cage.name} → ${frame.name} (${frame.width}m${frame.hasWaler ? ' 🔩' : ''})`;
+      const plannedDate = findWorkingDay(depDate, 10);
+      existingCounts[plannedDate] = (existingCounts[plannedDate] || 0) + 1;
+      frameAssignments[cage.id] = frame.id;
 
-    newMovements.push({
-      id: uid(),
-      type: 'Facility → Frame',
-      typeKey: 'facility-to-frame',
-      cageId: cage.id,
-      frameId: frame.id,
-      date: plannedDate,
-      shift: 'day',
-      notes: `Auto-planned · Departs ${fmt(depDate)}${walerNote}`,
-      completed: false,
-      description: desc,
-      createdAt: new Date().toISOString()
-    });
+      const walerNote = needsWaler(cage) && !frame.hasWaler ? ' [⚠ waler may be needed]' : '';
+      const desc = `${cage.name} → ${frame.name} (${frame.width}m${frame.hasWaler ? ' 🔩' : ''})`;
 
-    // Also add a fix-for-shipping step if only 1 cage will be in frame after this
-    // (schedule it on the same day, it counts as 1 move)
-    // We'll let the user manually fix — don't auto-generate fix steps to avoid confusion
+      newMovements.push({
+        id: uid(), type: 'Facility → Frame', typeKey: 'facility-to-frame',
+        cageId: cage.id, frameId: frame.id, date: plannedDate, shift: 'day',
+        notes: `Auto-planned · Departs ${fmt(depDate)}${walerNote}`,
+        completed: false, description: desc, createdAt: new Date().toISOString()
+      });
+      planned++;
+    } else {
+      // No soon ship date → plan 2 movements: Facility→Frame, then Frame→RMD
+      const frame = findFrameForCage(cage);
+      if (!frame) {
+        warnings.push(`⚠ No suitable frame found for cage ${cage.name} (${cage.width}m wide${needsWaler(cage) ? ' + needs waler' : ''}). Cannot auto-plan.`);
+        continue;
+      }
 
-    planned++;
+      const rmdSlot = findRMDForCage(cage);
+      if (!rmdSlot) {
+        warnings.push(`⚠ No compatible RMD slot found for cage ${cage.name}. Planned frame movement only.`);
+        // Fall back to just a frame movement
+        const plannedDate = findWorkingDay(depDate, 10);
+        existingCounts[plannedDate] = (existingCounts[plannedDate] || 0) + 1;
+        frameAssignments[cage.id] = frame.id;
+        const desc = `${cage.name} → ${frame.name} (${frame.width}m) [then move to RMD manually]`;
+        newMovements.push({
+          id: uid(), type: 'Facility → Frame', typeKey: 'facility-to-frame',
+          cageId: cage.id, frameId: frame.id, date: plannedDate, shift: 'day',
+          notes: `Auto-planned · Departs ${fmt(depDate)} · No ship date set, no RMD slot found`,
+          completed: false, description: desc, createdAt: new Date().toISOString()
+        });
+        planned++;
+        continue;
+      }
+
+      // Movement 1: Facility → Frame (on departure date)
+      const date1 = findWorkingDay(depDate, 10);
+      existingCounts[date1] = (existingCounts[date1] || 0) + 1;
+      frameAssignments[cage.id] = frame.id;
+      const desc1 = `${cage.name} → ${frame.name} (${frame.width}m)`;
+      newMovements.push({
+        id: uid(), type: 'Facility → Frame', typeKey: 'facility-to-frame',
+        cageId: cage.id, frameId: frame.id, date: date1, shift: 'day',
+        notes: `Auto-planned step 1/2 · Departs ${fmt(depDate)} · No imminent ship date`,
+        completed: false, description: desc1, createdAt: new Date().toISOString()
+      });
+
+      // Movement 2: Frame → RMD (next working day after movement 1)
+      const nextDay = new Date(date1 + 'T12:00:00');
+      nextDay.setDate(nextDay.getDate() + 1);
+      while (nextDay.getDay() === 0 || nextDay.getDay() === 6) nextDay.setDate(nextDay.getDate() + 1);
+      const date2Candidate = toISO(nextDay);
+      const date2 = findWorkingDay(date2Candidate, 10);
+      existingCounts[date2] = (existingCounts[date2] || 0) + 1;
+      const desc2 = `${cage.name} → RMD-${rmdSlot.rmdNum}${rmdSlot.side}`;
+      newMovements.push({
+        id: uid(), type: 'Frame → RMD Storage', typeKey: 'frame-to-rmd',
+        cageId: cage.id, frameId: frame.id, rmdSlot: rmdSlot.sideKey, date: date2, shift: 'day',
+        notes: `Auto-planned step 2/2 · No imminent ship date`,
+        completed: false, description: desc2, createdAt: new Date().toISOString()
+      });
+
+      planned += 2;
+    }
   }
 
   if (planned === 0 && skipped === 0 && warnings.length === 0) {
@@ -2860,10 +3066,15 @@ function generateBoatMovements() {
     assignments.filter(a => a.frame && a.action !== 'no_frame').map(a => a.frame)
   )].filter(f => !f.fixedForShipping);
 
-  const fixSteps = framesNeedingFix.map(f => ({
-    isFixStep: true, frame: f,
-    note: `Fix frame ${f.name} for shipping (bolt cage(s) to frame)`
-  }));
+  // For RMD→Frame and Frame→RMD moves, the fix step counts as part of the same movement (1 slot total)
+  // For Facility→Frame, fix step is a separate movement
+  const fixSteps = framesNeedingFix.map(f => {
+    const relatedAssignment = assignments.find(a => a.frame === f && (a.action === 'rmd_to_frame' || a.action === 'reframe'));
+    return {
+      isFixStep: true, frame: f, bundledWithLift: !!relatedAssignment,
+      note: `Fix frame ${f.name} for shipping (bolt cage(s) to frame)`
+    };
+  });
 
   // ── Step 3: Facility-exit steps ───────────────────────────────────────────
   // Cages coming from facility that have a departureDate (when they physically
@@ -2884,7 +3095,10 @@ function generateBoatMovements() {
 
   // ── Step 4: Schedule lifts across working days ────────────────────────────
   const liftSteps = assignments.filter(a => a.action !== 'already_framed' && a.action !== 'no_frame');
-  const allSteps = [...liftSteps, ...fixSteps]; // lifts first, then fixes
+  // Bundled fix steps (for RMD/reframe moves) travel with the lift, standalone ones count separately
+  const standaloneFixes = fixSteps.filter(f => !f.bundledWithLift);
+  const bundledFixes = fixSteps.filter(f => f.bundledWithLift);
+  const allSteps = [...liftSteps, ...standaloneFixes]; // lifts + standalone fixes count as moves
 
   const boatDate = new Date(bpBoatDate + 'T12:00:00');
   const todayD = new Date(); todayD.setHours(12,0,0,0);
@@ -2929,10 +3143,26 @@ function generateBoatMovements() {
   // Sort chronologically
   scheduledSteps.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
-  const moveSlotsNeeded = allSteps.length;
+  // Attach bundled fix steps to their corresponding lift steps (same date, not counted separately)
+  bundledFixes.forEach(fixStep => {
+    // Find the scheduled lift for this frame
+    const liftStep = scheduledSteps.find(s => !s.isFixStep && !s.isFacilityExit && s.frame === fixStep.frame);
+    if (liftStep) {
+      scheduledSteps.push({ ...fixStep, date: liftStep.date, bundledWithLift: true });
+    } else {
+      // fallback: add as standalone on first available day
+      scheduledSteps.push({ ...fixStep, date: workDays[0] || bpBoatDate });
+    }
+  });
+
+  // Re-sort after adding bundled fixes
+  scheduledSteps.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+
+  const moveSlotsNeeded = allSteps.length; // bundled fixes don't count
   const slotsAvailable = workDays.length * DAILY_LIMIT;
   if (moveSlotsNeeded > slotsAvailable) {
     warnings.push(`⚠ ${moveSlotsNeeded} lifts needed but only ${slotsAvailable} slots available (${workDays.length} days × ${DAILY_LIMIT}). Some days will exceed the limit.`);
+  }
   }
 
   // ── Step 5: Build display list ────────────────────────────────────────────
@@ -2955,6 +3185,8 @@ function generateBoatMovements() {
     }
     if (step.isFacilityExit) {
       moves.push({ type: '📤 Facility exit deadline', desc: step.note, category: 'facility-exit' });
+    } else if (step.isFixStep && step.bundledWithLift) {
+      moves.push({ type: `🔩 Included`, desc: step.note + ' (bundled with lift above — counts as 1 movement)', category: 'move' });
     } else if (step.isFixStep) {
       moves.push({ type: `🔩 Move ${moveNum++}`, desc: step.note, category: 'move' });
     } else {
