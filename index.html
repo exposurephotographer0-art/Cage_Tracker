@@ -385,636 +385,7 @@ tr:hover td { background: #f8f9fb; }
   .stat-card { min-width: 90px; padding: 10px; }
 }
 </style>
-</head>
-<body>
-
-<header class="header">
-  <div class="header-logo">CT</div>
-  <div>
-    <div class="header-title">Cage Tracker</div>
-    <div class="header-sub">FACILITY MANAGEMENT SYSTEM</div>
-  </div>
-</header>
-
-<div class="layout">
-  <nav class="sidebar" id="sidebar">
-    <button class="sidebar-btn active" onclick="switchTab(&#39;dashboard&#39;)">
-      <span class="sidebar-icon">◉</span><span>Dashboard</span>
-    </button>
-  
-    <button class="sidebar-btn " onclick="switchTab(&#39;cages&#39;)">
-      <span class="sidebar-icon">☐</span><span>Cages</span>
-    </button>
-  
-    <button class="sidebar-btn " onclick="switchTab(&#39;frames&#39;)">
-      <span class="sidebar-icon">⊞</span><span>Frames</span>
-    </button>
-  
-    <button class="sidebar-btn " onclick="switchTab(&#39;rmd&#39;)">
-      <span class="sidebar-icon">▦</span><span>RMD Storage</span>
-    </button>
-  
-    <button class="sidebar-btn " onclick="switchTab(&#39;planner&#39;)">
-      <span class="sidebar-icon">⇄</span><span>Planner</span>
-    </button>
-  
-    <button class="sidebar-btn " onclick="switchTab(&#39;boatplan&#39;)">
-      <span class="sidebar-icon">🚢</span><span>Boat Planner</span>
-    </button>
-  
-    <button class="sidebar-btn " onclick="switchTab(&#39;shipping&#39;)">
-      <span class="sidebar-icon">⛴</span><span>Shipping</span>
-    </button>
-  
-    <button class="sidebar-btn " onclick="switchTab(&#39;report&#39;)">
-      <span class="sidebar-icon">⎙</span><span>Report</span>
-    </button>
-  </nav>
-  <main class="main" id="main-content">
-    <div class="tab-content active" id="tab-dashboard">
-      
-    <h2 class="section-title">Dashboard Overview</h2>
-    <div class="stat-row">
-      <div class="stat-card"><div class="stat-val" style="color:var(--accent)">270</div><div class="stat-lbl">Total Cages</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--blue)">228</div><div class="stat-lbl">In Facility</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--green)">35</div><div class="stat-lbl">In RMD</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--orange)">7</div><div class="stat-lbl">In Frames</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--red)">6</div><div class="stat-lbl">Ready to Ship</div></div>
-    </div>
-    <div class="stat-row">
-      <div class="stat-card"><div class="stat-val" style="color:var(--accent)">13</div><div class="stat-lbl">Frames at Facility</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--blue)">0</div><div class="stat-lbl">Frames on Boat</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--purple)">37</div><div class="stat-lbl">Frames w/ Client</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--orange)">0</div><div class="stat-lbl">Today's Moves</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--yellow)">0</div><div class="stat-lbl">Pending Plans</div></div>
-    </div>
-    <div class="card" style="margin-bottom:14px;border-color:var(--red)">
-    <div class="flex-between" style="margin-bottom:10px">
-      <div class="card-title" style="margin:0">
-        📦 Next Due for Delivery
-        <span style="background:var(--red);color:#fff;font:700 10px var(--font-mono);padding:2px 7px;border-radius:10px;margin-left:8px">1 OVERDUE</span>
-        <span style="background:var(--orange);color:#fff;font:700 10px var(--font-mono);padding:2px 7px;border-radius:10px;margin-left:8px">3 URGENT</span>
-      </div>
-      <button class="btn btn-secondary btn-sm" onclick="switchTab(&#39;boatplan&#39;)">Boat Planner →</button>
-    </div>
-    <div style="display:flex;gap:6px;font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;padding:0 12px;margin-bottom:6px">
-      <span style="min-width:110px">Cage</span><span style="flex:1">Dimensions · Weight</span>
-      <span style="min-width:80px">Location</span><span style="min-width:100px">Prop. Ship Day</span>
-      <span style="min-width:90px">Leaves Facility</span><span style="min-width:90px;text-align:right">Due In</span>
-    </div>
-    <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:linear-gradient(90deg,rgba(201,48,48,0.12) 0%,rgba(201,48,48,0.04) 100%);border-left:3px solid var(--red);border-radius:0 6px 6px 0;margin-bottom:4px">
-      <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:var(--text-primary)">281</span></div>
-      <div style="flex:1;font-size:11px;color:var(--text-muted)">1.85m × 4.9m × 10m · 15.16t</div>
-      <div style="min-width:80px"><span class="badge badge-blue" style="font-size:9px">In Facility</span></div>
-      <div style="min-width:100px"></div>
-      <div style="font:600 11px var(--font-mono);color:var(--text-secondary);min-width:90px">Fri 20 Feb</div>
-      <div style="min-width:90px;text-align:right"><span style="background:#c93030;color:#fff;font:700 10px var(--font-mono);padding:2px 8px;border-radius:10px">OVERDUE</span></div>
-    </div><div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:linear-gradient(90deg,rgba(154,123,16,0.10) 0%,rgba(154,123,16,0.04) 100%);border-left:3px solid var(--yellow);border-radius:0 6px 6px 0;margin-bottom:4px">
-      <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:var(--text-primary)">392</span></div>
-      <div style="flex:1;font-size:11px;color:var(--text-muted)">1.1m × 6.9m × 4.5m · 4.52t</div>
-      <div style="min-width:80px"><span class="badge badge-blue" style="font-size:9px">In Facility</span></div>
-      <div style="min-width:100px"></div>
-      <div style="font:600 11px var(--font-mono);color:var(--text-secondary);min-width:90px">Mon 23 Feb</div>
-      <div style="min-width:90px;text-align:right"><span style="background:var(--yellow);color:#fff;font:700 10px var(--font-mono);padding:2px 8px;border-radius:10px">2d</span></div>
-    </div><div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:linear-gradient(90deg,rgba(154,123,16,0.10) 0%,rgba(154,123,16,0.04) 100%);border-left:3px solid var(--yellow);border-radius:0 6px 6px 0;margin-bottom:4px">
-      <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:var(--text-primary)">478</span></div>
-      <div style="flex:1;font-size:11px;color:var(--text-muted)">1.38m × 4m × 11.5m · 9.99t</div>
-      <div style="min-width:80px"><span class="badge badge-blue" style="font-size:9px">In Facility</span></div>
-      <div style="min-width:100px"></div>
-      <div style="font:600 11px var(--font-mono);color:var(--text-secondary);min-width:90px">Mon 23 Feb</div>
-      <div style="min-width:90px;text-align:right"><span style="background:var(--yellow);color:#fff;font:700 10px var(--font-mono);padding:2px 8px;border-radius:10px">2d</span></div>
-    </div><div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:linear-gradient(90deg,rgba(154,123,16,0.10) 0%,rgba(154,123,16,0.04) 100%);border-left:3px solid var(--yellow);border-radius:0 6px 6px 0;margin-bottom:4px">
-      <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:var(--text-primary)">424</span></div>
-      <div style="flex:1;font-size:11px;color:var(--text-muted)">0.98m × 3.1m × 10.3m · 4.5t</div>
-      <div style="min-width:80px"><span class="badge badge-blue" style="font-size:9px">In Facility</span></div>
-      <div style="min-width:100px"></div>
-      <div style="font:600 11px var(--font-mono);color:var(--text-secondary);min-width:90px">Mon 23 Feb</div>
-      <div style="min-width:90px;text-align:right"><span style="background:var(--yellow);color:#fff;font:700 10px var(--font-mono);padding:2px 8px;border-radius:10px">2d</span></div>
-    </div>
-  </div>
-    <div class="card" style="margin-bottom:14px">
-    <div class="flex-between" style="margin-bottom:10px">
-      <div class="card-title" style="margin:0">Frames at Facility (13)</div>
-      <button class="btn btn-secondary btn-sm" onclick="switchTab(&#39;frames&#39;)">Manage Frames →</button>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
-      <div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
-      <div class="flex-between" style="margin-bottom:5px">
-        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-7</span>
-        <div style="display:flex;gap:5px;align-items:center">
-          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
-          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
-      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
-            <span style="font-weight:600;font-family:var(--font-mono)">474</span>
-            <span style="color:var(--text-muted)">Tall</span>
-          </div>
-    </div><div class="card" style="padding:10px;">
-      <div class="flex-between" style="margin-bottom:5px">
-        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-13</span>
-        <div style="display:flex;gap:5px;align-items:center">
-          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
-          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
-      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
-    </div><div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
-      <div class="flex-between" style="margin-bottom:5px">
-        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-19</span>
-        <div style="display:flex;gap:5px;align-items:center">
-          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
-          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">2.5m frame</div>
-      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
-            <span style="font-weight:600;font-family:var(--font-mono)">320</span>
-            <span style="color:var(--text-muted)">Tall</span>
-          </div>
-    </div><div class="card" style="padding:10px;">
-      <div class="flex-between" style="margin-bottom:5px">
-        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-25</span>
-        <div style="display:flex;gap:5px;align-items:center">
-          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
-          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
-      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
-    </div><div class="card" style="padding:10px;">
-      <div class="flex-between" style="margin-bottom:5px">
-        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-28</span>
-        <div style="display:flex;gap:5px;align-items:center">
-          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
-          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.5m frame</div>
-      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
-    </div><div class="card" style="padding:10px;">
-      <div class="flex-between" style="margin-bottom:5px">
-        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-30</span>
-        <div style="display:flex;gap:5px;align-items:center">
-          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
-          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
-      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
-    </div><div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
-      <div class="flex-between" style="margin-bottom:5px">
-        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-33</span>
-        <div style="display:flex;gap:5px;align-items:center">
-          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
-          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
-      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
-            <span style="font-weight:600;font-family:var(--font-mono)">481</span>
-            <span style="color:var(--text-muted)">Tall</span>
-          </div>
-    </div><div class="card" style="padding:10px;border-color:#b0dcc0;background:#f0faf4">
-      <div class="flex-between" style="margin-bottom:5px">
-        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-38</span>
-        <div style="display:flex;gap:5px;align-items:center">
-          <span style="font:600 10px var(--font-mono);color:var(--green)">1 CAGE</span>
-          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">2.5m frame</div>
-      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
-            <span style="font-weight:600;font-family:var(--font-mono)">426</span>
-            <span style="color:var(--text-muted)">Medium</span>
-          </div>
-    </div><div class="card" style="padding:10px;">
-      <div class="flex-between" style="margin-bottom:5px">
-        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-39</span>
-        <div style="display:flex;gap:5px;align-items:center">
-          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
-          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
-      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
-    </div><div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
-      <div class="flex-between" style="margin-bottom:5px">
-        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-41</span>
-        <div style="display:flex;gap:5px;align-items:center">
-          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
-          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.5m frame</div>
-      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
-            <span style="font-weight:600;font-family:var(--font-mono)">431</span>
-            <span style="color:var(--text-muted)">Tall</span>
-          </div>
-    </div><div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
-      <div class="flex-between" style="margin-bottom:5px">
-        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-43</span>
-        <div style="display:flex;gap:5px;align-items:center">
-          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
-          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
-      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
-            <span style="font-weight:600;font-family:var(--font-mono)">613</span>
-            <span style="color:var(--text-muted)">Tall</span>
-          </div>
-    </div><div class="card" style="padding:10px;">
-      <div class="flex-between" style="margin-bottom:5px">
-        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-45</span>
-        <div style="display:flex;gap:5px;align-items:center">
-          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
-          
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">2.5m frame</div>
-      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
-    </div><div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
-      <div class="flex-between" style="margin-bottom:5px">
-        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-49</span>
-        <div style="display:flex;gap:5px;align-items:center">
-          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
-          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
-        </div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
-      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
-            <span style="font-weight:600;font-family:var(--font-mono)">418</span>
-            <span style="color:var(--text-muted)">Tall</span>
-          </div>
-    </div>
-    </div>
-  </div>
-    <div style="display:grid;grid-template-columns:1fr;gap:14px">
-      <div class="card" style="overflow-x:auto">
-        <div class="card-title">RMD Storage — Live View <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(click any bay to manage)</span></div>
-        <div class="rmd-site-layout" style="min-width:700px"><div class="rmd-site-row row-top"><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
-        <div class="card" style="padding:10px">
-          <div class="flex-between" style="margin-bottom:6px">
-            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-12</span>
-            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
-          </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">A Out</span>
-        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">A In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">398</span><span class="rmd-cage-detail">6.325m Tall</span></span>
-        </div>
-      </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">B In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">919</span><span class="rmd-cage-detail">4.7m Medium</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">B Out</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">957</span><span class="rmd-cage-detail">4.8m Tall</span></span>
-        </div>
-      </div>
-        </div>
-      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
-        <div class="card" style="padding:10px">
-          <div class="flex-between" style="margin-bottom:6px">
-            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-11</span>
-            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
-          </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">A Out</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">599</span><span class="rmd-cage-detail">3.5m Medium</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">A In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">437</span><span class="rmd-cage-detail">6m Tall</span></span>
-        </div>
-      </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">B In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">961</span><span class="rmd-cage-detail">4.9m Tall</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">B Out</span>
-        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
-      </div>
-        </div>
-      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
-        <div class="card" style="padding:10px">
-          <div class="flex-between" style="margin-bottom:6px">
-            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-10</span>
-            <span style="font-size:10px;color:var(--text-muted)">1/4</span>
-          </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">A Out</span>
-        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">A In</span>
-        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
-      </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">B In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">415</span><span class="rmd-cage-detail">4.9m Tall</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">B Out</span>
-        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
-      </div>
-        </div>
-      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
-        <div class="card" style="padding:10px">
-          <div class="flex-between" style="margin-bottom:6px">
-            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-9</span>
-            <span style="font-size:10px;color:var(--text-muted)">2/4</span>
-          </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">A Out</span>
-        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">A In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">401</span><span class="rmd-cage-detail">5.5m Tall</span></span>
-        </div>
-      </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">B In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">383</span><span class="rmd-cage-detail">5.8m Tall</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">B Out</span>
-        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
-      </div>
-        </div>
-      </div></div><div class="rmd-site-row row-mid"><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
-        <div class="card" style="padding:10px">
-          <div class="flex-between" style="margin-bottom:6px">
-            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-8</span>
-            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
-          </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">A Out</span>
-        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">A In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">433</span><span class="rmd-cage-detail">5.96m Tall</span></span>
-        </div>
-      </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">B In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">901</span><span class="rmd-cage-detail">4.6m Medium</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">B Out</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">587</span><span class="rmd-cage-detail">3.5m Medium</span></span>
-        </div>
-      </div>
-        </div>
-      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
-        <div class="card" style="padding:10px">
-          <div class="flex-between" style="margin-bottom:6px">
-            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-7</span>
-            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
-          </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">A Out</span>
-        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">A In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">389</span><span class="rmd-cage-detail">7m Tall</span></span>
-        </div>
-      </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">B In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">410</span><span class="rmd-cage-detail">4.49m Medium</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">B Out</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">589</span><span class="rmd-cage-detail">3.5m Medium</span></span>
-        </div>
-      </div>
-        </div>
-      </div></div><div class="rmd-site-row row-bot"><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
-        <div class="card" style="padding:10px">
-          <div class="flex-between" style="margin-bottom:6px">
-            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-6</span>
-            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
-          </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">A Out</span>
-        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">A In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">962</span><span class="rmd-cage-detail">4.8m Tall</span></span>
-        </div>
-      </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">B In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">368</span><span class="rmd-cage-detail">3.1m Medium</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">B Out</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">910</span><span class="rmd-cage-detail">3.095m Medium</span></span>
-        </div>
-      </div>
-        </div>
-      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
-        <div class="card" style="padding:10px">
-          <div class="flex-between" style="margin-bottom:6px">
-            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-5</span>
-            <span style="font-size:10px;color:var(--text-muted)">4/4</span>
-          </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">A Out</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">956</span><span class="rmd-cage-detail">4.85m Tall</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">A In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">955</span><span class="rmd-cage-detail">4.785m Tall</span></span>
-        </div>
-      </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">B In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">597</span><span class="rmd-cage-detail">3.2m Medium</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">B Out</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">591</span><span class="rmd-cage-detail">3.2m Medium</span></span>
-        </div>
-      </div>
-        </div>
-      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
-        <div class="card" style="padding:10px">
-          <div class="flex-between" style="margin-bottom:6px">
-            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-4</span>
-            <span style="font-size:10px;color:var(--text-muted)">4/4</span>
-          </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">A Out</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">417</span><span class="rmd-cage-detail">7m Tall</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">A In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">416</span><span class="rmd-cage-detail">7m Tall</span></span>
-        </div>
-      </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">B In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">950</span><span class="rmd-cage-detail">4.8m Tall</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">B Out</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">595</span><span class="rmd-cage-detail">3.2m Medium</span></span>
-        </div>
-      </div>
-        </div>
-      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
-        <div class="card" style="padding:10px">
-          <div class="flex-between" style="margin-bottom:6px">
-            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-3</span>
-            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
-          </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">A Out</span>
-        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">A In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">445</span><span class="rmd-cage-detail">4.1m Medium</span></span>
-        </div>
-      </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">B In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">479</span><span class="rmd-cage-detail">4.1m Medium</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">B Out</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">440</span><span class="rmd-cage-detail">3.9m Medium</span></span>
-        </div>
-      </div>
-        </div>
-      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
-        <div class="card" style="padding:10px">
-          <div class="flex-between" style="margin-bottom:6px">
-            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-2</span>
-            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
-          </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">A Out</span>
-        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">A In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">407</span><span class="rmd-cage-detail">5.8m Tall</span></span>
-        </div>
-      </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">B In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">951</span><span class="rmd-cage-detail">4.7m Medium</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">B Out</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">500</span><span class="rmd-cage-detail">3.4m Medium</span></span>
-        </div>
-      </div>
-        </div>
-      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
-        <div class="card" style="padding:10px">
-          <div class="flex-between" style="margin-bottom:6px">
-            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-1</span>
-            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
-          </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">A Out</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">916</span><span class="rmd-cage-detail">3m Medium</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">A In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">406</span><span class="rmd-cage-detail">4.1m Medium</span></span>
-        </div>
-      </div>
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
-          <div class="rmd-slot">
-        <span class="rmd-slot-label">B In</span>
-        <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name">454</span><span class="rmd-cage-detail">6.5m Tall</span></span>
-        </div>
-      </div><div class="rmd-slot">
-        <span class="rmd-slot-label">B Out</span>
-        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
-      </div>
-        </div>
-      </div></div></div>
-      </div>
-      <div class="card">
-        <div class="card-title">Today's Planned Movements</div>
-        <div class="empty-msg">No movements planned for today</div>
-      </div>
-    </div>
-  
-    </div>
-  </main>
-</div>
-<input type="file" id="excel-import" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleExcelImport(this)">
-
-<script>
+<script defer>
 // ═══════════════════════════════════════════════════════════════════════════════
 // DATA MODEL & CONSTANTS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1798,7 +1169,7 @@ function clearCageFromCurrentLocation(cid) {
   });
 }
 
-function changeCageLocation(cid, target) {
+async function changeCageLocation(cid, target) {
   if(!target) return;
   const cage = getCage(cid);
   if(!cage) return;
@@ -2538,7 +1909,7 @@ function openDashboardWindow() {
   });
 }
 
-function addMovement() {
+async function addMovement() {
   const type = document.getElementById('pf-type').value;
   const cageId = document.getElementById('pf-cage').value;
   const frameEl = document.getElementById('pf-frame');
@@ -2576,7 +1947,7 @@ function addMovement() {
   render();
   await addMovementToAPI(move);
 }
-function completeMove(id) {
+async function completeMove(id) {
   const m = STATE.plannedMovements.find(x=>x.id===id);
   if(!m) return;
 
@@ -2662,7 +2033,7 @@ function completeMove(id) {
   if (frame) await saveFrame(frame);
   await saveRMD();
 }
-function autoplanDepartures() {
+async function autoplanDepartures() {
   // Find all cages in 'facility' that have a departureDate set
   const dueToLeave = STATE.cages.filter(c => c.location === 'facility' && c.departureDate);
 
@@ -3514,7 +2885,7 @@ function generateBoatMovements() {
   bpGeneratedMovements = {moves, warnings, assignments, framesUsed, scheduledSteps};
   render();
 }
-function commitBoatPlan() {
+async function commitBoatPlan() {
   if (!bpGeneratedMovements) return;
   const {scheduledSteps} = bpGeneratedMovements;
   let added = 0;
@@ -3558,7 +2929,7 @@ function commitBoatPlan() {
   await Promise.all(newMovements.map(m => addMovementToAPI(m)));
 }
 
-function renderBoatPlanner() {
+async function renderBoatPlanner() {
   const today = new Date();
   const in7Days = new Date(today); in7Days.setDate(in7Days.getDate() + 7);
 
@@ -3714,6 +3085,635 @@ function renderBoatPlanner() {
   render();
 })();
 </script>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-logo">CT</div>
+  <div>
+    <div class="header-title">Cage Tracker</div>
+    <div class="header-sub">FACILITY MANAGEMENT SYSTEM</div>
+  </div>
+</header>
+
+<div class="layout">
+  <nav class="sidebar" id="sidebar">
+    <button class="sidebar-btn active" onclick="switchTab(&#39;dashboard&#39;)">
+      <span class="sidebar-icon">◉</span><span>Dashboard</span>
+    </button>
+  
+    <button class="sidebar-btn " onclick="switchTab(&#39;cages&#39;)">
+      <span class="sidebar-icon">☐</span><span>Cages</span>
+    </button>
+  
+    <button class="sidebar-btn " onclick="switchTab(&#39;frames&#39;)">
+      <span class="sidebar-icon">⊞</span><span>Frames</span>
+    </button>
+  
+    <button class="sidebar-btn " onclick="switchTab(&#39;rmd&#39;)">
+      <span class="sidebar-icon">▦</span><span>RMD Storage</span>
+    </button>
+  
+    <button class="sidebar-btn " onclick="switchTab(&#39;planner&#39;)">
+      <span class="sidebar-icon">⇄</span><span>Planner</span>
+    </button>
+  
+    <button class="sidebar-btn " onclick="switchTab(&#39;boatplan&#39;)">
+      <span class="sidebar-icon">🚢</span><span>Boat Planner</span>
+    </button>
+  
+    <button class="sidebar-btn " onclick="switchTab(&#39;shipping&#39;)">
+      <span class="sidebar-icon">⛴</span><span>Shipping</span>
+    </button>
+  
+    <button class="sidebar-btn " onclick="switchTab(&#39;report&#39;)">
+      <span class="sidebar-icon">⎙</span><span>Report</span>
+    </button>
+  </nav>
+  <main class="main" id="main-content">
+    <div class="tab-content active" id="tab-dashboard">
+      
+    <h2 class="section-title">Dashboard Overview</h2>
+    <div class="stat-row">
+      <div class="stat-card"><div class="stat-val" style="color:var(--accent)">270</div><div class="stat-lbl">Total Cages</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--blue)">228</div><div class="stat-lbl">In Facility</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--green)">35</div><div class="stat-lbl">In RMD</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--orange)">7</div><div class="stat-lbl">In Frames</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--red)">6</div><div class="stat-lbl">Ready to Ship</div></div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-card"><div class="stat-val" style="color:var(--accent)">13</div><div class="stat-lbl">Frames at Facility</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--blue)">0</div><div class="stat-lbl">Frames on Boat</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--purple)">37</div><div class="stat-lbl">Frames w/ Client</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--orange)">0</div><div class="stat-lbl">Today's Moves</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--yellow)">0</div><div class="stat-lbl">Pending Plans</div></div>
+    </div>
+    <div class="card" style="margin-bottom:14px;border-color:var(--red)">
+    <div class="flex-between" style="margin-bottom:10px">
+      <div class="card-title" style="margin:0">
+        📦 Next Due for Delivery
+        <span style="background:var(--red);color:#fff;font:700 10px var(--font-mono);padding:2px 7px;border-radius:10px;margin-left:8px">1 OVERDUE</span>
+        <span style="background:var(--orange);color:#fff;font:700 10px var(--font-mono);padding:2px 7px;border-radius:10px;margin-left:8px">3 URGENT</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="switchTab(&#39;boatplan&#39;)">Boat Planner →</button>
+    </div>
+    <div style="display:flex;gap:6px;font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;padding:0 12px;margin-bottom:6px">
+      <span style="min-width:110px">Cage</span><span style="flex:1">Dimensions · Weight</span>
+      <span style="min-width:80px">Location</span><span style="min-width:100px">Prop. Ship Day</span>
+      <span style="min-width:90px">Leaves Facility</span><span style="min-width:90px;text-align:right">Due In</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:linear-gradient(90deg,rgba(201,48,48,0.12) 0%,rgba(201,48,48,0.04) 100%);border-left:3px solid var(--red);border-radius:0 6px 6px 0;margin-bottom:4px">
+      <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:var(--text-primary)">281</span></div>
+      <div style="flex:1;font-size:11px;color:var(--text-muted)">1.85m × 4.9m × 10m · 15.16t</div>
+      <div style="min-width:80px"><span class="badge badge-blue" style="font-size:9px">In Facility</span></div>
+      <div style="min-width:100px"></div>
+      <div style="font:600 11px var(--font-mono);color:var(--text-secondary);min-width:90px">Fri 20 Feb</div>
+      <div style="min-width:90px;text-align:right"><span style="background:#c93030;color:#fff;font:700 10px var(--font-mono);padding:2px 8px;border-radius:10px">OVERDUE</span></div>
+    </div><div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:linear-gradient(90deg,rgba(154,123,16,0.10) 0%,rgba(154,123,16,0.04) 100%);border-left:3px solid var(--yellow);border-radius:0 6px 6px 0;margin-bottom:4px">
+      <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:var(--text-primary)">392</span></div>
+      <div style="flex:1;font-size:11px;color:var(--text-muted)">1.1m × 6.9m × 4.5m · 4.52t</div>
+      <div style="min-width:80px"><span class="badge badge-blue" style="font-size:9px">In Facility</span></div>
+      <div style="min-width:100px"></div>
+      <div style="font:600 11px var(--font-mono);color:var(--text-secondary);min-width:90px">Mon 23 Feb</div>
+      <div style="min-width:90px;text-align:right"><span style="background:var(--yellow);color:#fff;font:700 10px var(--font-mono);padding:2px 8px;border-radius:10px">2d</span></div>
+    </div><div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:linear-gradient(90deg,rgba(154,123,16,0.10) 0%,rgba(154,123,16,0.04) 100%);border-left:3px solid var(--yellow);border-radius:0 6px 6px 0;margin-bottom:4px">
+      <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:var(--text-primary)">478</span></div>
+      <div style="flex:1;font-size:11px;color:var(--text-muted)">1.38m × 4m × 11.5m · 9.99t</div>
+      <div style="min-width:80px"><span class="badge badge-blue" style="font-size:9px">In Facility</span></div>
+      <div style="min-width:100px"></div>
+      <div style="font:600 11px var(--font-mono);color:var(--text-secondary);min-width:90px">Mon 23 Feb</div>
+      <div style="min-width:90px;text-align:right"><span style="background:var(--yellow);color:#fff;font:700 10px var(--font-mono);padding:2px 8px;border-radius:10px">2d</span></div>
+    </div><div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:linear-gradient(90deg,rgba(154,123,16,0.10) 0%,rgba(154,123,16,0.04) 100%);border-left:3px solid var(--yellow);border-radius:0 6px 6px 0;margin-bottom:4px">
+      <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:var(--text-primary)">424</span></div>
+      <div style="flex:1;font-size:11px;color:var(--text-muted)">0.98m × 3.1m × 10.3m · 4.5t</div>
+      <div style="min-width:80px"><span class="badge badge-blue" style="font-size:9px">In Facility</span></div>
+      <div style="min-width:100px"></div>
+      <div style="font:600 11px var(--font-mono);color:var(--text-secondary);min-width:90px">Mon 23 Feb</div>
+      <div style="min-width:90px;text-align:right"><span style="background:var(--yellow);color:#fff;font:700 10px var(--font-mono);padding:2px 8px;border-radius:10px">2d</span></div>
+    </div>
+  </div>
+    <div class="card" style="margin-bottom:14px">
+    <div class="flex-between" style="margin-bottom:10px">
+      <div class="card-title" style="margin:0">Frames at Facility (13)</div>
+      <button class="btn btn-secondary btn-sm" onclick="switchTab(&#39;frames&#39;)">Manage Frames →</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
+      <div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-7</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
+            <span style="font-weight:600;font-family:var(--font-mono)">474</span>
+            <span style="color:var(--text-muted)">Tall</span>
+          </div>
+    </div><div class="card" style="padding:10px;">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-13</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
+    </div><div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-19</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">2.5m frame</div>
+      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
+            <span style="font-weight:600;font-family:var(--font-mono)">320</span>
+            <span style="color:var(--text-muted)">Tall</span>
+          </div>
+    </div><div class="card" style="padding:10px;">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-25</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
+    </div><div class="card" style="padding:10px;">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-28</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.5m frame</div>
+      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
+    </div><div class="card" style="padding:10px;">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-30</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
+    </div><div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-33</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
+            <span style="font-weight:600;font-family:var(--font-mono)">481</span>
+            <span style="color:var(--text-muted)">Tall</span>
+          </div>
+    </div><div class="card" style="padding:10px;border-color:#b0dcc0;background:#f0faf4">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-38</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--green)">1 CAGE</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">2.5m frame</div>
+      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
+            <span style="font-weight:600;font-family:var(--font-mono)">426</span>
+            <span style="color:var(--text-muted)">Medium</span>
+          </div>
+    </div><div class="card" style="padding:10px;">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-39</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
+    </div><div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-41</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.5m frame</div>
+      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
+            <span style="font-weight:600;font-family:var(--font-mono)">431</span>
+            <span style="color:var(--text-muted)">Tall</span>
+          </div>
+    </div><div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-43</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
+            <span style="font-weight:600;font-family:var(--font-mono)">613</span>
+            <span style="color:var(--text-muted)">Tall</span>
+          </div>
+    </div><div class="card" style="padding:10px;">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-45</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
+          
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">2.5m frame</div>
+      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
+    </div><div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-49</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
+            <span style="font-weight:600;font-family:var(--font-mono)">418</span>
+            <span style="color:var(--text-muted)">Tall</span>
+          </div>
+    </div>
+    </div>
+  </div>
+    <div style="display:grid;grid-template-columns:1fr;gap:14px">
+      <div class="card" style="overflow-x:auto">
+        <div class="card-title">RMD Storage — Live View <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(click any bay to manage)</span></div>
+        <div class="rmd-site-layout" style="min-width:700px"><div class="rmd-site-row row-top"><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-12</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">398</span><span class="rmd-cage-detail">6.325m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">919</span><span class="rmd-cage-detail">4.7m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">957</span><span class="rmd-cage-detail">4.8m Tall</span></span>
+        </div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-11</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">599</span><span class="rmd-cage-detail">3.5m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">437</span><span class="rmd-cage-detail">6m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">961</span><span class="rmd-cage-detail">4.9m Tall</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-10</span>
+            <span style="font-size:10px;color:var(--text-muted)">1/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">415</span><span class="rmd-cage-detail">4.9m Tall</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-9</span>
+            <span style="font-size:10px;color:var(--text-muted)">2/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">401</span><span class="rmd-cage-detail">5.5m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">383</span><span class="rmd-cage-detail">5.8m Tall</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div>
+        </div>
+      </div></div><div class="rmd-site-row row-mid"><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-8</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">433</span><span class="rmd-cage-detail">5.96m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">901</span><span class="rmd-cage-detail">4.6m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">587</span><span class="rmd-cage-detail">3.5m Medium</span></span>
+        </div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-7</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">389</span><span class="rmd-cage-detail">7m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">410</span><span class="rmd-cage-detail">4.49m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">589</span><span class="rmd-cage-detail">3.5m Medium</span></span>
+        </div>
+      </div>
+        </div>
+      </div></div><div class="rmd-site-row row-bot"><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-6</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">962</span><span class="rmd-cage-detail">4.8m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">368</span><span class="rmd-cage-detail">3.1m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">910</span><span class="rmd-cage-detail">3.095m Medium</span></span>
+        </div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-5</span>
+            <span style="font-size:10px;color:var(--text-muted)">4/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">956</span><span class="rmd-cage-detail">4.85m Tall</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">955</span><span class="rmd-cage-detail">4.785m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">597</span><span class="rmd-cage-detail">3.2m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">591</span><span class="rmd-cage-detail">3.2m Medium</span></span>
+        </div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-4</span>
+            <span style="font-size:10px;color:var(--text-muted)">4/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">417</span><span class="rmd-cage-detail">7m Tall</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">416</span><span class="rmd-cage-detail">7m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">950</span><span class="rmd-cage-detail">4.8m Tall</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">595</span><span class="rmd-cage-detail">3.2m Medium</span></span>
+        </div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-3</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">445</span><span class="rmd-cage-detail">4.1m Medium</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">479</span><span class="rmd-cage-detail">4.1m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">440</span><span class="rmd-cage-detail">3.9m Medium</span></span>
+        </div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-2</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">407</span><span class="rmd-cage-detail">5.8m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">951</span><span class="rmd-cage-detail">4.7m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">500</span><span class="rmd-cage-detail">3.4m Medium</span></span>
+        </div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-1</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">916</span><span class="rmd-cage-detail">3m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">406</span><span class="rmd-cage-detail">4.1m Medium</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">454</span><span class="rmd-cage-detail">6.5m Tall</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div>
+        </div>
+      </div></div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Today's Planned Movements</div>
+        <div class="empty-msg">No movements planned for today</div>
+      </div>
+    </div>
+  
+    </div>
+  </main>
+</div>
+<input type="file" id="excel-import" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleExcelImport(this)">
+
 
 
 </body></html>
