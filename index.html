@@ -471,14 +471,20 @@ let activeTab = 'dashboard';
 const API_BASE = 'https://cage-tracker-api.exposurephotographer0.workers.dev';
 
 async function api(path, method = 'GET', body = null) {
-  const opts = { method, headers: { 'Content-Type': 'application/json' } };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(API_BASE + path, opts);
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({}));
-    throw new Error(e.error || `HTTP ${res.status}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const opts = { method, headers: { 'Content-Type': 'application/json' }, signal: controller.signal };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(API_BASE + path, opts);
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
   }
-  return res.json();
 }
 
 // ── Load all state from D1 on startup ───────────────────────────────────────
@@ -500,8 +506,16 @@ async function loadState() {
     console.log('[CageTracker] State loaded:', STATE.cages.length, 'cages');
   } catch(e) {
     console.error('[CageTracker] Failed to load state from API:', e);
-    showError('Could not connect to database: ' + e.message);
-    STATE = initState();
+    showError('Could not connect to server — running with local data. Changes may not be saved.');
+    STATE = {
+      ...initState(),
+      cages: (PRELOAD_STATE.cages || []).map(normaliseCage),
+      frames: PRELOAD_STATE.frames || [],
+      rmdSlots: PRELOAD_STATE.rmdSlots || [],
+      plannedMovements: PRELOAD_STATE.plannedMovements || [],
+      shipments: PRELOAD_STATE.shipments || [],
+      settings: PRELOAD_STATE.settings || { movementsPerDay: MAX_MOVES },
+    };
   } finally {
     showLoadingOverlay(false);
   }
