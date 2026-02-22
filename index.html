@@ -1856,7 +1856,9 @@ function changeCageLocation(cid, target) {
   await saveRMD();
   const affectedFrame = STATE.frames.find(f => f.cages.includes(cage.id));
   if (affectedFrame) await saveFrame(affectedFrame);
-}(input) {
+}
+
+async function handleExcelImport(input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
