@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
+<!-- saved from url=(0059)file:///C:/Users/HenryWatson/Downloads/cage-tracker-v8.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cage Tracker — Facility Management</title>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="./Cage Tracker — Facility Management1_files/css2" rel="stylesheet">
+<script src="./Cage Tracker — Facility Management1_files/xlsx.full.min.js.download"></script>
 <style>
 :root {
   --bg-deep: #f0f2f5;
@@ -397,10 +397,622 @@ tr:hover td { background: #f8f9fb; }
 </header>
 
 <div class="layout">
-  <nav class="sidebar" id="sidebar"></nav>
-  <main class="main" id="main-content"></main>
+  <nav class="sidebar" id="sidebar">
+    <button class="sidebar-btn active" onclick="switchTab(&#39;dashboard&#39;)">
+      <span class="sidebar-icon">◉</span><span>Dashboard</span>
+    </button>
+  
+    <button class="sidebar-btn " onclick="switchTab(&#39;cages&#39;)">
+      <span class="sidebar-icon">☐</span><span>Cages</span>
+    </button>
+  
+    <button class="sidebar-btn " onclick="switchTab(&#39;frames&#39;)">
+      <span class="sidebar-icon">⊞</span><span>Frames</span>
+    </button>
+  
+    <button class="sidebar-btn " onclick="switchTab(&#39;rmd&#39;)">
+      <span class="sidebar-icon">▦</span><span>RMD Storage</span>
+    </button>
+  
+    <button class="sidebar-btn " onclick="switchTab(&#39;planner&#39;)">
+      <span class="sidebar-icon">⇄</span><span>Planner</span>
+    </button>
+  
+    <button class="sidebar-btn " onclick="switchTab(&#39;boatplan&#39;)">
+      <span class="sidebar-icon">🚢</span><span>Boat Planner</span>
+    </button>
+  
+    <button class="sidebar-btn " onclick="switchTab(&#39;shipping&#39;)">
+      <span class="sidebar-icon">⛴</span><span>Shipping</span>
+    </button>
+  
+    <button class="sidebar-btn " onclick="switchTab(&#39;report&#39;)">
+      <span class="sidebar-icon">⎙</span><span>Report</span>
+    </button>
+  </nav>
+  <main class="main" id="main-content">
+    <div class="tab-content active" id="tab-dashboard">
+      
+    <h2 class="section-title">Dashboard Overview</h2>
+    <div class="stat-row">
+      <div class="stat-card"><div class="stat-val" style="color:var(--accent)">270</div><div class="stat-lbl">Total Cages</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--blue)">228</div><div class="stat-lbl">In Facility</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--green)">35</div><div class="stat-lbl">In RMD</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--orange)">7</div><div class="stat-lbl">In Frames</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--red)">6</div><div class="stat-lbl">Ready to Ship</div></div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-card"><div class="stat-val" style="color:var(--accent)">13</div><div class="stat-lbl">Frames at Facility</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--blue)">0</div><div class="stat-lbl">Frames on Boat</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--purple)">37</div><div class="stat-lbl">Frames w/ Client</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--orange)">0</div><div class="stat-lbl">Today's Moves</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--yellow)">0</div><div class="stat-lbl">Pending Plans</div></div>
+    </div>
+    <div class="card" style="margin-bottom:14px;border-color:var(--red)">
+    <div class="flex-between" style="margin-bottom:10px">
+      <div class="card-title" style="margin:0">
+        📦 Next Due for Delivery
+        <span style="background:var(--red);color:#fff;font:700 10px var(--font-mono);padding:2px 7px;border-radius:10px;margin-left:8px">1 OVERDUE</span>
+        <span style="background:var(--orange);color:#fff;font:700 10px var(--font-mono);padding:2px 7px;border-radius:10px;margin-left:8px">3 URGENT</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="switchTab(&#39;boatplan&#39;)">Boat Planner →</button>
+    </div>
+    <div style="display:flex;gap:6px;font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;padding:0 12px;margin-bottom:6px">
+      <span style="min-width:110px">Cage</span><span style="flex:1">Dimensions · Weight</span>
+      <span style="min-width:80px">Location</span><span style="min-width:100px">Prop. Ship Day</span>
+      <span style="min-width:90px">Leaves Facility</span><span style="min-width:90px;text-align:right">Due In</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:linear-gradient(90deg,rgba(201,48,48,0.12) 0%,rgba(201,48,48,0.04) 100%);border-left:3px solid var(--red);border-radius:0 6px 6px 0;margin-bottom:4px">
+      <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:var(--text-primary)">281</span></div>
+      <div style="flex:1;font-size:11px;color:var(--text-muted)">1.85m × 4.9m × 10m · 15.16t</div>
+      <div style="min-width:80px"><span class="badge badge-blue" style="font-size:9px">In Facility</span></div>
+      <div style="min-width:100px"></div>
+      <div style="font:600 11px var(--font-mono);color:var(--text-secondary);min-width:90px">Fri 20 Feb</div>
+      <div style="min-width:90px;text-align:right"><span style="background:#c93030;color:#fff;font:700 10px var(--font-mono);padding:2px 8px;border-radius:10px">OVERDUE</span></div>
+    </div><div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:linear-gradient(90deg,rgba(154,123,16,0.10) 0%,rgba(154,123,16,0.04) 100%);border-left:3px solid var(--yellow);border-radius:0 6px 6px 0;margin-bottom:4px">
+      <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:var(--text-primary)">392</span></div>
+      <div style="flex:1;font-size:11px;color:var(--text-muted)">1.1m × 6.9m × 4.5m · 4.52t</div>
+      <div style="min-width:80px"><span class="badge badge-blue" style="font-size:9px">In Facility</span></div>
+      <div style="min-width:100px"></div>
+      <div style="font:600 11px var(--font-mono);color:var(--text-secondary);min-width:90px">Mon 23 Feb</div>
+      <div style="min-width:90px;text-align:right"><span style="background:var(--yellow);color:#fff;font:700 10px var(--font-mono);padding:2px 8px;border-radius:10px">2d</span></div>
+    </div><div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:linear-gradient(90deg,rgba(154,123,16,0.10) 0%,rgba(154,123,16,0.04) 100%);border-left:3px solid var(--yellow);border-radius:0 6px 6px 0;margin-bottom:4px">
+      <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:var(--text-primary)">478</span></div>
+      <div style="flex:1;font-size:11px;color:var(--text-muted)">1.38m × 4m × 11.5m · 9.99t</div>
+      <div style="min-width:80px"><span class="badge badge-blue" style="font-size:9px">In Facility</span></div>
+      <div style="min-width:100px"></div>
+      <div style="font:600 11px var(--font-mono);color:var(--text-secondary);min-width:90px">Mon 23 Feb</div>
+      <div style="min-width:90px;text-align:right"><span style="background:var(--yellow);color:#fff;font:700 10px var(--font-mono);padding:2px 8px;border-radius:10px">2d</span></div>
+    </div><div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:linear-gradient(90deg,rgba(154,123,16,0.10) 0%,rgba(154,123,16,0.04) 100%);border-left:3px solid var(--yellow);border-radius:0 6px 6px 0;margin-bottom:4px">
+      <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:var(--text-primary)">424</span></div>
+      <div style="flex:1;font-size:11px;color:var(--text-muted)">0.98m × 3.1m × 10.3m · 4.5t</div>
+      <div style="min-width:80px"><span class="badge badge-blue" style="font-size:9px">In Facility</span></div>
+      <div style="min-width:100px"></div>
+      <div style="font:600 11px var(--font-mono);color:var(--text-secondary);min-width:90px">Mon 23 Feb</div>
+      <div style="min-width:90px;text-align:right"><span style="background:var(--yellow);color:#fff;font:700 10px var(--font-mono);padding:2px 8px;border-radius:10px">2d</span></div>
+    </div>
+  </div>
+    <div class="card" style="margin-bottom:14px">
+    <div class="flex-between" style="margin-bottom:10px">
+      <div class="card-title" style="margin:0">Frames at Facility (13)</div>
+      <button class="btn btn-secondary btn-sm" onclick="switchTab(&#39;frames&#39;)">Manage Frames →</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
+      <div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-7</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
+            <span style="font-weight:600;font-family:var(--font-mono)">474</span>
+            <span style="color:var(--text-muted)">Tall</span>
+          </div>
+    </div><div class="card" style="padding:10px;">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-13</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
+    </div><div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-19</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">2.5m frame</div>
+      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
+            <span style="font-weight:600;font-family:var(--font-mono)">320</span>
+            <span style="color:var(--text-muted)">Tall</span>
+          </div>
+    </div><div class="card" style="padding:10px;">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-25</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
+    </div><div class="card" style="padding:10px;">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-28</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.5m frame</div>
+      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
+    </div><div class="card" style="padding:10px;">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-30</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
+    </div><div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-33</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
+            <span style="font-weight:600;font-family:var(--font-mono)">481</span>
+            <span style="color:var(--text-muted)">Tall</span>
+          </div>
+    </div><div class="card" style="padding:10px;border-color:#b0dcc0;background:#f0faf4">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-38</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--green)">1 CAGE</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">2.5m frame</div>
+      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
+            <span style="font-weight:600;font-family:var(--font-mono)">426</span>
+            <span style="color:var(--text-muted)">Medium</span>
+          </div>
+    </div><div class="card" style="padding:10px;">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-39</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
+    </div><div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-41</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.5m frame</div>
+      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
+            <span style="font-weight:600;font-family:var(--font-mono)">431</span>
+            <span style="color:var(--text-muted)">Tall</span>
+          </div>
+    </div><div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-43</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
+            <span style="font-weight:600;font-family:var(--font-mono)">613</span>
+            <span style="color:var(--text-muted)">Tall</span>
+          </div>
+    </div><div class="card" style="padding:10px;">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-45</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted)">EMPTY</span>
+          
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">2.5m frame</div>
+      <div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>
+    </div><div class="card" style="padding:10px;border-color:#c0a050;background:#fdfaf0">
+      <div class="flex-between" style="margin-bottom:5px">
+        <span style="font:700 13px var(--font-mono);color:var(--accent)">TF-49</span>
+        <div style="display:flex;gap:5px;align-items:center">
+          <span style="font:600 10px var(--font-mono);color:var(--accent)">✓ SHIP READY</span>
+          <span class="badge badge-blue" style="font-size:8px;padding:1px 4px">🔩</span>
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:5px">1.1m frame</div>
+      <div style="font-size:11px;padding:2px 0;display:flex;justify-content:space-between">
+            <span style="font-weight:600;font-family:var(--font-mono)">418</span>
+            <span style="color:var(--text-muted)">Tall</span>
+          </div>
+    </div>
+    </div>
+  </div>
+    <div style="display:grid;grid-template-columns:1fr;gap:14px">
+      <div class="card" style="overflow-x:auto">
+        <div class="card-title">RMD Storage — Live View <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(click any bay to manage)</span></div>
+        <div class="rmd-site-layout" style="min-width:700px"><div class="rmd-site-row row-top"><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-12</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">398</span><span class="rmd-cage-detail">6.325m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">919</span><span class="rmd-cage-detail">4.7m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">957</span><span class="rmd-cage-detail">4.8m Tall</span></span>
+        </div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-11</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">599</span><span class="rmd-cage-detail">3.5m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">437</span><span class="rmd-cage-detail">6m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">961</span><span class="rmd-cage-detail">4.9m Tall</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-10</span>
+            <span style="font-size:10px;color:var(--text-muted)">1/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">415</span><span class="rmd-cage-detail">4.9m Tall</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-9</span>
+            <span style="font-size:10px;color:var(--text-muted)">2/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">401</span><span class="rmd-cage-detail">5.5m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">383</span><span class="rmd-cage-detail">5.8m Tall</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div>
+        </div>
+      </div></div><div class="rmd-site-row row-mid"><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-8</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">433</span><span class="rmd-cage-detail">5.96m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">901</span><span class="rmd-cage-detail">4.6m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">587</span><span class="rmd-cage-detail">3.5m Medium</span></span>
+        </div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-7</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">389</span><span class="rmd-cage-detail">7m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">410</span><span class="rmd-cage-detail">4.49m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">589</span><span class="rmd-cage-detail">3.5m Medium</span></span>
+        </div>
+      </div>
+        </div>
+      </div></div><div class="rmd-site-row row-bot"><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-6</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">962</span><span class="rmd-cage-detail">4.8m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">368</span><span class="rmd-cage-detail">3.1m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">910</span><span class="rmd-cage-detail">3.095m Medium</span></span>
+        </div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-5</span>
+            <span style="font-size:10px;color:var(--text-muted)">4/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">956</span><span class="rmd-cage-detail">4.85m Tall</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">955</span><span class="rmd-cage-detail">4.785m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">597</span><span class="rmd-cage-detail">3.2m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">591</span><span class="rmd-cage-detail">3.2m Medium</span></span>
+        </div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-4</span>
+            <span style="font-size:10px;color:var(--text-muted)">4/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">417</span><span class="rmd-cage-detail">7m Tall</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">416</span><span class="rmd-cage-detail">7m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">950</span><span class="rmd-cage-detail">4.8m Tall</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">595</span><span class="rmd-cage-detail">3.2m Medium</span></span>
+        </div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-3</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">445</span><span class="rmd-cage-detail">4.1m Medium</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">479</span><span class="rmd-cage-detail">4.1m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">440</span><span class="rmd-cage-detail">3.9m Medium</span></span>
+        </div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-2</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">407</span><span class="rmd-cage-detail">5.8m Tall</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">951</span><span class="rmd-cage-detail">4.7m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">500</span><span class="rmd-cage-detail">3.4m Medium</span></span>
+        </div>
+      </div>
+        </div>
+      </div><div class="rmd-site-card" onclick="switchTab(&#39;rmd&#39;)" style="cursor:pointer">
+        <div class="card" style="padding:10px">
+          <div class="flex-between" style="margin-bottom:6px">
+            <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-1</span>
+            <span style="font-size:10px;color:var(--text-muted)">3/4</span>
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">A Out</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">916</span><span class="rmd-cage-detail">3m Medium</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">A In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">406</span><span class="rmd-cage-detail">4.1m Medium</span></span>
+        </div>
+      </div>
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          <div class="rmd-slot">
+        <span class="rmd-slot-label">B In</span>
+        <div class="rmd-slot-content">
+          <span class="rmd-cage-info"><span class="rmd-cage-name">454</span><span class="rmd-cage-detail">6.5m Tall</span></span>
+        </div>
+      </div><div class="rmd-slot">
+        <span class="rmd-slot-label">B Out</span>
+        <div class="rmd-slot-content" style="color:var(--text-muted);font-size:11px;font-style:italic">empty</div>
+      </div>
+        </div>
+      </div></div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Today's Planned Movements</div>
+        <div class="empty-msg">No movements planned for today</div>
+      </div>
+    </div>
+  
+    </div>
+  </main>
 </div>
-<input type="file" id="excel-import" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleExcelImport(this)"/>
+<input type="file" id="excel-import" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleExcelImport(this)">
 
 <script>
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -483,49 +1095,140 @@ function initState() {
 let STATE = initState();
 let activeTab = 'dashboard';
 
-// ── Worker API URL ─────────────────────────────────────────────────────────────
-// Replace this with your actual Cloudflare Worker URL
-const WORKER_URL = 'https://cage-tracker-api.exposurephotographer0.workers.dev';
+// ── API config ──────────────────────────────────────────────────────────────
+// Set this to your Worker URL, e.g. https://cage-tracker-api.yourname.workers.dev
+const API_BASE = 'https://cage-tracker-api.exposurephotographer0.workers.dev';
 
-// ── API helpers ────────────────────────────────────────────────────────────────
-async function apiGet(path) {
-  const r = await fetch(WORKER_URL + path);
-  if (!r.ok) throw new Error('API error: ' + r.status);
-  return r.json();
-}
-async function apiPost(path, data) {
-  return fetch(WORKER_URL + path, {
-    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data)
-  });
-}
-async function apiPut(path, data) {
-  return fetch(WORKER_URL + path, {
-    method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data)
-  });
-}
-async function apiDelete(path, data) {
-  return fetch(WORKER_URL + path, {
-    method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data)
-  });
+async function api(path, method = 'GET', body = null) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API_BASE + path, opts);
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.error || `HTTP ${res.status}`);
+  }
+  return res.json();
 }
 
-// ── Save/Load ──────────────────────────────────────────────────────────────────
-// saveState() is now a no-op — each action saves directly via its own API call
-async function saveState() { /* replaced by per-action API calls below */ }
-
+// ── Load all state from D1 on startup ───────────────────────────────────────
 async function loadState() {
   try {
-    const data = await apiGet('/api/state');
-    if (data && (data.cages || data.frames)) {
-      STATE = {...initState(), ...data};
-      if (!STATE.frames || STATE.frames.length === 0) STATE.frames = initState().frames;
-      if (!STATE.rmdSlots || STATE.rmdSlots.length === 0) STATE.rmdSlots = initState().rmdSlots;
-      return;
-    }
+    showLoadingOverlay(true);
+    const data = await api('/api/state');
+    STATE = {
+      ...initState(),
+      cages: data.cages.map(normaliseCage),
+      frames: data.frames,
+      rmdSlots: data.rmdSlots,
+      plannedMovements: data.plannedMovements,
+      shipments: data.shipments,
+      settings: { movementsPerDay: parseInt(data.settings?.movementsPerDay) || MAX_MOVES }
+    };
   } catch(e) {
-    console.warn('Could not load from worker, using defaults:', e);
+    console.error('Failed to load state from API:', e);
+    showError('Could not connect to database: ' + e.message);
+    STATE = initState();
+  } finally {
+    showLoadingOverlay(false);
   }
-  STATE = initState();
+}
+
+function normaliseCage(c) {
+  return {
+    id: c.id, name: c.name,
+    height: c.height || 0, width: c.width || 0, length: c.length || 0, weight: c.weight || 0,
+    location: c.location || 'facility',
+    locationDetail: c.location_detail || c.locationDetail || '',
+    departureDate: c.departure_date || c.departureDate || null,
+    proposedShipDay: c.proposed_ship_day || c.proposedShipDay || null,
+    notes: c.notes || '',
+    createdAt: c.created_at || c.createdAt || new Date().toISOString(),
+  };
+}
+
+// saveState is now a no-op — we save directly to the API on each mutation
+function saveState() {}
+
+// ── UI helpers ───────────────────────────────────────────────────────────────
+function showLoadingOverlay(show) {
+  let el = document.getElementById('api-loading');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'api-loading';
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(26,34,53,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;color:#fff;font:600 15px var(--font-display);gap:10px;';
+    el.innerHTML = '<div style="width:22px;height:22px;border:3px solid rgba(255,255,255,0.3);border-top-color:#e8a830;border-radius:50%;animation:spin 0.8s linear infinite"></div> Loading…';
+    document.body.appendChild(el);
+    const style = document.createElement('style');
+    style.textContent = '@keyframes spin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(style);
+  }
+  el.style.display = show ? 'flex' : 'none';
+}
+
+function showError(msg) {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;top:16px;right:16px;background:#fce8e8;border:1px solid #e8b0b0;color:#c93030;padding:12px 18px;border-radius:8px;font-size:13px;z-index:9999;max-width:380px;box-shadow:0 4px 12px rgba(0,0,0,0.15)';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 6000);
+}
+
+function showSuccess(msg) {
+  const el = document.createElement('div');
+  el.style.cssText = 'position:fixed;top:16px;right:16px;background:#e6f5ec;border:1px solid #b0dcc0;color:#1a8a4a;padding:12px 18px;border-radius:8px;font-size:13px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.15)';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+// ── Granular save helpers (called after each mutation) ────────────────────────
+async function saveCage(cage) {
+  try { await api('/api/cages', 'PUT', cage); }
+  catch(e) { showError('Failed to save cage: ' + e.message); }
+}
+async function addCageToAPI(cage) {
+  try { await api('/api/cages', 'POST', cage); }
+  catch(e) { showError('Failed to add cage: ' + e.message); }
+}
+async function deleteCageFromAPI(id) {
+  try { await api('/api/cages', 'DELETE', { id }); }
+  catch(e) { showError('Failed to delete cage: ' + e.message); }
+}
+async function saveFrame(frame) {
+  try { await api('/api/frames', 'PUT', frame); }
+  catch(e) { showError('Failed to save frame: ' + e.message); }
+}
+async function saveRMD() {
+  try { await api('/api/rmd', 'PUT', STATE.rmdSlots); }
+  catch(e) { showError('Failed to save RMD: ' + e.message); }
+}
+async function addMovementToAPI(m) {
+  try { await api('/api/movements', 'POST', m); }
+  catch(e) { showError('Failed to add movement: ' + e.message); }
+}
+async function updateMovementInAPI(m) {
+  try { await api('/api/movements', 'PUT', m); }
+  catch(e) { showError('Failed to update movement: ' + e.message); }
+}
+async function deleteMovementFromAPI(id) {
+  try { await api('/api/movements', 'DELETE', { id }); }
+  catch(e) { showError('Failed to delete movement: ' + e.message); }
+}
+async function deleteAllMovementsFromAPI() {
+  try { await api('/api/movements', 'DELETE', { deleteAll: true }); }
+  catch(e) { showError('Failed to clear movements: ' + e.message); }
+}
+async function addShipmentToAPI(s) {
+  try { await api('/api/shipments', 'POST', s); }
+  catch(e) { showError('Failed to add shipment: ' + e.message); }
+}
+async function updateShipmentInAPI(s) {
+  try { await api('/api/shipments', 'PUT', s); }
+  catch(e) { showError('Failed to update shipment: ' + e.message); }
+}
+async function deleteShipmentFromAPI(id) {
+  try { await api('/api/shipments', 'DELETE', { id }); }
+  catch(e) { showError('Failed to delete shipment: ' + e.message); }
 }
 
 function getCage(id) { return STATE.cages.find(c=>c.id===id); }
@@ -957,7 +1660,7 @@ function renderCages() {
   `;
 }
 
-function addCage() {
+async function addCage() {
   const name = document.getElementById('cf-name').value.trim();
   const h = parseFloat(document.getElementById('cf-h').value);
   const w = parseFloat(document.getElementById('cf-w').value);
@@ -965,11 +1668,11 @@ function addCage() {
   const wt = parseFloat(document.getElementById('cf-wt').value);
   const notes = document.getElementById('cf-notes').value.trim();
   if (!name||isNaN(h)||isNaN(w)||isNaN(l)||isNaN(wt)) return alert('Please fill all required fields.');
-  const newCage = {id:uid(),name,height:h,width:w,length:l,weight:wt,notes,departureDate:null,location:'facility',locationDetail:'',createdAt:new Date().toISOString()};
-  STATE.cages.push(newCage);
+  const cage = {id:uid(),name,height:h,width:w,length:l,weight:wt,notes,departureDate:null,location:'facility',locationDetail:'',createdAt:new Date().toISOString()};
+  STATE.cages.push(cage);
   cageFormOpen = false;
-  apiPost('/api/cages', newCage);
   render();
+  await addCageToAPI(cage);
 }
 function toggleCageSelect(id, checked) {
   if (checked) cageSelected.add(id);
@@ -984,10 +1687,11 @@ function toggleAllCages(checked, ids) {
   render();
 }
 
-function deleteSelectedCages() {
+async function deleteSelectedCages() {
   if (cageSelected.size === 0) return;
   if (!confirm(`Delete ${cageSelected.size} selected cage${cageSelected.size>1?'s':''}? This cannot be undone.`)) return;
-  cageSelected.forEach(id => {
+  const ids = [...cageSelected];
+  ids.forEach(id => {
     STATE.cages = STATE.cages.filter(c => c.id !== id);
     STATE.frames.forEach(f => { f.cages = f.cages.filter(cid => cid !== id); });
     STATE.rmdSlots.forEach(r => {
@@ -996,13 +1700,14 @@ function deleteSelectedCages() {
         if (r[s].cage2 === id) r[s].cage2 = null;
       });
     });
-    apiDelete('/api/cages', {id});
   });
-  // Sync frames and RMD after bulk delete
-  STATE.frames.forEach(f => apiPut('/api/frames', f));
-  apiPut('/api/rmd', STATE.rmdSlots);
   cageSelected.clear();
   render();
+  await Promise.all(ids.map(id => deleteCageFromAPI(id)));
+  // Sync affected frames and RMD
+  const affectedFrames = STATE.frames.filter(f => ids.some(id => f.cages.includes(id)));
+  await Promise.all(affectedFrames.map(f => saveFrame(f)));
+  await saveRMD();
 }
 
 function startInlineEdit(cageId, field, spanEl) {
@@ -1026,8 +1731,8 @@ function startInlineEdit(cageId, field, spanEl) {
     if (isNumber) { const n = parseFloat(raw); if (!isNaN(n)) c[field] = n; }
     else if (isDate) { c[field] = raw || null; }
     else { if (raw) c[field] = raw; }
-    apiPut('/api/cages', c);
     render();
+    saveCage(c);
   };
   input.addEventListener('blur', save);
   input.addEventListener('keydown', e => {
@@ -1056,11 +1761,11 @@ function saveCageEdit(id) {
   c.departureDate = dep || null;
   c.proposedShipDay = ship || null;
   cageEditing = null;
-  apiPut('/api/cages', c);
   render();
+  saveCage(c);
 }
 
-function deleteCage(id) {
+async function deleteCage(id) {
   if (!confirm('Delete this cage? It will be removed from any frame or RMD slot.')) return;
   STATE.cages = STATE.cages.filter(c=>c.id!==id);
   STATE.frames.forEach(f=>{ f.cages = f.cages.filter(cid=>cid!==id); });
@@ -1070,10 +1775,12 @@ function deleteCage(id) {
       if(r[s].cage2===id) r[s].cage2=null;
     });
   });
-  apiDelete('/api/cages', {id});
-  STATE.frames.forEach(f => apiPut('/api/frames', f));
-  apiPut('/api/rmd', STATE.rmdSlots);
   render();
+  await deleteCageFromAPI(id);
+  await saveRMD();
+  const affectedFrames = STATE.frames.filter(f => !f.cages.includes(id)); // already removed above
+  // Save all frames to sync cage lists
+  await Promise.all(STATE.frames.map(f => saveFrame(f)));
 }
 
 // Remove a cage from whatever frame/RMD it's currently in
@@ -1129,7 +1836,7 @@ function changeCageLocation(cid, target) {
         if (!confirm(`Height pairing ${hCat(cage.height)} + ${hCat(other.height)} not standard. Override?`)) {
           // Re-add to old location — just set facility as fallback
           cage.location = 'facility'; cage.locationDetail = '';
-          apiPut('/api/cages', cage); render(); return;
+          render(); saveCage(cage); return;
         }
         r[side].overridden = true;
       }
@@ -1140,13 +1847,12 @@ function changeCageLocation(cid, target) {
     cage.departureDate = null; // in RMD — no longer "leaving facility"
   }
 
-  apiPut('/api/cages', cage);
-  STATE.frames.forEach(f => apiPut('/api/frames', f));
-  apiPut('/api/rmd', STATE.rmdSlots);
   render();
-}
-
-function handleExcelImport(input) {
+  await saveCage(cage);
+  await saveRMD();
+  const affectedFrame = STATE.frames.find(f => f.cages.includes(cage.id));
+  if (affectedFrame) await saveFrame(affectedFrame);
+}(input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
@@ -1244,9 +1950,12 @@ function handleExcelImport(input) {
       if (colWeight === -1) msg += `\n⚠ Weight column not found`;
       alert(msg);
 
-      // Save all cages to D1 (send each new one)
-      STATE.cages.forEach(c => apiPost('/api/cages', c).catch(()=>{}));
       render();
+      // Batch-insert new cages via API
+      const newCages = STATE.cages.slice(-imported);
+      for (const cage of newCages) {
+        await addCageToAPI(cage);
+      }
     } catch(err) {
       alert('Error reading Excel file: ' + err.message);
       console.error(err);
@@ -1330,8 +2039,8 @@ function renderFrames() {
   `;
 }
 
-function updateFrameWidth(fid,w) { const f=getFrame(fid); f.width=parseFloat(w); apiPut('/api/frames', f); render(); }
-function updateFrameLoc(fid,loc) {
+function updateFrameWidth(fid,w) { const f=getFrame(fid); f.width=parseFloat(w); render(); saveFrame(f); }
+async function updateFrameLoc(fid,loc) {
   const f=getFrame(fid);
   f.location=loc;
   if(loc!=='facility') f.fixedForShipping=false;
@@ -1339,12 +2048,13 @@ function updateFrameLoc(fid,loc) {
     f.cages.forEach(cid=>{
       const c=getCage(cid);
       if(c) { c.location = loc==='boat'||loc==='client' ? 'shipped' : 'facility'; c.locationDetail = loc==='boat'?'In transit':loc==='client'?'With client':''; if (loc!=='facility') c.departureDate = null; }
-      if(c) apiPut('/api/cages', c);
     });
   }
-  apiPut('/api/frames', f); render();
+  render();
+  await saveFrame(f);
+  await Promise.all(f.cages.map(cid => { const c=getCage(cid); return c ? saveCage(c) : Promise.resolve(); }));
 }
-function assignCageToFrame(fid,cid) {
+async function assignCageToFrame(fid,cid) {
   if(!cid) return;
   const f=getFrame(fid), c=getCage(cid);
   if(f.cages.length>=2) return alert('Frame already has max cages.');
@@ -1354,19 +2064,25 @@ function assignCageToFrame(fid,cid) {
   }
   f.cages.push(cid);
   c.location='frame'; c.locationDetail=f.name;
+  // Remove from any RMD slot
   STATE.rmdSlots.forEach(r=>{ SIDES.forEach(s=>{ if(r[s].cage1===cid) r[s].cage1=null; if(r[s].cage2===cid) r[s].cage2=null; }); });
-  apiPut('/api/frames', f); apiPut('/api/cages', c); apiPut('/api/rmd', STATE.rmdSlots); render();
+  render();
+  await saveFrame(f);
+  await saveCage(c);
+  await saveRMD();
 }
-function removeCageFromFrame(fid,cid) {
+async function removeCageFromFrame(fid,cid) {
   const f=getFrame(fid), c=getCage(cid);
   f.cages=f.cages.filter(id=>id!==cid); f.fixedForShipping=false;
   if(c) { c.location='facility'; c.locationDetail=''; }
-  apiPut('/api/frames', f); if(c) apiPut('/api/cages', c); render();
+  render();
+  await saveFrame(f);
+  if(c) await saveCage(c);
 }
 function toggleWaler(fid) {
   const f=getFrame(fid);
   f.hasWaler = !f.hasWaler;
-  apiPut('/api/frames', f); render();
+  render(); saveFrame(f);
 }
 function toggleShipping(fid) {
   const f=getFrame(fid);
@@ -1378,7 +2094,7 @@ function toggleShipping(fid) {
     }
   }
   f.fixedForShipping = !f.fixedForShipping;
-  apiPut('/api/frames', f); render();
+  render(); saveFrame(f);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1467,7 +2183,7 @@ function renderRMD() {
   `;
 }
 
-function assignToRMD(idx,side,slot,cid) {
+async function assignToRMD(idx,side,slot,cid) {
   if(!cid) return;
   const r = STATE.rmdSlots[idx];
   const otherSlot = slot==='cage1'?'cage2':'cage1';
@@ -1483,15 +2199,19 @@ function assignToRMD(idx,side,slot,cid) {
   r[side][slot] = cid;
   cage.location = 'rmd';
   cage.locationDetail = `${r.number}${side}`;
-  apiPut('/api/rmd', STATE.rmdSlots); apiPut('/api/cages', cage); render();
+  render();
+  await saveCage(cage);
+  await saveRMD();
 }
-function removeFromRMD(idx,side,slot) {
+async function removeFromRMD(idx,side,slot) {
   const cid = STATE.rmdSlots[idx][side][slot];
   if(!cid) return;
   STATE.rmdSlots[idx][side][slot] = null;
   const c = getCage(cid);
-  if(c) { c.location='facility'; c.locationDetail=''; apiPut('/api/cages', c); }
-  apiPut('/api/rmd', STATE.rmdSlots); render();
+  if(c) { c.location='facility'; c.locationDetail=''; }
+  render();
+  if(c) await saveCage(c);
+  await saveRMD();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1841,13 +2561,14 @@ function addMovement() {
   const desc = parts.join(' → ') || notes || 'Movement';
   const typeLabel = MOVE_TYPES.find(t=>t.value===type)?.label || type;
 
-  STATE.plannedMovements.push({
+  const move = {
     id:uid(), type:typeLabel, typeKey:type, cageId, frameId:resolvedFrameId, rmdSlot,
     date, shift, notes, completed:false, description:desc, createdAt:new Date().toISOString()
-  });
+  };
+  STATE.plannedMovements.push(move);
   planFormOpen = false;
-  apiPost('/api/movements', STATE.plannedMovements[STATE.plannedMovements.length-1]);
   render();
+  await addMovementToAPI(move);
 }
 function completeMove(id) {
   const m = STATE.plannedMovements.find(x=>x.id===id);
@@ -1929,11 +2650,11 @@ function completeMove(id) {
 
   m.completed = true;
   m.completedAt = new Date().toISOString();
-  apiPut('/api/movements', m);
-  if (cage) apiPut('/api/cages', cage);
-  if (frame) apiPut('/api/frames', frame);
-  apiPut('/api/rmd', STATE.rmdSlots);
   render();
+  await updateMovementInAPI(m);
+  if (cage) await saveCage(cage);
+  if (frame) await saveFrame(frame);
+  await saveRMD();
 }
 function autoplanDepartures() {
   // Find all cages in 'facility' that have a departureDate set
@@ -2103,26 +2824,25 @@ function autoplanDepartures() {
   if (skipped > 0) msg += ` ${skipped} cage${skipped !== 1 ? 's' : ''} already had planned movements (skipped).`;
   if (warnings.length > 0) msg += '\n\n' + warnings.join('\n');
 
-  newMovements.forEach(m => apiPost('/api/movements', m));
   render();
   alert(msg);
+  await Promise.all(newMovements.map(m => addMovementToAPI(m)));
 }
 
-function blankCanvasPlanner() {
+async function blankCanvasPlanner() {
   const count = STATE.plannedMovements.length;
   if (count === 0) return alert('No planned movements to clear.');
   if (!confirm(`Clear all ${count} planned movement${count!==1?'s':''}? This cannot be undone.`)) return;
   STATE.plannedMovements = [];
   planWeekStart = (() => { const d=new Date(); d.setDate(d.getDate()-d.getDay()+1); return toISO(d); })();
-  // Delete all movements one by one
-  fetch(WORKER_URL + '/api/movements', {method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({deleteAll: true})});
   render();
+  await deleteAllMovementsFromAPI();
 }
 
-function deleteMove(id) {
+async function deleteMove(id) {
   STATE.plannedMovements = STATE.plannedMovements.filter(m=>m.id!==id);
-  apiDelete('/api/movements', {id});
   render();
+  await deleteMovementFromAPI(id);
 }
 function shiftWeek(dir) {
   const d = new Date(planWeekStart+'T12:00:00');
@@ -2213,60 +2933,73 @@ function toggleShipSelect(fid) {
   else shipSelected.push(fid);
   render();
 }
-function createShipment() {
+async function createShipment() {
   if(shipSelected.length===0) return alert('Select frames to ship.');
   const date = document.getElementById('sf-date').value;
   const notes = document.getElementById('sf-notes').value.trim();
-  const newShipment = {id:uid(), date, notes, frameIds:[...shipSelected], status:'in-transit', createdAt:new Date().toISOString()};
-  STATE.shipments.push(newShipment);
+  const shipment = {id:uid(), date, notes, frameIds:[...shipSelected], status:'in-transit', createdAt:new Date().toISOString()};
+  STATE.shipments.push(shipment);
+  const updatedFrames = [];
+  const updatedCages = [];
   shipSelected.forEach(fid=>{
     const f=getFrame(fid);
     f.location='boat';
-    f.cages.forEach(cid=>{ const c=getCage(cid); if(c){c.location='shipped';c.locationDetail='In transit'; apiPut('/api/cages', c);} });
-    apiPut('/api/frames', f);
+    updatedFrames.push(f);
+    f.cages.forEach(cid=>{ const c=getCage(cid); if(c){c.location='shipped';c.locationDetail='In transit'; updatedCages.push(c);} });
   });
-  apiPost('/api/shipments', newShipment);
   shipFormOpen=false; shipSelected=[];
   render();
+  await addShipmentToAPI(shipment);
+  await Promise.all(updatedFrames.map(f => saveFrame(f)));
+  await Promise.all(updatedCages.map(c => saveCage(c)));
 }
-function markDelivered(sid) {
+async function markDelivered(sid) {
   const sh = STATE.shipments.find(s=>s.id===sid);
   sh.status = 'delivered';
-  sh.frameIds.forEach(fid=>{ const f=getFrame(fid); if(f) { f.location='client'; apiPut('/api/frames', f); } });
-  apiPut('/api/shipments', sh); render();
+  const updatedFrames = [];
+  sh.frameIds.forEach(fid=>{ const f=getFrame(fid); if(f) { f.location='client'; updatedFrames.push(f); } });
+  render();
+  await updateShipmentInAPI(sh);
+  await Promise.all(updatedFrames.map(f => saveFrame(f)));
 }
-function clearShipmentHistory() {
+async function clearShipmentHistory() {
   const count = STATE.shipments.length;
   if (count === 0) return;
   if (!confirm(`Clear all ${count} shipment record${count!==1?'s':''}? This cannot be undone.`)) return;
-  STATE.shipments.forEach(s => apiDelete('/api/shipments', {id: s.id}));
+  const ids = STATE.shipments.map(s=>s.id);
   STATE.shipments = [];
   render();
+  await Promise.all(ids.map(id => deleteShipmentFromAPI(id)));
 }
 
-function returnFrames(sid) {
+async function returnFrames(sid) {
   const sh = STATE.shipments.find(s=>s.id===sid);
   sh.status = 'frames-returned';
+  const updatedFrames = [];
   sh.frameIds.forEach(fid=>{
     const f=getFrame(fid);
-    if(f){ f.location='facility'; f.cages=[]; f.fixedForShipping=false; f.hasWaler=false; apiPut('/api/frames', f); }
+    if(f){ f.location='facility'; f.cages=[]; f.fixedForShipping=false; f.hasWaler=false; updatedFrames.push(f); }
   });
-  apiPut('/api/shipments', sh); render();
+  render();
+  await updateShipmentInAPI(sh);
+  await Promise.all(updatedFrames.map(f => saveFrame(f)));
 }
 
-function returnFromClient(fid) {
+async function returnFromClient(fid) {
   const f = getFrame(fid);
   if (!f) return;
-  // Release cages back to facility
+  const updatedCages = [];
   f.cages.forEach(cid => {
     const c = getCage(cid);
-    if (c) { c.location = 'facility'; c.locationDetail = ''; c.departureDate = null; }
+    if (c) { c.location = 'facility'; c.locationDetail = ''; c.departureDate = null; updatedCages.push(c); }
   });
   f.cages = [];
   f.fixedForShipping = false;
   f.hasWaler = false;
   f.location = 'boat';
-  apiPut('/api/frames', f); render();
+  render();
+  await saveFrame(f);
+  await Promise.all(updatedCages.map(c => saveCage(c)));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2378,13 +3111,14 @@ function renderOverview() {
   `;
 }
 
-function clearReportMovements() {
+async function clearReportMovements() {
   const inRange = STATE.plannedMovements.filter(m => m.date >= reportFrom && m.date <= reportTo);
   if (inRange.length === 0) return alert('No movements in the selected date range.');
   if (!confirm(`Clear ${inRange.length} movement${inRange.length!==1?'s':''} between ${fmt(reportFrom)} and ${fmt(reportTo)}? This cannot be undone.`)) return;
-  inRange.forEach(m => apiDelete('/api/movements', {id: m.id}));
+  const ids = inRange.map(m=>m.id);
   STATE.plannedMovements = STATE.plannedMovements.filter(m => !(m.date >= reportFrom && m.date <= reportTo));
   render();
+  await Promise.all(ids.map(id => deleteMovementFromAPI(id)));
 }
 
 function renderReport() {
@@ -2779,9 +3513,10 @@ function commitBoatPlan() {
   const {scheduledSteps} = bpGeneratedMovements;
   let added = 0;
 
+  const newMovements = [];
   scheduledSteps.forEach(step => {
     if (step.isFacilityExit) {
-      STATE.plannedMovements.push({
+      newMovements.push({
         id: uid(), date: step.date, type: 'Facility Exit',
         description: step.note,
         shift: 'day', notes: `Boat plan — load date: ${fmt(bpBoatDate)}`,
@@ -2789,13 +3524,13 @@ function commitBoatPlan() {
         completed: false,
       });
     } else if (step.isFixStep) {
-      STATE.plannedMovements.push({
+      newMovements.push({
         id: uid(), date: step.date, type: 'Shipping',
         description: step.note,
         shift: 'day', notes: `Boat plan — load date: ${fmt(bpBoatDate)}`, completed: false
       });
     } else {
-      STATE.plannedMovements.push({
+      newMovements.push({
         id: uid(), date: step.date, type: step.action === 'rmd_to_frame' ? 'RMD → Frame' : 'Facility → Frame',
         description: step.note + (needsWaler(step.cage) ? ' [waler req.]' : ''),
         shift: 'day',
@@ -2806,14 +3541,15 @@ function commitBoatPlan() {
     }
     added++;
   });
+  STATE.plannedMovements.push(...newMovements);
 
   // Count unique days
   const days = new Set(scheduledSteps.map(s=>s.date));
   alert(`${added} movements added across ${days.size} working day${days.size!==1?'s':''} leading up to ${fmt(bpBoatDate)}!`);
   bpSelectedCages.clear();
   bpGeneratedMovements = null;
-  STATE.plannedMovements.slice(-added).forEach(m => apiPost('/api/movements', m));
   render();
+  await Promise.all(newMovements.map(m => addMovementToAPI(m)));
 }
 
 function renderBoatPlanner() {
@@ -2972,5 +3708,6 @@ function renderBoatPlanner() {
   render();
 })();
 </script>
-</body>
-</html>
+
+
+</body></html>
