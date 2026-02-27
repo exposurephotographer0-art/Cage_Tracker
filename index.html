@@ -170,7 +170,7 @@ tr:hover td { background: #f8f9fb; }
 .rmd-site-row.row-top { justify-content: flex-start; }
 .rmd-site-row.row-mid { justify-content: flex-start; padding-left: 0; }
 .rmd-site-row.row-bot { justify-content: flex-start; }
-.rmd-site-card { min-width: 180px; flex: 0 0 auto; }
+.rmd-site-card { min-width: 380px; flex: 0 0 auto; }
 .rmd-site-card .card { margin-bottom: 0; padding: 12px; }
 
 /* Mini spatial for dashboard */
@@ -1730,21 +1730,20 @@ function renderRMD() {
           const outA = getSideGroupLength(r2.A,'cage2','cage4');
           const insB = getSideGroupLength(r2.B,'cage1','cage3');
           const outB = getSideGroupLength(r2.B,'cage2','cage4');
-          const sideAhtml = '<div style="margin-bottom:4px"><div style="font:700 10px var(--font-mono);color:var(--text-muted);margin-bottom:4px">SIDE A</div>'
-            + '<div style="font:600 8px var(--font-mono);color:var(--blue)">INSIDE ('+insA.toFixed(1)+'m)</div>'
-            + renderCompact('A','cage1','IN1',['cage1','cage3'])
-            + renderCompact('A','cage3','IN2',['cage1','cage3'])
-            + '<div style="font:600 8px var(--font-mono);color:var(--green);margin-top:3px">OUTSIDE ('+outA.toFixed(1)+'m)</div>'
-            + renderCompact('A','cage2','OUT1',['cage2','cage4'])
-            + renderCompact('A','cage4','OUT2',['cage2','cage4'])
+          function pairRow(s1, s2) {
+            return '<div style="display:flex;gap:6px;margin-bottom:4px"><div style="flex:1;min-width:0">'+s1+'</div><div style="flex:1;min-width:0">'+s2+'</div></div>';
+          }
+          const sideAhtml = '<div style="margin-bottom:8px"><div style="font:700 10px var(--font-mono);color:var(--text-muted);margin-bottom:4px">SIDE A</div>'
+            + '<div style="font:600 8px var(--font-mono);color:var(--blue);margin-bottom:3px">INSIDE ('+insA.toFixed(1)+'m)</div>'
+            + pairRow(renderCompact('A','cage1','IN1',['cage1','cage3']), renderCompact('A','cage3','IN2',['cage1','cage3']))
+            + '<div style="font:600 8px var(--font-mono);color:var(--green);margin-bottom:3px">OUTSIDE ('+outA.toFixed(1)+'m)</div>'
+            + pairRow(renderCompact('A','cage2','OUT1',['cage2','cage4']), renderCompact('A','cage4','OUT2',['cage2','cage4']))
             + '</div>';
           const sideBhtml = '<div><div style="font:700 10px var(--font-mono);color:var(--text-muted);margin-bottom:4px">SIDE B</div>'
-            + '<div style="font:600 8px var(--font-mono);color:var(--blue)">INSIDE ('+insB.toFixed(1)+'m)</div>'
-            + renderCompact('B','cage1','IN1',['cage1','cage3'])
-            + renderCompact('B','cage3','IN2',['cage1','cage3'])
-            + '<div style="font:600 8px var(--font-mono);color:var(--green);margin-top:3px">OUTSIDE ('+outB.toFixed(1)+'m)</div>'
-            + renderCompact('B','cage2','OUT1',['cage2','cage4'])
-            + renderCompact('B','cage4','OUT2',['cage2','cage4'])
+            + '<div style="font:600 8px var(--font-mono);color:var(--blue);margin-bottom:3px">INSIDE ('+insB.toFixed(1)+'m)</div>'
+            + pairRow(renderCompact('B','cage1','IN1',['cage1','cage3']), renderCompact('B','cage3','IN2',['cage1','cage3']))
+            + '<div style="font:600 8px var(--font-mono);color:var(--green);margin-bottom:3px">OUTSIDE ('+outB.toFixed(1)+'m)</div>'
+            + pairRow(renderCompact('B','cage2','OUT1',['cage2','cage4']), renderCompact('B','cage4','OUT2',['cage2','cage4']))
             + '</div>';
 
           return '<div class="rmd-site-card"><div class="card"><div class="flex-between" style="margin-bottom:8px"><span style="font:700 16px var(--font-mono);color:var(--accent)">RMD-'+r2.number+'</span><span style="font-size:11px;color:var(--text-muted)">'+cnt2+'/8</span></div>'+sideAhtml+sideBhtml+(r2.A.overridden||r2.B.overridden?'<span class="badge badge-yellow">⚠ Override</span>':'')+'</div></div>';
