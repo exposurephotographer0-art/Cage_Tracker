@@ -185,7 +185,7 @@ tr:hover td { background: #f8f9fb; }
   border-radius: 6px; padding: 6px 10px; border: 1px solid var(--border); margin-bottom: 0;
   min-width: 0;
 }
-.rmd-slot-label { font: 600 10px var(--font-mono); color: var(--text-muted); width: 52px; flex-shrink:0; }
+.rmd-slot-label { font: 600 10px var(--font-mono); color: var(--text-muted); width: 34px; flex-shrink:0; }
 .rmd-slot-content { flex: 1; display: flex; justify-content: space-between; align-items: center; }
 .rmd-slot select { font-size: 11px; padding: 4px 8px; }
 .rmd-cage-info { font-size: 12px; }
@@ -1676,14 +1676,14 @@ function renderRMD() {
       return `<div style="margin-bottom:10px">
         <div style="font:700 10px var(--font-mono);color:var(--text-muted);margin-bottom:5px">SIDE ${side}</div>
         <div style="font:600 9px var(--font-mono);color:var(--blue);margin-bottom:3px;padding:2px 4px;background:rgba(37,99,176,0.06);border-radius:3px">INSIDE ${iBar}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
-          ${renderSlotEl(idx,r,side,'cage1','INSIDE 1',['cage1','cage3'])}
-          ${renderSlotEl(idx,r,side,'cage3','INSIDE 2',['cage1','cage3'])}
+        <div style="display:flex;gap:6px;margin-bottom:6px">
+          <div style="flex:1;min-width:0">${renderSlotEl(idx,r,side,'cage1','IN 1',['cage1','cage3'])}</div>
+          <div style="flex:1;min-width:0">${renderSlotEl(idx,r,side,'cage3','IN 2',['cage1','cage3'])}</div>
         </div>
         <div style="font:600 9px var(--font-mono);color:var(--green);margin-bottom:3px;padding:2px 4px;background:rgba(26,138,74,0.06);border-radius:3px">OUTSIDE ${oBar}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-          ${renderSlotEl(idx,r,side,'cage2','OUTSIDE 1',['cage2','cage4'])}
-          ${renderSlotEl(idx,r,side,'cage4','OUTSIDE 2',['cage2','cage4'])}
+        <div style="display:flex;gap:6px">
+          <div style="flex:1;min-width:0">${renderSlotEl(idx,r,side,'cage2','OUT 1',['cage2','cage4'])}</div>
+          <div style="flex:1;min-width:0">${renderSlotEl(idx,r,side,'cage4','OUT 2',['cage2','cage4'])}</div>
         </div>
       </div>`;
     }).join('');
