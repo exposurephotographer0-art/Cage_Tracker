@@ -753,8 +753,16 @@ function renderDashboard() {
       const r = getRMDByNum(item);
       if (!r) return '';
       const cnt = [r.A.cage1,r.A.cage2,r.A.cage3,r.A.cage4,r.B.cage1,r.B.cage2,r.B.cage3,r.B.cage4].filter(Boolean).length;
-      const sideA = renderRMDSlot('A','cage2','A Out',r) + renderRMDSlot('A','cage1','A In',r) + renderRMDSlot('A','cage4','A Out2',r) + renderRMDSlot('A','cage3','A In2',r);
-      const sideB = renderRMDSlot('B','cage1','B In',r) + renderRMDSlot('B','cage2','B Out',r) + renderRMDSlot('B','cage3','B In2',r) + renderRMDSlot('B','cage4','B Out2',r);
+      function renderSidePaired(side) {
+        return `<div style="font:600 9px var(--font-mono);color:var(--blue);margin-bottom:2px">Inside</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px">
+            ${renderRMDSlot(side,'cage1',side+' In 1',r)}${renderRMDSlot(side,'cage3',side+' In 2',r)}
+          </div>
+          <div style="font:600 9px var(--font-mono);color:var(--green);margin-bottom:2px">Outside</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+            ${renderRMDSlot(side,'cage2',side+' Out 1',r)}${renderRMDSlot(side,'cage4',side+' Out 2',r)}
+          </div>`;
+      }
       return `<div class="rmd-site-card" onclick="switchTab('rmd')" style="cursor:pointer">
         <div class="card" style="padding:10px">
           <div class="flex-between" style="margin-bottom:6px">
@@ -762,9 +770,9 @@ function renderDashboard() {
             <span style="font-size:10px;color:var(--text-muted)">${cnt}/8</span>
           </div>
           <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-bottom:3px;text-transform:uppercase">Side A</div>
-          ${sideA}
-          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:6px;margin-bottom:3px;text-transform:uppercase">Side B</div>
-          ${sideB}
+          ${renderSidePaired('A')}
+          <div style="font:600 9px var(--font-mono);color:var(--text-muted);margin-top:8px;margin-bottom:3px;text-transform:uppercase">Side B</div>
+          ${renderSidePaired('B')}
         </div>
       </div>`;
     }).join('');
@@ -1667,11 +1675,15 @@ function renderRMD() {
       return `<div style="margin-bottom:10px">
         <div style="font:700 10px var(--font-mono);color:var(--text-muted);margin-bottom:5px">SIDE ${side}</div>
         <div style="font:600 9px var(--font-mono);color:var(--blue);margin-bottom:3px;padding:2px 4px;background:rgba(37,99,176,0.06);border-radius:3px">INSIDE ${iBar}</div>
-        ${renderSlotEl(idx,r,side,'cage1','INSIDE 1',['cage1','cage3'])}
-        ${renderSlotEl(idx,r,side,'cage3','INSIDE 2',['cage1','cage3'])}
-        <div style="font:600 9px var(--font-mono);color:var(--green);margin:6px 0 3px;padding:2px 4px;background:rgba(26,138,74,0.06);border-radius:3px">OUTSIDE ${oBar}</div>
-        ${renderSlotEl(idx,r,side,'cage2','OUTSIDE 1',['cage2','cage4'])}
-        ${renderSlotEl(idx,r,side,'cage4','OUTSIDE 2',['cage2','cage4'])}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">
+          ${renderSlotEl(idx,r,side,'cage1','INSIDE 1',['cage1','cage3'])}
+          ${renderSlotEl(idx,r,side,'cage3','INSIDE 2',['cage1','cage3'])}
+        </div>
+        <div style="font:600 9px var(--font-mono);color:var(--green);margin-bottom:3px;padding:2px 4px;background:rgba(26,138,74,0.06);border-radius:3px">OUTSIDE ${oBar}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          ${renderSlotEl(idx,r,side,'cage2','OUTSIDE 1',['cage2','cage4'])}
+          ${renderSlotEl(idx,r,side,'cage4','OUTSIDE 2',['cage2','cage4'])}
+        </div>
       </div>`;
     }).join('');
     return `<div class="card">
@@ -1982,7 +1994,9 @@ function renderPlanner() {
     ? '<tr><td colspan="7" class="empty-msg" style="text-align:center;padding:20px">No movements planned</td></tr>'
     : sorted.map(m=>`
       <tr style="opacity:${m.completed?'0.5':'1'}">
-        <td style="font-family:var(--font-mono)">${fmt(m.date)}</td>
+        <td style="font-family:var(--font-mono)">
+          ${!m.completed ? `<input type="date" value="${m.date}" title="Click to change date" style="border:none;background:transparent;font:600 12px var(--font-mono);color:var(--accent);cursor:pointer;width:130px;padding:2px 4px;border-radius:4px;border:1px solid transparent" onmouseover="this.style.borderColor='var(--border)'" onmouseout="this.style.borderColor='transparent'" onchange="rescheduleMove('${m.id}',this.value)" />` : `<span>${fmt(m.date)}</span>`}
+        </td>
         <td>${m.shift==='night'?'🌙 Night':'☀ Day'}</td>
         <td>${esc(m.type)}</td>
         <td style="font-weight:600;color:var(--text-primary)">${esc(m.description)}</td>
@@ -2432,6 +2446,15 @@ async function blankCanvasPlanner() {
   planWeekStart = (() => { const d=new Date(); d.setDate(d.getDate()-d.getDay()+1); return toISO(d); })();
   render();
   await deleteAllMovementsFromAPI();
+}
+
+async function rescheduleMove(id, newDate) {
+  const m = STATE.plannedMovements.find(m=>m.id===id);
+  if (!m) return;
+  m.date = newDate;
+  await updateMovementInAPI(m);
+  render();
+  showSuccess('Movement rescheduled to ' + fmt(newDate));
 }
 
 async function deleteMove(id) {
@@ -3299,6 +3322,19 @@ function renderBoatPlanner() {
 }
 // ═══════════════════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════════════
+// UK clock
+function updateUKClock() {
+  const now = new Date();
+  const opts = { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
+  const dateOpts = { timeZone: 'Europe/London', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' };
+  const tEl = document.getElementById('hdr-time');
+  const dEl = document.getElementById('hdr-date');
+  if (tEl) tEl.textContent = now.toLocaleTimeString('en-GB', opts);
+  if (dEl) dEl.textContent = now.toLocaleDateString('en-GB', dateOpts).toUpperCase();
+}
+setInterval(updateUKClock, 1000);
+document.addEventListener("DOMContentLoaded", () => updateUKClock());
+
 document.addEventListener("DOMContentLoaded", async function() {
   try {
     await loadState();
@@ -3327,6 +3363,10 @@ document.addEventListener("DOMContentLoaded", async function() {
   <div>
     <div class="header-title">Cage Tracker</div>
     <div class="header-sub">FACILITY MANAGEMENT SYSTEM</div>
+  </div>
+  <div style="margin-left:auto;display:flex;flex-direction:column;align-items:flex-end">
+    <div id="hdr-time" style="font:700 15px var(--font-mono);color:#e8a830;letter-spacing:0.05em"></div>
+    <div id="hdr-date" style="font:500 10px var(--font-mono);color:#8899aa;letter-spacing:0.06em"></div>
   </div>
 </header>
 
