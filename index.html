@@ -1703,13 +1703,13 @@ function renderRMD() {
             if(cage2) {
               const _s = shipmentShadeClass(cage2, _rmdTabShipDays);
               const _b = _s ? shipmentShadeBg(_s)+'border-radius:4px;padding:1px 4px;' : '';
-              return '<div class="rmd-slot" style="'+_b+'"><span class="rmd-slot-label">'+posLabel+'</span><div class="rmd-slot-content"><span class="rmd-cage-info"><span class="rmd-cage-name" style="'+shipmentShadeNameColor(_s)+'">'+esc(cage2.name)+'</span><span class="rmd-cage-detail" style="'+shipmentShadeDetailColor(_s)+'">'+cage2.height+'m·'+cage2.length+'m</span></span><button class="remove-btn" onclick="removeFromRMD('+idx2+',''+side+'',''+slot+'')">&#215;</button></div></div>';
+              return '<div class="rmd-slot" style="'+_b+'"><span class="rmd-slot-label">'+posLabel+'</span><div class="rmd-slot-content"><span class="rmd-cage-info"><span class="rmd-cage-name" style="'+shipmentShadeNameColor(_s)+'">'+esc(cage2.name)+'</span><span class="rmd-cage-detail" style="'+shipmentShadeDetailColor(_s)+'">'+cage2.height+'m·'+cage2.length+'m</span></span><button class="remove-btn" onclick="removeFromRMD('+idx2+',\''+side+'\',\''+slot+'\')">&#215;</button></div></div>';
             } else {
               const used2 = groupSlots.filter(s=>s!==slot).reduce((sum,s)=>{const c2=sObj2[s]?getCage(sObj2[s]):null;return sum+(c2?c2.length||0:0);},0);
               const rem2 = (RMD_MAX_LENGTH-used2).toFixed(1);
               const opts2 = avail.filter(c2=>(c2.length||0)+used2<=RMD_MAX_LENGTH).map(c2=>`<option value="${c2.id}">${esc(c2.name)} (${c2.length}m)</option>`).join('');
               const gs2 = groupSlots.join(',');
-              return '<div class="rmd-slot"><span class="rmd-slot-label">'+posLabel+'</span><select class="rmd-slot" style="flex:1;font-size:11px;padding:4px 8px" onchange="assignToRMD('+idx2+',''+side+'',''+slot+'',this.value,''+gs2+'');this.value=''"><option value="">≤'+rem2+'m</option>'+opts2+'</select></div>';
+              return '<div class="rmd-slot"><span class="rmd-slot-label">'+posLabel+'</span><select class="rmd-slot" style="flex:1;font-size:11px;padding:4px 8px" onchange="assignToRMD('+idx2+',\''+side+'\',\''+slot+'\',this.value,\''+gs2+'\');this.value=\'\'"><option value="">≤'+rem2+'m</option>'+opts2+'</select></div>';
             }
           }
 
