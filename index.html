@@ -182,7 +182,8 @@ tr:hover td { background: #f8f9fb; }
 .planner-rmd-row { display: flex; gap: 4px; flex-wrap: wrap; }
 .rmd-slot {
   display: flex; align-items: center; gap: 8px; background: var(--bg-input);
-  border-radius: 6px; padding: 6px 10px; border: 1px solid var(--border); margin-bottom: 4px;
+  border-radius: 6px; padding: 6px 10px; border: 1px solid var(--border); margin-bottom: 0;
+  min-width: 0;
 }
 .rmd-slot-label { font: 600 10px var(--font-mono); color: var(--text-muted); width: 52px; flex-shrink:0; }
 .rmd-slot-content { flex: 1; display: flex; justify-content: space-between; align-items: center; }
@@ -1657,7 +1658,7 @@ function renderRMD() {
       const gs = groupSlots.join(',');
       return `<div class="rmd-slot">
         <span class="rmd-slot-label">${posLabel}</span>
-        <select class="rmd-slot" style="flex:1;font-size:11px;padding:4px 8px" onchange="assignToRMD(${idx},'${side}','${slot}',this.value,'${gs}');this.value=''">
+        <select style="flex:1;font-size:11px;padding:4px 8px;min-width:0;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary)" onchange="assignToRMD(${idx},'${side}','${slot}',this.value,'${gs}');this.value=''">
           <option value="">— empty (≤${remaining}m) —</option>${opts}
         </select>
       </div>`;
