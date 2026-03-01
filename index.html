@@ -3361,392 +3361,410 @@ function renderBoatPlanner() {
   `;
 }
 // ═══════════════════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════════════════
-// MOVEMENTS MAP TAB — side-by-side RMD | Frames with SVG arrow overlay
+// MOVEMENTS MAP TAB
 // ═══════════════════════════════════════════════════════════════════════════════
 let mvFilter = 'all';
-
-// Called after the tab renders to draw arrows between nodes
-function drawMovementArrows() {
-  const svg = document.getElementById('mv-svg');
-  const root = document.getElementById('mv-root');
-  if (!svg || !root) return;
-
-  // Get element position relative to the mv-root container
-  function elCenter(id) {
-    const el = document.getElementById(id);
-    if (!el) return null;
-    const rootR = root.getBoundingClientRect();
-    const elR   = el.getBoundingClientRect();
-    const ox = elR.left - rootR.left;
-    const oy = elR.top  - rootR.top;
-    return {
-      x: ox + elR.width / 2,
-      y: oy + elR.height / 2,
-      left:   ox,
-      right:  ox + elR.width,
-      top:    oy,
-      bottom: oy + elR.height,
-      w: elR.width,
-      h: elR.height
-    };
-  }
-
-  const W = root.offsetWidth;
-  const H = root.scrollHeight;
-  svg.style.width  = W + 'px';
-  svg.style.height = H + 'px';
-  svg.setAttribute('width', W);
-  svg.setAttribute('height', H);
-  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
-
-  const COLORS = {
-    'rmd-to-frame':       '#27a060',
-    'frame-to-rmd':       '#7040c0',
-    'facility-to-frame':  '#2563b0',
-    'frame-fix-shipping': '#c08520',
-  };
-  const LABELS = {
-    'rmd-to-frame':       'RMD → Frame',
-    'frame-to-rmd':       'Frame → RMD',
-    'facility-to-frame':  'Facility → Frame',
-    'frame-fix-shipping': 'Fix for Shipping',
-  };
-
-  let defs = '<defs>';
-  Object.entries(COLORS).forEach(([k,c]) => {
-    const safe = k.replace(/-/g,'_');
-    defs += `<marker id="arr_${safe}" markerWidth="10" markerHeight="10" refX="8" refY="4" orient="auto" markerUnits="userSpaceOnUse">
-      <path d="M0,0 L0,8 L10,4 z" fill="${c}"/>
-    </marker>`;
-  });
-  defs += '</defs>';
-
-  // Build a lookup: moves array injected by renderMovementsMap
-  const moves = window._mvMoves || [];
-  let paths = '';
-
-  // Track how many arrows leave/enter each node to stagger them
-  const rmdOutCount = {}; const frameInCount = {}; const rmdInCount = {}; const frameOutCount = {};
-
-  moves.forEach(m => {
-    const rk = String(m.rmdSlot);
-    const fk = String(m.frameId);
-    if (m.typeKey === 'rmd-to-frame') {
-      rmdOutCount[rk] = (rmdOutCount[rk]||0)+1;
-      frameInCount[fk] = (frameInCount[fk]||0)+1;
-    } else if (m.typeKey === 'frame-to-rmd') {
-      frameOutCount[fk] = (frameOutCount[fk]||0)+1;
-      rmdInCount[rk] = (rmdInCount[rk]||0)+1;
-    }
-  });
-
-  const rmdOutIdx = {}; const frameInIdx = {}; const rmdInIdx = {}; const frameOutIdx = {};
-
-  moves.forEach((m, idx) => {
-    const color = COLORS[m.typeKey] || '#c08520';
-    const safe  = (m.typeKey||'').replace(/-/g,'_');
-    const markId = 'arr_' + safe;
-    const label = LABELS[m.typeKey] || m.typeKey;
-    const cageName = m.description ? m.description.split(' → ')[0] : '?';
-
-    if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-to-rmd') {
-      const rk = String(m.rmdSlot);
-      const fk  = String(m.frameId);
-      const rmdEl   = elCenter('mv-rmd-' + rk);
-      const frameEl = elCenter('mv-frame-' + fk);
-      if (!rmdEl || !frameEl) return;
-
-      // Stagger exit/entry points vertically within the card
-      let ri, fi;
-      if (m.typeKey === 'rmd-to-frame') {
-        rmdOutIdx[rk] = (rmdOutIdx[rk]||0);
-        frameInIdx[fk] = (frameInIdx[fk]||0);
-        ri = rmdOutIdx[rk]++; fi = frameInIdx[fk]++;
-      } else {
-        frameOutIdx[fk] = (frameOutIdx[fk]||0);
-        rmdInIdx[rk]  = (rmdInIdx[rk]||0);
-        ri = rmdInIdx[rk]++; fi = frameOutIdx[fk]++;
-      }
-
-      const rTot = m.typeKey === 'rmd-to-frame' ? (rmdOutCount[rk]||1) : (rmdInCount[rk]||1);
-      const fTot = m.typeKey === 'rmd-to-frame' ? (frameInCount[fk]||1) : (frameOutCount[fk]||1);
-
-      // Vertical spread within the card height
-      const ry = rmdEl.top + rmdEl.h * (0.25 + 0.5*(ri/(Math.max(rTot-1,1))));
-      const fy = frameEl.top + frameEl.h * (0.25 + 0.5*(fi/(Math.max(fTot-1,1))));
-
-      let x1, y1, x2, y2;
-      if (m.typeKey === 'rmd-to-frame') {
-        // RMD is on left, frame on right — exit from right side of RMD, enter left side of Frame
-        x1 = rmdEl.right; y1 = ry;
-        x2 = frameEl.left; y2 = fy;
-      } else {
-        // Frame → RMD: exit right of frame, enter right of RMD (both on same side) OR
-        // exit left of frame, arrive right of RMD
-        x1 = frameEl.left; y1 = fy;
-        x2 = rmdEl.right;  y2 = ry;
-      }
-
-      // Bezier control points — curve up/down to avoid overlap
-      const dx = Math.abs(x2 - x1);
-      const midX = (x1 + x2) / 2;
-      // For rmd-to-frame: arc upward; for frame-to-rmd: arc downward
-      const arcSign = m.typeKey === 'rmd-to-frame' ? -1 : 1;
-      const arcH = Math.min(120, Math.max(30, dx * 0.35)) * arcSign;
-
-      const cx1 = x1 + dx * 0.4;
-      const cy1 = y1 + arcH;
-      const cx2 = x2 - dx * 0.4;
-      const cy2 = y2 + arcH;
-
-      const numbX = midX;
-      const numbY = (y1 + y2) / 2 + arcH * 0.6;
-
-      const cage = m.description ? m.description : '';
-      paths += `<path d="M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}"
-        fill="none" stroke="${color}" stroke-width="2.5" stroke-opacity="0.9"
-        marker-end="url(#${markId})">
-        <title>${label}: ${cage} — ${m.date||''}</title>
-      </path>`;
-
-      // Circle with number label on the arc midpoint
-      const numIdx = idx + 1;
-      const lx = midX;
-      const ly = (cy1 + cy2) / 2;
-      paths += `<circle cx="${lx}" cy="${ly}" r="10" fill="${color}" opacity="0.9"/>`;
-      paths += `<text x="${lx}" y="${ly+4}" text-anchor="middle" font-size="10" fill="#fff" font-family="monospace" font-weight="700">${numIdx}</text>`;
-      paths += `<text x="${lx}" y="${ly+22}" text-anchor="middle" font-size="9.5" fill="${color}" font-family="monospace" font-weight="700" paint-order="stroke" stroke="#fff" stroke-width="3">${cageName}</text>`;
-
-    } else if (m.typeKey === 'facility-to-frame') {
-      const fk = String(m.frameId);
-      const frameEl = elCenter('mv-frame-' + fk);
-      if (!frameEl) return;
-      // Draw a downward arrow from above the frame
-      const x = frameEl.x;
-      const y2 = frameEl.top + 4;
-      const y1 = Math.max(10, y2 - 44);
-      const numIdx = idx + 1;
-      paths += `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${color}" stroke-width="2.5" stroke-dasharray="6,3" marker-end="url(#${markId})" opacity="0.85"/>`;
-      paths += `<text x="${x}" y="${y1-4}" text-anchor="middle" font-size="9" fill="${color}" font-family="monospace" font-weight="700">FAC</text>`;
-    }
-  });
-
-  svg.innerHTML = defs + paths;
-}
 
 function renderMovementsMap() {
   const pendingMoves = STATE.plannedMovements.filter(m => !m.completed);
 
   if (pendingMoves.length === 0) {
-    window._mvMoves = [];
     return `
       <h2 class="section-title" style="margin-bottom:4px">↔ Movements Map</h2>
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:20px">Visual map of all planned (not yet actioned) cage movements between RMD and frames.</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:20px">Visual map of all planned (not yet actioned) cage movements.</div>
       <div class="card" style="text-align:center;padding:40px">
-        <div style="font-size:28px;margin-bottom:10px">✅</div>
-        <div style="font-weight:600;color:var(--text-primary)">No pending movements</div>
-        <div style="font-size:13px;color:var(--text-muted);margin-top:6px">All planned movements have been completed, or none have been created yet.</div>
+        <div style="font-size:32px;margin-bottom:10px">✅</div>
+        <div style="font-weight:600;font-size:15px">No pending movements</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:6px">All movements completed or none planned yet.</div>
         <button class="btn btn-primary" style="margin-top:14px" onclick="switchTab('planner')">Go to Planner →</button>
       </div>`;
   }
 
   const filtered = mvFilter === 'all' ? pendingMoves : pendingMoves.filter(m => m.typeKey === mvFilter);
-  window._mvMoves = filtered.map(m => ({
-    id: m.id, typeKey: m.typeKey, cageId: m.cageId,
-    rmdSlot: m.rmdSlot, frameId: m.frameId,
-    description: m.description, date: m.date,
-  }));
-
-  // Count by type for filter buttons
   const ct = {};
   pendingMoves.forEach(m => { ct[m.typeKey] = (ct[m.typeKey]||0)+1; });
 
   const filterBtns = [
-    {k:'all', label:`All (${pendingMoves.length})`},
-    {k:'rmd-to-frame', label:`RMD → Frame (${ct['rmd-to-frame']||0})`},
-    {k:'frame-to-rmd', label:`Frame → RMD (${ct['frame-to-rmd']||0})`},
-    {k:'facility-to-frame', label:`Facility → Frame (${ct['facility-to-frame']||0})`},
-  ].map(b => `<button class="filter-btn ${mvFilter===b.k?'active':''}" onclick="mvFilter='${b.k}';render()">${b.label}</button>`).join('');
+    {k:'all',              label:`All (${pendingMoves.length})`},
+    {k:'rmd-to-frame',     label:`RMD → Frame (${ct['rmd-to-frame']||0})`},
+    {k:'frame-to-rmd',     label:`Frame → RMD (${ct['frame-to-rmd']||0})`},
+    {k:'facility-to-frame',label:`Facility → Frame (${ct['facility-to-frame']||0})`},
+    {k:'frame-fix-shipping',label:`Fix Shipping (${ct['frame-fix-shipping']||0})`},
+  ].map(b=>`<button class="filter-btn ${mvFilter===b.k?'active':''}" onclick="mvFilter='${b.k}';render()">${b.label}</button>`).join('');
 
-  // Which RMDs and Frames are in movements?
-  const activeRmds  = new Set(filtered.filter(m=>m.rmdSlot).map(m=>String(m.rmdSlot)));
-  const activeFrames= new Set(filtered.filter(m=>m.frameId).map(m=>m.frameId));
+  const activeRmds   = new Set(filtered.filter(m=>m.rmdSlot).map(m=>String(m.rmdSlot)));
+  const activeFrames = new Set(filtered.filter(m=>m.frameId).map(m=>m.frameId));
 
-  // ── RMD cards ──
+  // ── RMD cards HTML ──
   function buildRmdCard(rmdNum) {
     const r = getRMDByNum(rmdNum);
     if (!r) return '';
     const isActive = activeRmds.has(String(rmdNum));
     const movesForRmd = filtered.filter(m => String(m.rmdSlot) === String(rmdNum));
-
-    // Collect all cage IDs in this RMD
-    const slotKeys = ['cage1','cage2','cage3','cage4'];
     const sides = ['A','B'];
+    const slotKeys = ['cage1','cage2','cage3','cage4'];
     let slotsHTML = '';
     sides.forEach(side => {
       const hasCages = slotKeys.some(sk => r[side][sk]);
       if (!hasCages) return;
-      slotsHTML += `<div style="margin-top:5px"><div style="font:700 8px var(--font-mono);color:var(--text-muted);text-transform:uppercase;margin-bottom:3px">Side ${side}</div>`;
+      slotsHTML += `<div style="font:700 8px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin:5px 0 3px">Side ${side}</div>`;
       slotKeys.forEach(sk => {
         const cid = r[side][sk];
         if (!cid) return;
         const cage = getCage(cid);
         if (!cage) return;
-        const mvOut = movesForRmd.some(m => m.cageId === cid && (m.typeKey==='rmd-to-frame'));
-        const mvIn  = movesForRmd.some(m => m.cageId === cid && m.typeKey==='frame-to-rmd');
-        const bg = mvOut ? 'background:#fff7ed;border-color:#f5a742;' : mvIn ? 'background:#f0faf4;border-color:#4aad72;' : '';
-        slotsHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid var(--border);margin-bottom:2px;display:flex;align-items:center;gap:4px;${bg}">
-          ${mvOut ? '<span style="color:#c08520;font-weight:700;font-size:11px">→</span>' : mvIn ? '<span style="color:#27a060;font-weight:700;font-size:11px">←</span>' : ''}
-          <span style="font:600 10px var(--font-mono)">${esc(cage.name)}</span>
-          <span style="color:var(--text-muted)">${cage.height}m</span>
+        const mvOut = movesForRmd.some(m => m.cageId===cid && m.typeKey==='rmd-to-frame');
+        const mvIn  = movesForRmd.some(m => m.cageId===cid && m.typeKey==='frame-to-rmd');
+        const bg = mvOut ? 'background:#fff7ed;border-color:#f5a742;' : mvIn ? 'background:#f0faf4;border-color:#4aad72;' : 'border-color:var(--border);';
+        const arrow = mvOut ? '<span style="color:#c08520;font-weight:800;margin-right:4px">→</span>'
+                    : mvIn  ? '<span style="color:#27a060;font-weight:800;margin-right:4px">←</span>' : '';
+        slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;background:var(--bg-input);margin-bottom:2px;display:flex;align-items:center;${bg}">
+          ${arrow}<span style="font:600 10px var(--font-mono)">${esc(cage.name)}</span>
+          <span style="color:var(--text-muted);margin-left:5px">${cage.height}m</span>
         </div>`;
       });
-      slotsHTML += '</div>';
     });
 
-    const borderStyle = isActive ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.12);' : 'border:1px solid var(--border);';
-    return `<div id="mv-rmd-${rmdNum}" style="background:var(--bg-card);${borderStyle}border-radius:8px;padding:9px 10px;min-width:140px;flex:0 0 auto;">
-      <div style="font:700 13px var(--font-mono);color:${isActive?'var(--accent)':'var(--text-primary)'};margin-bottom:2px;">RMD-${rmdNum}</div>
-      ${slotsHTML || '<div style="font-size:10px;color:var(--text-muted);font-style:italic">empty</div>'}
+    const border = isActive ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);' : 'border:1px solid var(--border);';
+    return `<div id="mvr-${rmdNum}" style="background:var(--bg-card);${border}border-radius:8px;padding:9px 11px;min-width:145px;flex:0 0 auto;">
+      <div style="font:700 13px var(--font-mono);color:${isActive?'var(--accent)':'var(--text-primary)'};margin-bottom:1px;">RMD-${rmdNum}</div>
+      ${slotsHTML||'<div style="font-size:10px;color:var(--text-muted);font-style:italic;margin-top:4px">empty</div>'}
     </div>`;
   }
 
-  const rmdRowsHTML = RMD_LAYOUT.map(row => {
-    const cards = row.items.map(n => buildRmdCard(n)).join('');
-    return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${cards}</div>`;
-  }).join('');
+  const rmdRowsHTML = RMD_LAYOUT.map(row =>
+    `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">${row.items.map(n=>buildRmdCard(n)).join('')}</div>`
+  ).join('');
 
-  // ── Frame cards — only facility frames, those with movements first ──
-  const facilityFrames = STATE.frames.filter(f => f.location === 'facility');
-  // Sort: active first
-  const sortedFrames = [...facilityFrames].sort((a,b) => {
-    const ai = activeFrames.has(a.id) ? 0 : 1;
-    const bi = activeFrames.has(b.id) ? 0 : 1;
-    return ai - bi;
+  // ── Frame cards HTML ──
+  const facilityFrames = STATE.frames.filter(f=>f.location==='facility');
+  const sortedFrames = [...facilityFrames].sort((a,b)=>{
+    return (activeFrames.has(b.id)?1:0)-(activeFrames.has(a.id)?1:0);
   });
 
   function buildFrameCard(f) {
     const isActive = activeFrames.has(f.id);
-    const movesForFrame = filtered.filter(m => m.frameId === f.id);
+    const movesForFrame = filtered.filter(m=>m.frameId===f.id);
     const fCages = f.cages.map(cid=>getCage(cid)).filter(Boolean);
-    const incomingCageIds = movesForFrame.filter(m=>m.typeKey==='rmd-to-frame'||m.typeKey==='facility-to-frame').map(m=>m.cageId);
-    const outgoingCageIds = movesForFrame.filter(m=>m.typeKey==='frame-to-rmd').map(m=>m.cageId);
-
-    let cagesHTML = '';
-    fCages.forEach(c => {
-      const mvOut = outgoingCageIds.includes(c.id);
-      const bg = mvOut ? 'background:#fff7ed;border-color:#f5a742;' : '';
-      cagesHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid var(--border);margin-bottom:2px;display:flex;align-items:center;gap:4px;${bg}">
-        ${mvOut ? '<span style="color:#c08520;font-weight:700;font-size:11px">→</span>' : ''}
+    const outIds = movesForFrame.filter(m=>m.typeKey==='frame-to-rmd').map(m=>m.cageId);
+    const inIds  = movesForFrame.filter(m=>m.typeKey==='rmd-to-frame'||m.typeKey==='facility-to-frame').map(m=>m.cageId);
+    let html = '';
+    fCages.forEach(c=>{
+      const out = outIds.includes(c.id);
+      html += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid ${out?'#f5a742':'var(--border)'};background:${out?'#fff7ed':'var(--bg-input)'};margin-bottom:2px;display:flex;align-items:center;gap:3px;">
+        ${out?'<span style="color:#c08520;font-weight:800">→</span>':''}
         <span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
         <span style="color:var(--text-muted)">${c.height}m</span>
       </div>`;
     });
-    incomingCageIds.forEach(cid => {
-      const c = getCage(cid);
-      if (!c) return;
-      cagesHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #4aad72;margin-bottom:2px;display:flex;align-items:center;gap:4px;background:#f0faf4;">
-        <span style="color:#27a060;font-weight:700;font-size:11px">←</span>
+    inIds.forEach(cid=>{
+      const c=getCage(cid); if(!c)return;
+      if(fCages.find(x=>x.id===cid))return; // already shown
+      html+=`<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #4aad72;background:#f0faf4;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
+        <span style="color:#27a060;font-weight:800">←</span>
         <span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
         <span style="color:var(--text-muted)">${c.height}m</span>
       </div>`;
     });
-    if (!cagesHTML) cagesHTML = '<div style="font-size:10px;color:var(--text-muted);font-style:italic">empty</div>';
-
-    const borderStyle = isActive ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.12);' : 'border:1px solid var(--border);';
-    return `<div id="mv-frame-${f.id}" style="background:var(--bg-card);${borderStyle}border-radius:8px;padding:9px 10px;min-width:100px;">
+    if(!html) html='<div style="font-size:10px;color:var(--text-muted);font-style:italic">empty</div>';
+    const border = isActive ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);' : 'border:1px solid var(--border);';
+    return `<div id="mvf-${f.id}" style="background:var(--bg-card);${border}border-radius:8px;padding:9px 10px;min-width:100px;">
       <div style="font:700 12px var(--font-mono);color:${isActive?'var(--accent)':'var(--text-primary)'}">${esc(f.name)}</div>
       <div style="font-size:9px;color:var(--text-muted);margin-bottom:4px">${f.width}m${f.hasWaler?' 🔩':''}</div>
-      ${cagesHTML}
+      ${html}
     </div>`;
   }
 
-  const framesHTML = sortedFrames.map(f => buildFrameCard(f)).join('');
+  const framesHTML = sortedFrames.map(f=>buildFrameCard(f)).join('');
 
-  // Numbered movement list
-  const moveListHTML = filtered.map((m,i) => {
-    const colors = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','facility-to-frame':'#2563b0','frame-fix-shipping':'#c08520'};
-    const c = colors[m.typeKey]||'var(--accent)';
+  // ── Movement list sidebar ──
+  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','facility-to-frame':'#2563b0','frame-fix-shipping':'#c08520'};
+  const moveListHTML = filtered.map((m,i)=>{
+    const col = MVCOLS[m.typeKey]||'var(--accent)';
     const cage = getCage(m.cageId);
     const frame = getFrame(m.frameId);
-    const rmdLabel = m.rmdSlot ? 'RMD-'+m.rmdSlot : '—';
-    const frameLabel = frame ? frame.name : '—';
-    const direction = m.typeKey === 'rmd-to-frame' ? `${rmdLabel} → ${frameLabel}` :
-                      m.typeKey === 'frame-to-rmd' ? `${frameLabel} → ${rmdLabel}` :
-                      m.typeKey === 'facility-to-frame' ? `Facility → ${frameLabel}` :
-                      m.description;
-    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border-light)">
-      <div style="width:22px;height:22px;border-radius:50%;background:${c};color:#fff;font:700 11px var(--font-mono);display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+    const dir = m.typeKey==='rmd-to-frame' ? `RMD-${m.rmdSlot} → ${frame?frame.name:'?'}`
+              : m.typeKey==='frame-to-rmd' ? `${frame?frame.name:'?'} → RMD-${m.rmdSlot}`
+              : m.typeKey==='facility-to-frame' ? `Facility → ${frame?frame.name:'?'}`
+              : m.description;
+    return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-light)">
+      <div style="width:22px;height:22px;border-radius:50%;background:${col};color:#fff;font:700 11px var(--font-mono);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${i+1}</div>
       <div style="flex:1;min-width:0">
-        <div style="font:600 12px var(--font-mono);color:var(--text-primary)">${cage?esc(cage.name):'?'}</div>
-        <div style="font-size:11px;color:var(--text-muted)">${direction}</div>
+        <div style="font:700 12px var(--font-mono);color:var(--text-primary)">${cage?esc(cage.name):'?'}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:1px">${dir}</div>
       </div>
       <div style="font-size:10px;color:var(--text-muted);white-space:nowrap">${m.date?fmt(m.date):''}</div>
     </div>`;
   }).join('');
 
-  // Schedule redraw after DOM update
-  setTimeout(function(){ if(typeof drawMovementArrows==='function') drawMovementArrows(); }, 120);
+  // Store moves globally so the draw function can access them after DOM update
+  window._mvMovesData = filtered.map(m=>({
+    id:m.id, typeKey:m.typeKey, cageId:m.cageId,
+    rmdSlot:m.rmdSlot, frameId:m.frameId,
+    description:m.description, date:m.date,
+  }));
+
 
   return `
     <h2 class="section-title" style="margin-bottom:4px">↔ Movements Map</h2>
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Arrows show all planned, not-yet-actioned cage movements between RMD storage and frames.</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Arrows show all planned, not-yet-actioned movements between RMD storage and frames.</div>
 
-    <div class="mv-filter-bar">
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
       ${filterBtns}
-      <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="drawMovementArrows()">↺ Redraw arrows</button>
+      <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="mvRedraw()">↺ Redraw</button>
     </div>
 
-    <div class="mv-legend">
-      <div class="mv-legend-item"><span style="display:inline-block;width:28px;height:3px;background:#27a060;vertical-align:middle;margin-right:4px"></span>RMD → Frame</div>
-      <div class="mv-legend-item"><span style="display:inline-block;width:28px;height:3px;background:#7040c0;vertical-align:middle;margin-right:4px"></span>Frame → RMD</div>
-      <div class="mv-legend-item"><span style="display:inline-block;width:28px;height:3px;background:#2563b0;vertical-align:middle;margin-right:4px;border-top:3px dashed #2563b0"></span>Facility → Frame</div>
-      <div class="mv-legend-item" style="margin-left:auto;color:var(--text-muted)">${filtered.length} movement${filtered.length!==1?'s':''}</div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#27a060;border-radius:2px;display:inline-block"></span>RMD → Frame</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#7040c0;border-radius:2px;display:inline-block"></span>Frame → RMD</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#2563b0;border-radius:2px;display:inline-block;border-top:3px dashed #2563b0"></span>Facility → Frame</span>
+      <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">${filtered.length} movement${filtered.length!==1?'s':''}</span>
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 260px;gap:16px;align-items:start">
 
-      <!-- Main map canvas -->
-      <div id="mv-root" style="position:relative;overflow:hidden;min-height:200px;">
-        <svg id="mv-svg" style="position:absolute;top:0;left:0;pointer-events:none;z-index:5;overflow:visible" width="10" height="10"></svg>
+      <!-- Canvas map -->
+      <div style="position:relative">
+        <div id="mv-content" style="position:relative;z-index:2">
 
-        <!-- RMD zone -->
-        <div style="margin-bottom:20px">
-          <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px;">🗄 RMD Storage</div>
-          ${rmdRowsHTML}
-        </div>
+          <!-- RMD zone -->
+          <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🗄 RMD Storage</div>
+          <div id="mv-rmd-zone">
+            ${rmdRowsHTML}
+          </div>
 
-        <!-- Divider -->
-        <div style="border-top:2px dashed var(--border);margin-bottom:20px;position:relative">
-          <span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--bg-deep);padding:0 10px;font:600 10px var(--font-mono);color:var(--text-muted)">FRAMES AT FACILITY</span>
-        </div>
+          <!-- Divider -->
+          <div style="border-top:2px dashed var(--border);margin:20px 0 16px;position:relative">
+            <span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--bg-deep);padding:0 12px;font:600 10px var(--font-mono);color:var(--text-muted);letter-spacing:.06em">FRAMES AT FACILITY</span>
+          </div>
 
-        <!-- Frames zone -->
-        <div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <!-- Frames zone -->
+          <div id="mv-frame-zone" style="display:flex;gap:6px;flex-wrap:wrap;">
             ${framesHTML}
           </div>
         </div>
+
+        <!-- Canvas overlay -->
+        <canvas id="mv-canvas" style="position:absolute;top:0;left:0;pointer-events:none;z-index:10" width="10" height="10"></canvas>
       </div>
 
-      <!-- Movement list sidebar -->
+      <!-- Sidebar -->
       <div>
-        <div class="card" style="position:sticky;top:20px">
+        <div class="card" style="position:sticky;top:20px;max-height:calc(100vh - 120px);overflow-y:auto">
           <div class="card-title" style="margin-bottom:10px">Planned Movements</div>
-          ${moveListHTML || '<div class="empty-msg">No movements match filter</div>'}
+          ${moveListHTML||'<div class="empty-msg">No movements match filter</div>'}
         </div>
       </div>
-
     </div>
   `;
+  // Schedule canvas draw after DOM settles
+  setTimeout(mvRedraw, 100);
 }
 
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// MOVEMENTS CANVAS DRAW — top-level so it works after innerHTML injection
+// ═══════════════════════════════════════════════════════════════════════════════
+function mvRedraw() {
+  const canvas  = document.getElementById('mv-canvas');
+  const content = document.getElementById('mv-content');
+  if (!canvas || !content) return;
 
-// Redraw arrows when window resizes if movements tab is active
+  const MOVES  = window._mvMovesData || [];
+  const COLORS = {
+    'rmd-to-frame':        '#27a060',
+    'frame-to-rmd':        '#7040c0',
+    'facility-to-frame':   '#2563b0',
+    'frame-fix-shipping':  '#c08520',
+  };
+
+  // Measure element relative to mv-content div
+  function getRect(id) {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const wr = content.getBoundingClientRect();
+    const er = el.getBoundingClientRect();
+    return {
+      left:   er.left   - wr.left,
+      right:  er.right  - wr.left,
+      top:    er.top    - wr.top,
+      bottom: er.bottom - wr.top,
+      cx: er.left - wr.left + er.width  / 2,
+      cy: er.top  - wr.top  + er.height / 2,
+      w: er.width, h: er.height
+    };
+  }
+
+  // Size canvas to exactly cover the content div
+  const cr = content.getBoundingClientRect();
+  canvas.width  = Math.ceil(cr.width);
+  canvas.height = Math.ceil(cr.height);
+  canvas.style.width  = canvas.width  + 'px';
+  canvas.style.height = canvas.height + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!MOVES.length) return;
+
+  // Count arrows per node for stagger
+  const rmdExitTotal={}, frameEntryTotal={}, frameExitTotal={}, rmdEntryTotal={};
+  MOVES.forEach(m => {
+    const rk=String(m.rmdSlot), fk=String(m.frameId);
+    if (m.typeKey==='rmd-to-frame')  { rmdExitTotal[rk]=(rmdExitTotal[rk]||0)+1; frameEntryTotal[fk]=(frameEntryTotal[fk]||0)+1; }
+    if (m.typeKey==='frame-to-rmd')  { frameExitTotal[fk]=(frameExitTotal[fk]||0)+1; rmdEntryTotal[rk]=(rmdEntryTotal[rk]||0)+1; }
+  });
+  const rmdExitIdx={}, frameEntryIdx={}, frameExitIdx={}, rmdEntryIdx={};
+
+  MOVES.forEach((m, idx) => {
+    const color  = COLORS[m.typeKey] || '#c08520';
+    const cage   = getCage(m.cageId);
+    const cLabel = cage ? cage.name : '';
+    const num    = idx + 1;
+
+    if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-to-rmd') {
+      const rk = String(m.rmdSlot);
+      const fk = String(m.frameId);
+      const rRect = getRect('mvr-' + rk);
+      const fRect = getRect('mvf-' + fk);
+      if (!rRect || !fRect) { console.warn('mvRedraw: missing element', 'mvr-'+rk, 'mvf-'+fk); return; }
+
+      let ri, fi, rTot, fTot;
+      if (m.typeKey === 'rmd-to-frame') {
+        ri = (rmdExitIdx[rk]   = (rmdExitIdx[rk]   || 0)); rmdExitIdx[rk]++;
+        fi = (frameEntryIdx[fk]= (frameEntryIdx[fk] || 0)); frameEntryIdx[fk]++;
+        rTot = rmdExitTotal[rk]   || 1;
+        fTot = frameEntryTotal[fk] || 1;
+      } else {
+        ri = (rmdEntryIdx[rk]  = (rmdEntryIdx[rk]  || 0)); rmdEntryIdx[rk]++;
+        fi = (frameExitIdx[fk] = (frameExitIdx[fk]  || 0)); frameExitIdx[fk]++;
+        rTot = rmdEntryTotal[rk]  || 1;
+        fTot = frameExitTotal[fk] || 1;
+      }
+
+      // Spread connection points horizontally within card width
+      const rX = rRect.left + rRect.w * (rTot > 1 ? (0.2 + 0.6 * ri / (rTot - 1)) : 0.5);
+      const fX = fRect.left + fRect.w * (fTot > 1 ? (0.2 + 0.6 * fi / (fTot - 1)) : 0.5);
+
+      // Exit bottom of RMD, enter top of Frame
+      const x1 = rX, y1 = rRect.bottom;
+      const x2 = fX, y2 = fRect.top;
+
+      // S-curve control points
+      const dy = y2 - y1;
+      const dx = x2 - x1;
+      const cp1x = x1 + dx * 0.15;
+      const cp1y = y1 + dy * 0.4;
+      const cp2x = x2 - dx * 0.15;
+      const cp2y = y2 - dy * 0.4;
+
+      // Draw curve
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth   = 2.8;
+      ctx.lineCap     = 'round';
+      ctx.shadowColor = 'rgba(0,0,0,0.15)';
+      ctx.shadowBlur  = 3;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x2, y2);
+      ctx.stroke();
+
+      // Arrowhead
+      const aAngle = Math.atan2(y2 - cp2y, x2 - cp2x);
+      const aLen = 12, aWid = 0.42;
+      ctx.fillStyle = color;
+      ctx.shadowBlur = 0;
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x2 - aLen * Math.cos(aAngle - aWid), y2 - aLen * Math.sin(aAngle - aWid));
+      ctx.lineTo(x2 - aLen * Math.cos(aAngle + aWid), y2 - aLen * Math.sin(aAngle + aWid));
+      ctx.closePath();
+      ctx.fill();
+
+      // Number bubble at bezier midpoint (t=0.5)
+      const t=0.5, mt=0.5;
+      const bx = mt*mt*mt*x1 + 3*mt*mt*t*cp1x + 3*mt*t*t*cp2x + t*t*t*x2;
+      const by = mt*mt*mt*y1 + 3*mt*mt*t*cp1y + 3*mt*t*t*cp2y + t*t*t*y2;
+
+      ctx.shadowBlur = 5;
+      ctx.shadowColor = 'rgba(0,0,0,0.2)';
+      ctx.beginPath();
+      ctx.arc(bx, by, 12, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(num), bx, by);
+
+      // Cage name label
+      if (cLabel) {
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.shadowColor = '#fff';
+        ctx.shadowBlur = 4;
+        ctx.strokeText(cLabel, bx, by + 18);
+        ctx.fillStyle = color;
+        ctx.shadowBlur = 0;
+        ctx.fillText(cLabel, bx, by + 18);
+      }
+      ctx.restore();
+
+    } else if (m.typeKey === 'facility-to-frame' || m.typeKey === 'frame-fix-shipping') {
+      const fk = String(m.frameId);
+      const fRect = getRect('mvf-' + fk);
+      if (!fRect) return;
+      const x = fRect.cx;
+      const y2 = fRect.top;
+      const y1 = Math.max(10, y2 - 52);
+
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle   = color;
+      ctx.lineWidth   = 2.5;
+      ctx.setLineDash([7, 4]);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x, y1);
+      ctx.lineTo(x, y2 - 5);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Arrowhead
+      ctx.beginPath();
+      ctx.moveTo(x, y2 + 1);
+      ctx.lineTo(x - 7, y2 - 11);
+      ctx.lineTo(x + 7, y2 - 11);
+      ctx.closePath();
+      ctx.fill();
+
+      // Label
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3;
+      ctx.strokeText(cLabel || (m.typeKey==='frame-fix-shipping'?'FIX':'FAC'), x, y1 - 2);
+      ctx.fillStyle = color;
+      ctx.fillText(cLabel || (m.typeKey==='frame-fix-shipping'?'FIX':'FAC'), x, y1 - 2);
+      ctx.restore();
+    }
+  });
+}
+
+// Global resize handler for movements tab
 window.addEventListener('resize', function() {
-  if (activeTab === 'movements') setTimeout(drawMovementArrows, 80);
+  if (typeof activeTab !== 'undefined' && activeTab === 'movements') {
+    clearTimeout(window._mvResizeT);
+    window._mvResizeT = setTimeout(mvRedraw, 120);
+  }
 });
 
 function updateUKClock() {
