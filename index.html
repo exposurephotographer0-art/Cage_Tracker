@@ -3417,7 +3417,17 @@ function renderMovementsMap() {
     {k:'frame-fix-shipping',label:`Fix Shipping (${ct['frame-fix-shipping']||0})`},
   ].map(b=>`<button class="filter-btn ${mvFilter===b.k?'active':''}" onclick="mvFilter='${b.k}';render()">${b.label}</button>`).join('');
 
-  const activeRmds   = new Set(filtered.filter(m=>m.rmdSlot).map(m=>String(m.rmdSlot).replace(/[ABab]$/,'')));
+  // Helper: resolve rmdSlot from cage's current RMD location when not stored
+  function resolveRmdSlot(m) {
+    if (m.rmdSlot) return m.rmdSlot;
+    if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-to-rmd') {
+      const cage = getCage(m.cageId);
+      if (cage && cage.location === 'rmd' && cage.locationDetail) return cage.locationDetail;
+    }
+    return '';
+  }
+
+  const activeRmds   = new Set(filtered.map(m=>resolveRmdSlot(m)).filter(Boolean).map(s=>String(s).replace(/[ABab]$/,'')));
 
   // Helper: resolve frameId for a movement (handles old data where frame-to-rmd has no frameId)
   function resolveFrameId(m) {
@@ -3443,7 +3453,7 @@ function renderMovementsMap() {
     const r = getRMDByNum(rmdNum);
     if (!r) return '';
     const isActive = activeRmds.has(String(rmdNum));
-    const movesForRmd = filtered.filter(m => String(m.rmdSlot).replace(/[ABab]$/,'') === String(rmdNum));
+    const movesForRmd = filtered.filter(m => String(resolveRmdSlot(m)).replace(/[ABab]$/,'') === String(rmdNum));
     const sides = ['A','B'];
     const slotKeys = ['cage1','cage2','cage3','cage4'];
     const slotLabels = {cage1:'In 1', cage2:'Out 1', cage3:'In 2', cage4:'Out 2'};
@@ -3524,6 +3534,9 @@ function renderMovementsMap() {
 
   const framesHTML = sortedFrames.map(f=>buildFrameCard(f)).join('');
 
+  // ── Facility movements (for facility box display) ──
+  const facilityMoves = filtered.filter(m => m.typeKey === 'facility-to-frame');
+
   // ── Movement list sidebar ──
   const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','facility-to-frame':'#2563b0','frame-fix-shipping':'#c08520'};
   const moveListHTML = filtered.map((m,i)=>{
@@ -3542,8 +3555,9 @@ function renderMovementsMap() {
         if (pending) frame = getFrame(pending.frameId);
       }
     }
-    const dir = m.typeKey==='rmd-to-frame' ? `RMD-${m.rmdSlot} → ${frame?frame.name:'?'}`
-              : m.typeKey==='frame-to-rmd' ? `${frame?frame.name:'?'} → RMD-${m.rmdSlot}`
+    const resolvedRmdSlot = resolveRmdSlot(m);
+    const dir = m.typeKey==='rmd-to-frame' ? `RMD-${resolvedRmdSlot||'?'} → ${frame?frame.name:'?'}`
+              : m.typeKey==='frame-to-rmd' ? `${frame?frame.name:'?'} → RMD-${resolvedRmdSlot||'?'}`
               : m.typeKey==='facility-to-frame' ? `Facility → ${frame?frame.name:'?'}`
               : m.description;
     return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-light)">
@@ -3560,6 +3574,7 @@ function renderMovementsMap() {
   // Resolve missing frameId for frame-to-rmd movements (older data may lack it)
   window._mvMovesData = filtered.map(m=>{
     let frameId = m.frameId || '';
+    let rmdSlot = m.rmdSlot || '';
     if (!frameId && (m.typeKey === 'frame-to-rmd' || m.typeKey === 'rmd-to-frame')) {
       // Try to find the frame from the cage's current location
       const cage = getCage(m.cageId);
@@ -3575,9 +3590,16 @@ function renderMovementsMap() {
         if (pending) frameId = pending.frameId;
       }
     }
+    // Resolve missing rmdSlot for frame-to-rmd: use cage's current RMD location
+    if (!rmdSlot && (m.typeKey === 'frame-to-rmd' || m.typeKey === 'rmd-to-frame')) {
+      const cage = getCage(m.cageId);
+      if (cage && cage.location === 'rmd' && cage.locationDetail) {
+        rmdSlot = cage.locationDetail; // e.g. "7b" → will be cleaned to "7"
+      }
+    }
     return {
       id:m.id, typeKey:m.typeKey, cageId:m.cageId,
-      rmdSlot:m.rmdSlot, frameId:frameId,
+      rmdSlot:rmdSlot, frameId:frameId,
       description:m.description, date:m.date,
     };
   });
@@ -3606,9 +3628,27 @@ function renderMovementsMap() {
         <div id="mv-content">
 
           <!-- RMD zone -->
-          <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🗄 RMD Storage</div>
-          <div id="mv-rmd-zone">
-            ${rmdRowsHTML}
+          <div style="display:flex;gap:16px;align-items:flex-start">
+            <div style="flex:1">
+              <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🗄 RMD Storage</div>
+              <div id="mv-rmd-zone">
+                ${rmdRowsHTML}
+              </div>
+            </div>
+            <div>
+              <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🏭 Facility</div>
+              <div id="mv-facility-box" style="background:var(--bg-card);border:${facilityMoves.length?'2px solid #2563b0;box-shadow:0 0 0 3px rgba(37,99,176,0.12);':'1px solid var(--border);'}border-radius:8px;padding:12px 16px;min-width:130px;">
+                <div style="font:700 13px var(--font-mono);color:${facilityMoves.length?'#2563b0':'var(--text-muted)'};margin-bottom:8px">Facility</div>
+                ${facilityMoves.length ? facilityMoves.map(m=>{
+                  const c=getCage(m.cageId); if(!c) return '';
+                  return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #93c5fd;background:#eff6ff;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
+                    <span style="color:#2563b0;font-weight:800">→</span>
+                    <span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
+                    <span style="color:var(--text-muted)">${c.height}m</span>
+                  </div>`;
+                }).join('') : '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no movements</div>'}
+              </div>
+            </div>
           </div>
 
           <!-- Divider -->
@@ -3804,41 +3844,90 @@ function mvRedraw() {
       }
 
     } else if (m.typeKey === 'facility-to-frame' || m.typeKey === 'frame-fix-shipping') {
-      const fPos = getPos('mvf-' + String(m.frameId||''));
-      if (!fPos) return;
-      const x = fPos.cx;
-      const y2 = fPos.top;
-      const y1 = y2 - 48;
+      if (m.typeKey === 'facility-to-frame') {
+        // Draw bezier from Facility box to Frame card (similar to rmd-to-frame)
+        const facPos = getPos('mv-facility-box');
+        const fk = String(m.frameId||'');
+        const fPos = getPos('mvf-' + fk);
+        if (!facPos || !fPos) {
+          // Fallback: draw dashed vertical line above the frame
+          const fallbackFPos = fPos || getPos('mvf-' + fk);
+          if (!fallbackFPos) return;
+          const x = fallbackFPos.cx;
+          const y2 = fallbackFPos.top;
+          const y1 = y2 - 48;
+          const line = svgEl('line', { x1: x, y1: y1, x2: x, y2: y2 - 5, stroke: color, 'stroke-width': '2.5', 'stroke-dasharray': '7,4', 'stroke-linecap': 'round' });
+          svg.appendChild(line);
+          const tri = svgEl('polygon', { points: `${x},${y2+1} ${x-7},${y2-11} ${x+7},${y2-11}`, fill: color });
+          svg.appendChild(tri);
+          return;
+        }
 
-      // Dashed line
-      const line = svgEl('line', {
-        x1: x, y1: y1, x2: x, y2: y2 - 5,
-        stroke: color, 'stroke-width': '2.5', 'stroke-dasharray': '7,4', 'stroke-linecap': 'round'
-      });
-      svg.appendChild(line);
+        // FROM Facility box (bottom edge) TO Frame (top edge) — bezier curve
+        const sx = facPos.cx;
+        const sy = facPos.bottom;
+        const ex = fPos.cx;
+        const ey = fPos.top;
+        const gap = Math.abs(ey - sy);
+        const cpOff = Math.max(gap * 0.35, 40);
 
-      // Arrowhead triangle
-      const tri = svgEl('polygon', {
-        points: `${x},${y2+1} ${x-7},${y2-11} ${x+7},${y2-11}`, fill: color
-      });
-      svg.appendChild(tri);
+        const path = svgEl('path', {
+          d: `M${sx},${sy} C${sx},${sy+cpOff} ${ex},${ey-cpOff} ${ex},${ey}`,
+          stroke: color, 'stroke-width': '2.5', fill: 'none',
+          'stroke-linecap': 'round', 'stroke-dasharray': '7,4',
+          'marker-end': `url(#arrow-facility-to-frame)`
+        });
+        svg.appendChild(path);
 
-      // Label
-      const lbl = cLabel || (m.typeKey === 'frame-fix-shipping' ? 'FIX' : 'FAC');
-      const lblBg = svgEl('text', {
-        x: x, y: y1 - 3, fill: '#fff', 'font-size': '9', 'font-weight': 'bold',
-        'font-family': 'monospace', 'text-anchor': 'middle', 'dominant-baseline': 'auto',
-        stroke: '#fff', 'stroke-width': '3', 'paint-order': 'stroke'
-      });
-      lblBg.textContent = lbl;
-      svg.appendChild(lblBg);
-      const lblTxt = svgEl('text', {
-        x: x, y: y1 - 3, fill: color, 'font-size': '9', 'font-weight': 'bold',
-        'font-family': 'monospace', 'text-anchor': 'middle', 'dominant-baseline': 'auto'
-      });
-      lblTxt.textContent = lbl;
-      svg.appendChild(lblTxt);
-    }
+        // Midpoint label
+        const mt = 0.5;
+        const bx = (1-mt)*(1-mt)*(1-mt)*sx + 3*(1-mt)*(1-mt)*mt*sx + 3*(1-mt)*mt*mt*ex + mt*mt*mt*ex;
+        const by = (1-mt)*(1-mt)*(1-mt)*sy + 3*(1-mt)*(1-mt)*mt*(sy+cpOff) + 3*(1-mt)*mt*mt*(ey-cpOff) + mt*mt*mt*ey;
+        if (cLabel) {
+          const lblBg = svgEl('text', { x: bx+14, y: by, fill: '#fff', 'font-size': '9', 'font-weight': 'bold', 'font-family': 'monospace', 'text-anchor': 'middle', stroke: '#fff', 'stroke-width': '3', 'paint-order': 'stroke' });
+          lblBg.textContent = cLabel;
+          svg.appendChild(lblBg);
+          const lblTxt = svgEl('text', { x: bx+14, y: by, fill: color, 'font-size': '9', 'font-weight': 'bold', 'font-family': 'monospace', 'text-anchor': 'middle' });
+          lblTxt.textContent = cLabel;
+          svg.appendChild(lblTxt);
+        }
+      } else {
+        // frame-fix-shipping: keep original dashed vertical line
+        const fPos = getPos('mvf-' + String(m.frameId||''));
+        if (!fPos) return;
+        const x = fPos.cx;
+        const y2 = fPos.top;
+        const y1 = y2 - 48;
+
+        // Dashed line
+        const line = svgEl('line', {
+          x1: x, y1: y1, x2: x, y2: y2 - 5,
+          stroke: color, 'stroke-width': '2.5', 'stroke-dasharray': '7,4', 'stroke-linecap': 'round'
+        });
+        svg.appendChild(line);
+
+        // Arrowhead triangle
+        const tri = svgEl('polygon', {
+          points: `${x},${y2+1} ${x-7},${y2-11} ${x+7},${y2-11}`, fill: color
+        });
+        svg.appendChild(tri);
+
+        // Label
+        const lbl = cLabel || 'FIX';
+        const lblBg = svgEl('text', {
+          x: x, y: y1 - 3, fill: '#fff', 'font-size': '9', 'font-weight': 'bold',
+          'font-family': 'monospace', 'text-anchor': 'middle', 'dominant-baseline': 'auto',
+          stroke: '#fff', 'stroke-width': '3', 'paint-order': 'stroke'
+        });
+        lblBg.textContent = lbl;
+        svg.appendChild(lblBg);
+        const lblTxt = svgEl('text', {
+          x: x, y: y1 - 3, fill: color, 'font-size': '9', 'font-weight': 'bold',
+          'font-family': 'monospace', 'text-anchor': 'middle', 'dominant-baseline': 'auto'
+        });
+        lblTxt.textContent = lbl;
+        svg.appendChild(lblTxt);
+      }
   });
 }
 
