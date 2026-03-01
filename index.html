@@ -1728,14 +1728,27 @@ async function commitExcelImport(cages) {
 // FRAMES
 // ═══════════════════════════════════════════════════════════════════════════════
 let frameFilter = 'all';
+let frameSort = 'number';
 let frameEditing = null;
 
 function renderFrames() {
   const filtered = STATE.frames.filter(f=> frameFilter==='all' || f.location===frameFilter);
+
+  // Apply sort
+  const sortedFiltered = [...filtered].sort((a, b) => {
+    if (frameSort === 'return-date') {
+      // Frames with a returnDate first, sorted ascending; frames without go to end
+      if (a.returnDate && b.returnDate) return a.returnDate.localeCompare(b.returnDate);
+      if (a.returnDate) return -1;
+      if (b.returnDate) return 1;
+    }
+    // Default: sort by number extracted from name, then alphabetically
+    return a.name.localeCompare(b.name, undefined, {numeric: true});
+  });
   const counts = {all:STATE.frames.length, facility:STATE.frames.filter(f=>f.location==='facility').length, boat:STATE.frames.filter(f=>f.location==='boat').length, client:STATE.frames.filter(f=>f.location==='client').length};
   const availCages = STATE.cages.filter(c=>c.location==='facility'||c.location==='rmd').sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
 
-  let cardsHTML = filtered.map(f=>{
+  let cardsHTML = sortedFiltered.map(f=>{
     const fCages = f.cages.map(cid=>getCage(cid)).filter(Boolean);
     const isEditing = frameEditing===f.id;
     const locColors = {facility:'green',boat:'blue',client:'purple'};
@@ -1809,6 +1822,10 @@ function renderFrames() {
       ${['all','facility','boat','client'].map(f=>`
         <button class="filter-btn ${frameFilter===f?'active':''}" onclick="frameFilter='${f}';render()">${f==='all'?'All':f.charAt(0).toUpperCase()+f.slice(1)} (${counts[f]})</button>
       `).join('')}
+      <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
+      <span style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;white-space:nowrap">Sort:</span>
+      <button class="filter-btn ${frameSort==='number'?'active':''}" onclick="frameSort='number';render()" title="Sort by frame number"># Number</button>
+      <button class="filter-btn ${frameSort==='return-date'?'active':''}" onclick="frameSort='return-date';render()" title="Sort by expected return date (frames with client/boat first)">📅 Return Date</button>
     </div>
     <div class="frame-grid">${cardsHTML}</div>
   `;
@@ -4081,27 +4098,33 @@ function renderMovementsMap() {
             </div>
             <div>
               <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🚢 Boat / Client</div>
-              <div id="mv-boat-box" style="background:var(--bg-card);border:${(boatMoves.length||STATE.frames.some(f=>(f.location==='client'||f.location==='boat')&&f.returnDate))?'2px solid #0e7490;box-shadow:0 0 0 3px rgba(14,116,144,0.12);':'1px solid var(--border);'}border-radius:8px;padding:12px 16px;min-width:145px;">
-                <div style="font:700 13px var(--font-mono);color:#0e7490;margin-bottom:8px">Boat / Client</div>
-                ${boatMoves.length ? boatMoves.map(m=>{
-                  const fr=getFrame(m.frameId); if(!fr) return '';
-                  return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #a5f3fc;background:#ecfeff;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
-                    <span style="color:#0e7490;font-weight:800">→</span>
-                    <span style="font:600 10px var(--font-mono)">${esc(fr.name)}</span>
-                    <span style="color:var(--text-muted)">${fr.width}m</span>
-                  </div>`;
-                }).join('') : ''}
-                ${STATE.frames.filter(f=>(f.location==='client'||f.location==='boat')).map(f=>{
-                  const daysLeft = f.returnDate ? Math.ceil((new Date(f.returnDate+'T12:00:00') - new Date()) / 86400000) : null;
-                  const retCol = daysLeft === null ? '#8895a7' : daysLeft < 0 ? 'var(--red)' : daysLeft <= 7 ? 'var(--orange)' : '#0e7490';
-                  const retStr = f.returnDate ? fmt(f.returnDate) + (daysLeft !== null ? ` (${daysLeft < 0 ? Math.abs(daysLeft)+'d OVR' : daysLeft+'d'})` : '') : 'no return date';
-                  return `<div id="mvboat-${f.id}" style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid ${f.returnDate?'#a5f3fc':'var(--border)'};background:${f.returnDate?'#ecfeff':'var(--bg-elevated)'};margin-bottom:3px;">
-                    <div style="font:700 10px var(--font-mono);color:${f.returnDate?'#0e7490':'var(--text-primary)'}">${esc(f.name)} <span style="font-weight:400;font-size:9px;color:var(--text-muted)">${f.location}</span></div>
-                    ${f.returnDate ? `<div style="font-size:9px;color:${retCol};font-family:var(--font-mono)">↩ ${retStr}</div>` : '<div style="font-size:9px;color:var(--text-muted);font-style:italic">set return date in Frames tab</div>'}
-                  </div>`;
-                }).join('')}
-                ${!boatMoves.length && !STATE.frames.some(f=>f.location==='client'||f.location==='boat') ? '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no frames away</div>' : ''}
-              </div>
+              ${(() => {
+                const framesWithReturn = STATE.frames
+                  .filter(f => (f.location==='client'||f.location==='boat') && f.returnDate)
+                  .sort((a,b) => a.returnDate.localeCompare(b.returnDate));
+                const hasAny = framesWithReturn.length > 0 || boatMoves.length > 0;
+                return `<div id="mv-boat-box" style="background:var(--bg-card);border:${hasAny?'2px solid #0e7490;box-shadow:0 0 0 3px rgba(14,116,144,0.12);':'1px solid var(--border);'}border-radius:8px;padding:12px 16px;min-width:145px;">
+                  <div style="font:700 13px var(--font-mono);color:#0e7490;margin-bottom:8px">Boat / Client</div>
+                  ${boatMoves.map(m=>{
+                    const fr=getFrame(m.frameId); if(!fr) return '';
+                    return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #a5f3fc;background:#ecfeff;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
+                      <span style="color:#0e7490;font-weight:800">→</span>
+                      <span style="font:600 10px var(--font-mono)">${esc(fr.name)}</span>
+                      <span style="color:var(--text-muted)">${fr.width}m</span>
+                    </div>`;
+                  }).join('')}
+                  ${framesWithReturn.map(f=>{
+                    const daysLeft = Math.ceil((new Date(f.returnDate+'T12:00:00') - new Date()) / 86400000);
+                    const retCol = daysLeft < 0 ? 'var(--red)' : daysLeft <= 7 ? 'var(--orange)' : '#0e7490';
+                    const retStr = fmt(f.returnDate) + ` (${daysLeft < 0 ? Math.abs(daysLeft)+'d OVR' : daysLeft+'d'})`;
+                    return `<div id="mvboat-${f.id}" style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #a5f3fc;background:#ecfeff;margin-bottom:3px;">
+                      <div style="font:700 10px var(--font-mono);color:#0e7490">${esc(f.name)} <span style="font-weight:400;font-size:9px;color:var(--text-muted)">${f.location}</span></div>
+                      <div style="font-size:9px;color:${retCol};font-family:var(--font-mono)">↩ ${retStr}</div>
+                    </div>`;
+                  }).join('')}
+                  ${!hasAny ? '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no frames away</div>' : ''}
+                </div>`;
+              })()}
             </div>
           </div>
 
