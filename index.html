@@ -310,7 +310,45 @@ tr:hover td { background: #f8f9fb; }
 .bp-movement-type { font-weight:600;color:var(--accent); }
 .bp-warning { background:#fef0e6;border:1px solid #e8c8a0;border-radius:6px;padding:8px 12px;font-size:12px;color:var(--orange);margin-bottom:8px; }
 
-/* ── RMD Dashboard mini ── */
+/* ── Movements Map ── */
+.mv-layout { position: relative; }
+.mv-canvas-wrap { position: relative; overflow: auto; }
+#mv-svg-overlay { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 10; }
+.mv-rmd-zone { margin-bottom: 18px; }
+.mv-rmd-zone-title { font: 700 11px var(--font-mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+.mv-rmd-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.mv-rmd-card {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; min-width: 160px; flex: 0 0 auto;
+  transition: box-shadow 0.12s;
+}
+.mv-rmd-card.has-movement { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(192,133,32,0.15); }
+.mv-rmd-title { font: 700 13px var(--font-mono); color: var(--accent); margin-bottom: 6px; }
+.mv-rmd-side-label { font: 600 9px var(--font-mono); color: var(--text-muted); text-transform: uppercase; margin-bottom: 3px; }
+.mv-rmd-slot { font-size: 11px; padding: 3px 6px; border-radius: 4px; background: var(--bg-input); border: 1px solid var(--border); margin-bottom: 3px; display: flex; align-items: center; gap: 5px; }
+.mv-rmd-slot.moving-out { background: #fef0e6; border-color: var(--orange); }
+.mv-rmd-slot.moving-in { background: #e6f5ec; border-color: var(--green); }
+.mv-rmd-slot-empty { font-size: 11px; color: var(--text-muted); font-style: italic; padding: 2px 6px; }
+.mv-frames-zone { margin-top: 24px; }
+.mv-frames-title { font: 700 11px var(--font-mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
+.mv-frames-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 6px; }
+.mv-frame-card {
+  background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px; font-size: 11px; min-height: 56px;
+  transition: box-shadow 0.12s;
+}
+.mv-frame-card.has-movement { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(192,133,32,0.15); }
+.mv-frame-name { font: 700 12px var(--font-mono); color: var(--text-primary); margin-bottom: 4px; }
+.mv-frame-width { color: var(--text-muted); margin-bottom: 4px; font-size: 10px; }
+.mv-frame-cage { padding: 2px 5px; border-radius: 3px; background: var(--bg-input); border: 1px solid var(--border); display: flex; align-items: center; gap: 4px; margin-bottom: 2px; }
+.mv-frame-cage.moving-out { background: #fef0e6; border-color: var(--orange); }
+.mv-frame-cage.moving-in { background: #e6f5ec; border-color: var(--green); }
+.mv-legend { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.mv-legend-item { display: flex; align-items: center; gap: 5px; font: 500 11px var(--font-display); color: var(--text-secondary); }
+.mv-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+.mv-filter-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
+
+
 .rmd-mini-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
 .rmd-mini {
   background: var(--bg-input); border-radius: 6px; padding: 8px; text-align: center;
@@ -404,6 +442,7 @@ const TABS = [
   {id:'frames', label:'Frames', icon:'⊞'},
   {id:'rmd', label:'RMD Storage', icon:'▦'},
   {id:'planner', label:'Planner', icon:'⇄'},
+  {id:'movements', label:'Movements', icon:'↔'},
   {id:'boatplan', label:'Boat Planner', icon:'🚢'},
   {id:'shipping', label:'Shipping', icon:'⛴'},
   {id:'report', label:'Report', icon:'⎙'},
@@ -659,6 +698,7 @@ function renderTab(id) {
     case 'frames': return renderFrames();
     case 'rmd': return renderRMD();
     case 'planner': return renderPlanner();
+    case 'movements': return renderMovementsMap();
     case 'boatplan': return renderBoatPlanner();
     case 'shipping': return renderShipping();
     case 'overview': return renderOverview();
@@ -3322,7 +3362,316 @@ function renderBoatPlanner() {
 }
 // ═══════════════════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════════════
-// UK clock
+// MOVEMENTS MAP TAB
+// ═══════════════════════════════════════════════════════════════════════════════
+let mvFilter = 'all'; // 'all' | 'rmd-to-frame' | 'frame-to-rmd' | 'facility-to-frame'
+
+function renderMovementsMap() {
+  const pendingMoves = STATE.plannedMovements.filter(m => !m.completed);
+
+  if (pendingMoves.length === 0) {
+    return `
+      <h2 class="section-title" style="margin-bottom:4px">↔ Movements Map</h2>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:20px">Visual map of all planned (not yet actioned) movements between RMD storage and frames.</div>
+      <div class="card" style="text-align:center;padding:40px">
+        <div style="font-size:28px;margin-bottom:10px">✅</div>
+        <div style="font-weight:600;color:var(--text-primary)">No pending movements</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:6px">All planned movements have been completed, or none have been created yet.</div>
+        <button class="btn btn-primary" style="margin-top:14px" onclick="switchTab('planner')">Go to Planner →</button>
+      </div>`;
+  }
+
+  // Filter by typeKey if selected
+  const filtered = mvFilter === 'all' ? pendingMoves : pendingMoves.filter(m => m.typeKey === mvFilter);
+
+  // Build sets of which RMDs and frames are involved
+  const rmdMoveSet = new Set(); // rmdNum strings that have a movement
+  const frameMoveSet = new Set(); // frameId strings that have a movement
+
+  filtered.forEach(m => {
+    if (m.rmdSlot) rmdMoveSet.add(String(m.rmdSlot));
+    if (m.frameId) frameMoveSet.add(m.frameId);
+  });
+
+  // ── Summary counts ──
+  const countByType = {};
+  pendingMoves.forEach(m => { countByType[m.typeKey] = (countByType[m.typeKey]||0)+1; });
+
+  // Filter buttons
+  const filterBtns = [
+    {k:'all', label:`All (${pendingMoves.length})`},
+    {k:'rmd-to-frame', label:`RMD → Frame (${countByType['rmd-to-frame']||0})`},
+    {k:'frame-to-rmd', label:`Frame → RMD (${countByType['frame-to-rmd']||0})`},
+    {k:'facility-to-frame', label:`Facility → Frame (${countByType['facility-to-frame']||0})`},
+  ].map(b => `<button class="filter-btn ${mvFilter===b.k?'active':''}" onclick="mvFilter='${b.k}';render()">${b.label}</button>`).join('');
+
+  // ── Build RMD section ──
+  function rmdSlotHTML(rmdNum, side, slotKey, posLabel, moves) {
+    const r = getRMDByNum(rmdNum);
+    if (!r) return '';
+    const cid = r[side][slotKey];
+    const cage = cid ? getCage(cid) : null;
+    const movesForSlot = moves.filter(m => m.cageId === cid);
+    const isMovingOut = movesForSlot.some(m => m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-fix-shipping');
+    const isMovingIn  = movesForSlot.some(m => m.typeKey === 'frame-to-rmd');
+    const mvClass = isMovingOut ? 'moving-out' : isMovingIn ? 'moving-in' : '';
+    const mvIcon  = isMovingOut ? '→' : isMovingIn ? '←' : '';
+    if (!cage && !isMovingIn) return `<div class="mv-rmd-slot-empty">—</div>`;
+    return `<div class="mv-rmd-slot ${mvClass}" id="mv-rmd-${rmdNum}-${side}-${slotKey}">
+      ${mvIcon ? `<span style="font-weight:700;color:${isMovingOut?'var(--orange)':'var(--green)'}">${mvIcon}</span>` : ''}
+      <span style="font-weight:600">${cage ? esc(cage.name) : '?'}</span>
+      ${cage ? `<span style="color:var(--text-muted)">${cage.height}m</span>` : ''}
+    </div>`;
+  }
+
+  const rmdHTML = RMD_LAYOUT.map(row => {
+    const rowItems = row.items.map(rmdNum => {
+      const r = getRMDByNum(rmdNum);
+      if (!r) return '';
+      const allCageIds = [r.A.cage1, r.A.cage2, r.A.cage3, r.A.cage4, r.B.cage1, r.B.cage2, r.B.cage3, r.B.cage4].filter(Boolean);
+      const involvedMoves = filtered.filter(m => allCageIds.includes(m.cageId) || String(m.rmdSlot) === String(rmdNum));
+      const hasMv = involvedMoves.length > 0 || rmdMoveSet.has(String(rmdNum));
+      const sideHTML = side => {
+        const slots = ['cage1','cage2','cage3','cage4'];
+        return `<div>
+          <div class="mv-rmd-side-label">Side ${side}</div>
+          ${slots.map(s => rmdSlotHTML(rmdNum, side, s, `${side}-${s}`, filtered)).join('')}
+        </div>`;
+      };
+      return `<div class="mv-rmd-card ${hasMv?'has-movement':''}" id="mv-rmd-card-${rmdNum}">
+        <div class="mv-rmd-title">RMD-${rmdNum}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          ${sideHTML('A')}${sideHTML('B')}
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="mv-rmd-row">${rowItems}</div>`;
+  }).join('');
+
+  // ── Build Frames section ──
+  // Only show frames at facility
+  const facilityFrames = STATE.frames.filter(f => f.location === 'facility');
+  const framesWithMoves = facilityFrames.filter(f => frameMoveSet.has(f.id));
+  const framesWithoutMoves = facilityFrames.filter(f => !frameMoveSet.has(f.id));
+
+  function frameCardHTML(f, hasMovement) {
+    const fCages = f.cages.map(cid => getCage(cid)).filter(Boolean);
+    const movesForFrame = filtered.filter(m => m.frameId === f.id);
+    const cagesMovingIn  = movesForFrame.filter(m => m.typeKey === 'rmd-to-frame' || m.typeKey === 'facility-to-frame').map(m => getCage(m.cageId)).filter(Boolean);
+    const cagesMovingOut = movesForFrame.filter(m => m.typeKey === 'frame-to-rmd').map(m => getCage(m.cageId)).filter(Boolean);
+    const cagesMovingOutIds = cagesMovingOut.map(c=>c.id);
+    const existingCageHTML = fCages.map(c => {
+      const out = cagesMovingOutIds.includes(c.id);
+      return `<div class="mv-frame-cage ${out?'moving-out':''}" id="mv-frame-cage-${f.id}-${c.id}">
+        ${out ? '<span style="font-weight:700;color:var(--orange)">→</span>' : ''}
+        <span style="font-weight:600">${esc(c.name)}</span>
+        <span style="color:var(--text-muted)">${c.height}m</span>
+      </div>`;
+    }).join('');
+    const incomingHTML = cagesMovingIn.map(c =>
+      `<div class="mv-frame-cage moving-in" id="mv-frame-cage-in-${f.id}-${c.id}">
+        <span style="font-weight:700;color:var(--green)">←</span>
+        <span style="font-weight:600">${esc(c.name)}</span>
+        <span style="color:var(--text-muted)">${c.height}m</span>
+      </div>`
+    ).join('');
+    const empty = fCages.length === 0 && cagesMovingIn.length === 0
+      ? `<div style="font-size:10px;color:var(--text-muted);font-style:italic">empty</div>` : '';
+    return `<div class="mv-frame-card ${hasMovement?'has-movement':''}" id="mv-frame-card-${f.id}">
+      <div class="mv-frame-name">${esc(f.name)}</div>
+      <div class="mv-frame-width">${f.width}m${f.hasWaler?'<span style="color:var(--blue);margin-left:4px">🔩</span>':''}</div>
+      ${existingCageHTML}${incomingHTML}${empty}
+    </div>`;
+  }
+
+  const framesInvolvedHTML = framesWithMoves.map(f => frameCardHTML(f, true)).join('');
+  const framesOtherHTML    = framesWithoutMoves.map(f => frameCardHTML(f, false)).join('');
+
+  // Encode movements for the SVG drawing script
+  const movesJSON = JSON.stringify(filtered.map(m => ({
+    id: m.id,
+    typeKey: m.typeKey,
+    cageId: m.cageId,
+    rmdSlot: m.rmdSlot,
+    frameId: m.frameId,
+    description: m.description,
+    date: m.date,
+  })));
+
+  return `
+    <h2 class="section-title" style="margin-bottom:4px">↔ Movements Map</h2>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Visual map of all planned, not yet actioned movements. Arrows show the direction of each cage movement between RMD storage and frames.</div>
+
+    <div class="mv-filter-bar">
+      ${filterBtns}
+      <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">${filtered.length} movement${filtered.length!==1?'s':''} shown</span>
+    </div>
+
+    <div class="mv-legend">
+      <div class="mv-legend-item"><div class="mv-legend-dot" style="background:var(--orange)"></div> Cage leaving this location</div>
+      <div class="mv-legend-item"><div class="mv-legend-dot" style="background:var(--green)"></div> Cage arriving here</div>
+      <div class="mv-legend-item"><svg width="28" height="12"><defs><marker id="lgnd-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="var(--accent)"/></marker></defs><line x1="2" y1="6" x2="22" y2="6" stroke="var(--accent)" stroke-width="2" marker-end="url(#lgnd-arrow)"/></svg> Planned movement arrow</div>
+    </div>
+
+    <div class="mv-layout" id="mv-layout-root">
+      <div class="mv-canvas-wrap" id="mv-canvas-wrap">
+        <svg id="mv-svg-overlay" width="1" height="1"></svg>
+
+        <div class="mv-rmd-zone">
+          <div class="mv-rmd-zone-title">🗄 RMD Storage</div>
+          ${rmdHTML}
+        </div>
+
+        <div class="mv-frames-zone">
+          <div class="mv-frames-title">📦 Frames at Facility</div>
+          ${framesWithMoves.length > 0 ? `
+            <div style="font:600 10px var(--font-mono);color:var(--accent);margin-bottom:6px">With planned movements:</div>
+            <div class="mv-frames-grid" style="margin-bottom:14px">${framesInvolvedHTML}</div>
+          ` : ''}
+          <div style="font:600 10px var(--font-mono);color:var(--text-muted);margin-bottom:6px">All frames:</div>
+          <div class="mv-frames-grid">${framesOtherHTML}${framesWithMoves.map(f=>frameCardHTML(f,true)).join('')}</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+    (function() {
+      const moves = ${movesJSON};
+      if (!moves.length) return;
+
+      function drawArrows() {
+        const wrap = document.getElementById('mv-canvas-wrap');
+        const svg  = document.getElementById('mv-svg-overlay');
+        if (!wrap || !svg) return;
+
+        const wrapRect = wrap.getBoundingClientRect();
+        const scrollX  = wrap.scrollLeft;
+        const scrollY  = wrap.scrollTop;
+
+        function center(el) {
+          if (!el) return null;
+          const r = el.getBoundingClientRect();
+          return {
+            x: r.left - wrapRect.left + scrollX + r.width / 2,
+            y: r.top  - wrapRect.top  + scrollY + r.height / 2,
+            right:  r.right  - wrapRect.left + scrollX,
+            left:   r.left   - wrapRect.left + scrollX,
+            top:    r.top    - wrapRect.top  + scrollY,
+            bottom: r.bottom - wrapRect.top  + scrollY,
+          };
+        }
+
+        const W = wrap.scrollWidth;
+        const H = wrap.scrollHeight;
+        svg.setAttribute('width',  W);
+        svg.setAttribute('height', H);
+        svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+
+        // Arrow colours per type
+        const COLORS = {
+          'rmd-to-frame':       '#c08520',
+          'frame-to-rmd':       '#7040c0',
+          'facility-to-frame':  '#2563b0',
+          'frame-fix-shipping': '#1a8a4a',
+        };
+        const LABELS = {
+          'rmd-to-frame':       'RMD→Frame',
+          'frame-to-rmd':       'Frame→RMD',
+          'facility-to-frame':  'Fac→Frame',
+          'frame-fix-shipping': 'Fix Ship',
+        };
+
+        let defs = '<defs>';
+        Object.entries(COLORS).forEach(([k,c]) => {
+          defs += '<marker id="arrow-' + k + '" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0 L0,7 L7,3.5 z" fill="' + c + '"/></marker>';
+        });
+        defs += '</defs>';
+
+        let paths = '';
+
+        moves.forEach((m, idx) => {
+          const color = COLORS[m.typeKey] || '#c08520';
+          const arrowId = 'arrow-' + m.typeKey;
+
+          // Find source and dest elements
+          let srcEl = null, dstEl = null;
+
+          if (m.typeKey === 'rmd-to-frame') {
+            // src = rmd card, dst = frame card
+            srcEl = document.getElementById('mv-rmd-card-' + m.rmdSlot);
+            dstEl = document.getElementById('mv-frame-card-' + m.frameId);
+          } else if (m.typeKey === 'frame-to-rmd') {
+            // src = frame card or frame-cage chip, dst = rmd card
+            srcEl = document.getElementById('mv-frame-card-' + m.frameId);
+            dstEl = document.getElementById('mv-rmd-card-' + m.rmdSlot);
+          } else if (m.typeKey === 'facility-to-frame' || m.typeKey === 'frame-fix-shipping') {
+            // facility→frame: no specific src element, use frame card as dst only; draw from a virtual facility marker
+            dstEl = document.getElementById('mv-frame-card-' + m.frameId);
+            if (!dstEl) return;
+            const dp = center(dstEl);
+            if (!dp) return;
+            // draw a small "FAC" badge with an arrow pointing down into the frame
+            const x = dp.x;
+            const y1 = Math.max(20, dp.top - 50);
+            const y2 = dp.top;
+            paths += svgArrowPath(x, y1, x, y2, color, arrowId, LABELS[m.typeKey], color);
+            return;
+          }
+
+          if (!srcEl || !dstEl) return;
+          const sp = center(srcEl);
+          const dp = center(dstEl);
+          if (!sp || !dp) return;
+
+          // Draw a curved path from src right-edge to dst left-edge (or appropriate sides)
+          let x1, y1, x2, y2;
+          // Determine if src is to the left or right of dst
+          if (sp.x < dp.x) {
+            x1 = sp.right; y1 = sp.y;
+            x2 = dp.left;  y2 = dp.y;
+          } else {
+            x1 = sp.left;  y1 = sp.y;
+            x2 = dp.right; y2 = dp.y;
+          }
+
+          const cx1 = x1 + (x2 - x1) * 0.45;
+          const cy1 = y1;
+          const cx2 = x1 + (x2 - x1) * 0.55;
+          const cy2 = y2;
+
+          // Offset slightly per index to avoid full overlap on same-source arrows
+          const offset = (idx % 5) * 3 - 6;
+
+          paths += '<path d="M ' + x1 + ' ' + (y1+offset) + ' C ' + cx1 + ' ' + (cy1+offset) + ', ' + cx2 + ' ' + (cy2+offset) + ', ' + x2 + ' ' + (y2+offset) + '"'
+            + ' fill="none" stroke="' + color + '" stroke-width="2.5" stroke-opacity="0.82"'
+            + ' marker-end="url(#' + arrowId + ')">'
+            + '<title>' + (m.description || '') + ' — ' + (m.date||'') + '</title>'
+            + '</path>';
+        });
+
+        svg.innerHTML = defs + paths;
+      }
+
+      function svgArrowPath(x1, y1, x2, y2, color, arrowId, label, textColor) {
+        return '<line x1="' + x1 + '" y1="' + y1 + '" x2="' + x1 + '" y2="' + (y2-8) + '"'
+          + ' stroke="' + color + '" stroke-width="2.5" stroke-dasharray="5,3" stroke-opacity="0.8"'
+          + ' marker-end="url(#' + arrowId + ')"/>'
+          + '<text x="' + (x1+4) + '" y="' + (y1+14) + '" font-size="9" fill="' + textColor + '" font-family="monospace" font-weight="700">' + label + '</text>';
+      }
+
+      // Draw after layout settles
+      requestAnimationFrame(function() {
+        setTimeout(drawArrows, 60);
+      });
+
+      // Redraw on resize
+      window.addEventListener('resize', drawArrows);
+    })();
+    <\/script>
+  `;
+}
+
+
 function updateUKClock() {
   const now = new Date();
   const opts = { timeZone: 'Europe/London', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false };
