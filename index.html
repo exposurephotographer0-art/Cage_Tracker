@@ -682,8 +682,8 @@ function renderSidebar() {
 
 function switchTab(id) {
   if (id !== 'movements') {
-    const c = document.getElementById('mv-canvas');
-    if (c) { const ctx=c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); }
+    const svg = document.getElementById('mv-svg-arrows');
+    if (svg) svg.innerHTML = '';
   }
   activeTab=id; renderSidebar(); renderMain();
 }
@@ -3558,8 +3558,8 @@ function renderMovementsMap() {
           </div>
         </div>
 
-        <!-- Canvas overlay: fixed over entire viewport, draws arrows using raw getBoundingClientRect coords -->
-        <canvas id="mv-canvas" style="position:fixed;top:0;left:0;pointer-events:none;z-index:9999" width="10" height="10"></canvas>
+        <!-- SVG overlay: absolutely positioned within mv-content for reliable arrow drawing -->
+        <svg id="mv-svg-arrows" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;overflow:visible"></svg>
       </div>
 
       <!-- Sidebar -->
@@ -3577,13 +3577,18 @@ function renderMovementsMap() {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════════════════════
-// MOVEMENTS CANVAS DRAW — fixed canvas uses raw viewport coords (no offset math)
+// MOVEMENTS SVG DRAW — uses absolute-positioned SVG within mv-content container
+// Positions calculated relative to the container, not the viewport
 // ═══════════════════════════════════════════════════════════════════════════════
 function mvRedraw() {
-  const canvas = document.getElementById('mv-canvas');
-  if (!canvas) return;
+  const svg = document.getElementById('mv-svg-arrows');
+  const container = document.getElementById('mv-content');
+  if (!svg || !container) return;
 
+  svg.innerHTML = '';
   const MOVES = window._mvMovesData || [];
+  if (!MOVES.length) return;
+
   const COLORS = {
     'rmd-to-frame':        '#27a060',
     'frame-to-rmd':        '#7040c0',
@@ -3591,52 +3596,69 @@ function mvRedraw() {
     'frame-fix-shipping':  '#c08520',
   };
 
-  // Canvas is position:fixed — size it to full viewport
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  canvas.width  = vw;
-  canvas.height = vh;
-  canvas.style.width  = vw + 'px';
-  canvas.style.height = vh + 'px';
+  const cRect = container.getBoundingClientRect();
 
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, vw, vh);
-  if (!MOVES.length) return;
-
-  // Raw viewport coords — canvas is fixed so no offset needed
-  // Allow generous margin so arrows can be drawn to partially visible elements
-  function getRect(id) {
+  // Get element position relative to the mv-content container
+  function getPos(id) {
     const el = document.getElementById(id);
     if (!el) return null;
     const r = el.getBoundingClientRect();
-    const margin = 200;
-    if (r.bottom < -margin || r.top > vh+margin || r.right < -margin || r.left > vw+margin) return null;
-    return { left:r.left, right:r.right, top:r.top, bottom:r.bottom,
-             cx:r.left+r.width/2, cy:r.top+r.height/2, w:r.width, h:r.height };
+    return {
+      left:   r.left - cRect.left,
+      right:  r.right - cRect.left,
+      top:    r.top - cRect.top,
+      bottom: r.bottom - cRect.top,
+      cx:     (r.left + r.right) / 2 - cRect.left,
+      cy:     (r.top + r.bottom) / 2 - cRect.top,
+      w:      r.width,
+      h:      r.height
+    };
   }
 
-  // Count per node
+  // SVG namespace
+  const NS = 'http://www.w3.org/2000/svg';
+  function svgEl(tag, attrs) {
+    const el = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+    return el;
+  }
+
+  // Define arrow markers per color
+  const defs = svgEl('defs', {});
+  Object.entries(COLORS).forEach(([key, col]) => {
+    const marker = svgEl('marker', {
+      id: 'arrow-' + key, markerWidth: '10', markerHeight: '8',
+      refX: '9', refY: '4', orient: 'auto', markerUnits: 'userSpaceOnUse'
+    });
+    const poly = svgEl('polygon', { points: '0,0 10,4 0,8', fill: col });
+    marker.appendChild(poly);
+    defs.appendChild(marker);
+  });
+  svg.appendChild(defs);
+
+  // Count per node for offset spreading
   const rET={}, fET={}, fXT={}, rNT={};
   MOVES.forEach(m => {
-    const rk=String(m.rmdSlot||'').replace(/[ABab]$/,''), fk=String(m.frameId);
-    if (m.typeKey==='rmd-to-frame') { rET[rk]=(rET[rk]||0)+1; fET[fk]=(fET[fk]||0)+1; }
-    if (m.typeKey==='frame-to-rmd') { fXT[fk]=(fXT[fk]||0)+1; rNT[rk]=(rNT[rk]||0)+1; }
+    const rk = String(m.rmdSlot||'').replace(/[ABab]$/,'');
+    const fk = String(m.frameId||'');
+    if (m.typeKey === 'rmd-to-frame') { rET[rk]=(rET[rk]||0)+1; fET[fk]=(fET[fk]||0)+1; }
+    if (m.typeKey === 'frame-to-rmd') { fXT[fk]=(fXT[fk]||0)+1; rNT[rk]=(rNT[rk]||0)+1; }
   });
   const rEI={}, fEI={}, fXI={}, rNI={};
 
   MOVES.forEach((m, idx) => {
     const color = COLORS[m.typeKey] || '#c08520';
-    const cage  = getCage(m.cageId);
+    const cage = getCage(m.cageId);
     const cLabel = cage ? cage.name : '';
-    const num   = idx + 1;
+    const num = idx + 1;
 
     if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-to-rmd') {
-      const rk    = String(m.rmdSlot||'').replace(/[ABab]$/,'');
-      const fk    = String(m.frameId);
-      const rRect = getRect('mvr-' + rk);
-      const fRect = getRect('mvf-' + fk);
-      if (!rRect || !fRect) {
-        console.warn('[mvRedraw] missing:', !rRect?'mvr-'+rk:'', !fRect?'mvf-'+fk:'', 'rmdSlot='+m.rmdSlot);
+      const rk = String(m.rmdSlot||'').replace(/[ABab]$/,'');
+      const fk = String(m.frameId||'');
+      const rPos = getPos('mvr-' + rk);
+      const fPos = getPos('mvf-' + fk);
+      if (!rPos || !fPos) {
+        console.warn('[mvRedraw] missing element:', !rPos ? 'mvr-'+rk : '', !fPos ? 'mvf-'+fk : '', 'rmdSlot='+m.rmdSlot, 'frameId='+m.frameId);
         return;
       }
 
@@ -3651,103 +3673,117 @@ function mvRedraw() {
         rTot=rNT[rk]||1; fTot=fXT[fk]||1;
       }
 
-      const rX = rRect.left + rRect.w * (rTot>1 ? (0.2+0.6*ri/(rTot-1)) : 0.5);
-      const fX = fRect.left + fRect.w * (fTot>1 ? (0.2+0.6*fi/(fTot-1)) : 0.5);
+      const rX = rPos.left + rPos.w * (rTot > 1 ? (0.2 + 0.6 * ri / (rTot - 1)) : 0.5);
+      const fX = fPos.left + fPos.w * (fTot > 1 ? (0.2 + 0.6 * fi / (fTot - 1)) : 0.5);
 
-      // Determine start/end based on direction
-      let x1, y1, x2, y2;
+      // RMD is above, Frames below. Always draw: start → end with arrowhead at end
+      let sx, sy, ex, ey;
       if (m.typeKey === 'rmd-to-frame') {
-        // Arrow FROM RMD bottom TO Frame top
-        x1=rX; y1=rRect.bottom; x2=fX; y2=fRect.top;
+        // FROM RMD (bottom edge) TO Frame (top edge)
+        sx = rX; sy = rPos.bottom;
+        ex = fX; ey = fPos.top;
       } else {
-        // Arrow FROM Frame top TO RMD bottom (frame-to-rmd)
-        x1=fX; y1=fRect.top; x2=rX; y2=rRect.bottom;
+        // FROM Frame (top edge) TO RMD (bottom edge)
+        sx = fX; sy = fPos.top;
+        ex = rX; ey = rPos.bottom;
       }
 
-      const dy=y2-y1, dx=x2-x1;
-      const pad = Math.max(Math.abs(dy)*0.4, 50);
-      // Control points: curve downward for rmd-to-frame, upward for frame-to-rmd
-      let cp1x, cp1y, cp2x, cp2y;
+      // Bezier control points — always curve through the gap between RMD and frames
+      const gap = Math.abs(ey - sy);
+      const cpOff = Math.max(gap * 0.35, 40);
+      let c1x, c1y, c2x, c2y;
       if (m.typeKey === 'rmd-to-frame') {
-        cp1x=x1+dx*0.1; cp1y=y1+pad;
-        cp2x=x2-dx*0.1; cp2y=y2-pad;
+        c1x = sx; c1y = sy + cpOff;
+        c2x = ex; c2y = ey - cpOff;
       } else {
-        // frame-to-rmd: curve upward from frame to RMD
-        cp1x=x1+dx*0.1; cp1y=y1-pad;
-        cp2x=x2-dx*0.1; cp2y=y2+pad;
+        c1x = sx; c1y = sy - cpOff;
+        c2x = ex; c2y = ey + cpOff;
       }
 
-      ctx.save();
-      ctx.strokeStyle=color; ctx.lineWidth=2.8; ctx.lineCap='round';
-      ctx.shadowColor='rgba(0,0,0,0.2)'; ctx.shadowBlur=3;
-      ctx.beginPath(); ctx.moveTo(x1,y1);
-      ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,x2,y2); ctx.stroke();
+      // Draw the bezier path
+      const path = svgEl('path', {
+        d: `M${sx},${sy} C${c1x},${c1y} ${c2x},${c2y} ${ex},${ey}`,
+        stroke: color, 'stroke-width': '2.5', fill: 'none',
+        'stroke-linecap': 'round',
+        'marker-end': `url(#arrow-${m.typeKey})`
+      });
+      svg.appendChild(path);
 
-      const aA=Math.atan2(y2-cp2y,x2-cp2x), aL=12, aW=0.42;
-      ctx.fillStyle=color; ctx.shadowBlur=0;
-      ctx.beginPath(); ctx.moveTo(x2,y2);
-      ctx.lineTo(x2-aL*Math.cos(aA-aW),y2-aL*Math.sin(aA-aW));
-      ctx.lineTo(x2-aL*Math.cos(aA+aW),y2-aL*Math.sin(aA+aW));
-      ctx.closePath(); ctx.fill();
+      // Midpoint label (numbered circle)
+      const mt = 0.5;
+      const bx = (1-mt)*(1-mt)*(1-mt)*sx + 3*(1-mt)*(1-mt)*mt*c1x + 3*(1-mt)*mt*mt*c2x + mt*mt*mt*ex;
+      const by = (1-mt)*(1-mt)*(1-mt)*sy + 3*(1-mt)*(1-mt)*mt*c1y + 3*(1-mt)*mt*mt*c2y + mt*mt*mt*ey;
 
-      const t=0.5,mt=0.5;
-      const bx=mt*mt*mt*x1+3*mt*mt*t*cp1x+3*mt*t*t*cp2x+t*t*t*x2;
-      const by=mt*mt*mt*y1+3*mt*mt*t*cp1y+3*mt*t*t*cp2y+t*t*t*y2;
-      ctx.shadowBlur=5; ctx.shadowColor='rgba(0,0,0,0.25)';
-      ctx.beginPath(); ctx.arc(bx,by,12,0,Math.PI*2); ctx.fillStyle=color; ctx.fill();
-      ctx.shadowBlur=0; ctx.fillStyle='#fff'; ctx.font='bold 11px monospace';
-      ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(String(num),bx,by);
+      const circle = svgEl('circle', { cx: bx, cy: by, r: '12', fill: color, stroke: '#fff', 'stroke-width': '2' });
+      svg.appendChild(circle);
+      const numText = svgEl('text', {
+        x: bx, y: by, fill: '#fff', 'font-size': '11', 'font-weight': 'bold',
+        'font-family': 'monospace', 'text-anchor': 'middle', 'dominant-baseline': 'central'
+      });
+      numText.textContent = String(num);
+      svg.appendChild(numText);
 
       if (cLabel) {
-        ctx.font='bold 10px monospace'; ctx.textAlign='center'; ctx.textBaseline='top';
-        ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.shadowColor='#fff'; ctx.shadowBlur=4;
-        ctx.strokeText(cLabel,bx,by+18); ctx.fillStyle=color; ctx.shadowBlur=0; ctx.fillText(cLabel,bx,by+18);
+        const labelBg = svgEl('text', {
+          x: bx, y: by + 18, fill: '#fff', 'font-size': '10', 'font-weight': 'bold',
+          'font-family': 'monospace', 'text-anchor': 'middle', 'dominant-baseline': 'hanging',
+          stroke: '#fff', 'stroke-width': '3', 'paint-order': 'stroke'
+        });
+        labelBg.textContent = cLabel;
+        svg.appendChild(labelBg);
+        const labelTxt = svgEl('text', {
+          x: bx, y: by + 18, fill: color, 'font-size': '10', 'font-weight': 'bold',
+          'font-family': 'monospace', 'text-anchor': 'middle', 'dominant-baseline': 'hanging'
+        });
+        labelTxt.textContent = cLabel;
+        svg.appendChild(labelTxt);
       }
-      ctx.restore();
 
-    } else if (m.typeKey==='facility-to-frame' || m.typeKey==='frame-fix-shipping') {
-      const fRect = getRect('mvf-'+String(m.frameId));
-      if (!fRect) return;
-      const x=fRect.cx, y2=fRect.top, y1=Math.max(10,y2-52);
-      ctx.save();
-      ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=2.5;
-      ctx.setLineDash([7,4]); ctx.lineCap='round';
-      ctx.beginPath(); ctx.moveTo(x,y1); ctx.lineTo(x,y2-5); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.beginPath(); ctx.moveTo(x,y2+1); ctx.lineTo(x-7,y2-11); ctx.lineTo(x+7,y2-11); ctx.closePath(); ctx.fill();
-      ctx.font='bold 9px monospace'; ctx.textAlign='center'; ctx.textBaseline='bottom';
-      ctx.strokeStyle='#fff'; ctx.lineWidth=3;
-      const lbl=cLabel||(m.typeKey==='frame-fix-shipping'?'FIX':'FAC');
-      ctx.strokeText(lbl,x,y1-2); ctx.fillStyle=color; ctx.fillText(lbl,x,y1-2);
-      ctx.restore();
+    } else if (m.typeKey === 'facility-to-frame' || m.typeKey === 'frame-fix-shipping') {
+      const fPos = getPos('mvf-' + String(m.frameId||''));
+      if (!fPos) return;
+      const x = fPos.cx;
+      const y2 = fPos.top;
+      const y1 = y2 - 48;
+
+      // Dashed line
+      const line = svgEl('line', {
+        x1: x, y1: y1, x2: x, y2: y2 - 5,
+        stroke: color, 'stroke-width': '2.5', 'stroke-dasharray': '7,4', 'stroke-linecap': 'round'
+      });
+      svg.appendChild(line);
+
+      // Arrowhead triangle
+      const tri = svgEl('polygon', {
+        points: `${x},${y2+1} ${x-7},${y2-11} ${x+7},${y2-11}`, fill: color
+      });
+      svg.appendChild(tri);
+
+      // Label
+      const lbl = cLabel || (m.typeKey === 'frame-fix-shipping' ? 'FIX' : 'FAC');
+      const lblBg = svgEl('text', {
+        x: x, y: y1 - 3, fill: '#fff', 'font-size': '9', 'font-weight': 'bold',
+        'font-family': 'monospace', 'text-anchor': 'middle', 'dominant-baseline': 'auto',
+        stroke: '#fff', 'stroke-width': '3', 'paint-order': 'stroke'
+      });
+      lblBg.textContent = lbl;
+      svg.appendChild(lblBg);
+      const lblTxt = svgEl('text', {
+        x: x, y: y1 - 3, fill: color, 'font-size': '9', 'font-weight': 'bold',
+        'font-family': 'monospace', 'text-anchor': 'middle', 'dominant-baseline': 'auto'
+      });
+      lblTxt.textContent = lbl;
+      svg.appendChild(lblTxt);
     }
   });
 }
 
 
-// Global resize + scroll handlers — redraw arrows as page scrolls/resizes
+// Global resize handler — redraw arrows on resize
 window.addEventListener('resize', function() {
   if (typeof activeTab !== 'undefined' && activeTab === 'movements') {
     clearTimeout(window._mvResizeT);
     window._mvResizeT = setTimeout(mvRedraw, 120);
-  }
-});
-window.addEventListener('scroll', function() {
-  if (typeof activeTab !== 'undefined' && activeTab === 'movements') {
-    cancelAnimationFrame(window._mvScrollRAF);
-    window._mvScrollRAF = requestAnimationFrame(mvRedraw);
-  }
-}, { passive: true });
-// The .main container is the actual scrollable element, so attach there too
-document.addEventListener('DOMContentLoaded', function() {
-  const mainEl = document.querySelector('.main');
-  if (mainEl) {
-    mainEl.addEventListener('scroll', function() {
-      if (typeof activeTab !== 'undefined' && activeTab === 'movements') {
-        cancelAnimationFrame(window._mvScrollRAF);
-        window._mvScrollRAF = requestAnimationFrame(mvRedraw);
-      }
-    }, { passive: true });
   }
 });
 
