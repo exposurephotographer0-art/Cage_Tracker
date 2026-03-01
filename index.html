@@ -446,6 +446,7 @@ const TABS = [
   {id:'boatplan', label:'Boat Planner', icon:'🚢'},
   {id:'shipping', label:'Shipping', icon:'⛴'},
   {id:'report', label:'Report', icon:'⎙'},
+  {id:'audit', label:'Audit Log', icon:'📋'},
 ];
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
@@ -713,6 +714,7 @@ function renderTab(id) {
     case 'shipping': return renderShipping();
     case 'overview': return renderOverview();
     case 'report': return renderReport();
+    case 'audit': return renderAuditLog();
     default: return '';
   }
 }
@@ -756,6 +758,64 @@ function shipmentLegendHTML(shipDays) {
   return `<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
     ${shipDays[0] ? `<span style="background:#3b1d6e;color:#e0ccff;font:700 9px var(--font-mono);padding:2px 10px;border-radius:10px">&#9632; Next shipment: ${fmt(shipDays[0])}</span>` : ''}
     ${shipDays[1] ? `<span style="background:#c8b8e8;color:#4a2a7a;font:700 9px var(--font-mono);padding:2px 10px;border-radius:10px">&#9632; 2nd shipment: ${fmt(shipDays[1])}</span>` : ''}
+  </div>`;
+}
+
+function renderRMDHeatmap() {
+  const total = STATE.rmdSlots.length;
+  if (total === 0) return '';
+  const slotKeys = ['cage1','cage2','cage3','cage4'];
+  const maxSlots = 8; // 4 per side × 2 sides
+
+  const cards = RMD_LAYOUT.flatMap(row => row.items).map(rmdNum => {
+    const r = getRMDByNum(rmdNum);
+    if (!r) return '';
+    const used = ['A','B'].reduce((sum, side) =>
+      sum + slotKeys.filter(k => !!r[side][k]).length, 0);
+    const pct = used / maxSlots;
+    const isEmpty = used === 0;
+    const isFull = used === maxSlots;
+    // Colour: green=empty, yellow=partial, orange=mostly full, red=full
+    const bg = isEmpty ? '#e6f5ec' : isFull ? '#fce8e8' : pct >= 0.75 ? '#fff0e0' : '#fdf5dc';
+    const border = isEmpty ? '#b0dcc0' : isFull ? '#e8b0b0' : pct >= 0.75 ? '#e8c8a0' : '#e0d8a0';
+    const textCol = isEmpty ? 'var(--green)' : isFull ? 'var(--red)' : pct >= 0.75 ? 'var(--orange)' : 'var(--yellow)';
+
+    // Mini slot grid: 4 rows (A-in, A-out, B-in, B-out), 2 cols each
+    const slotDots = ['A','B'].map(side =>
+      slotKeys.map(k => {
+        const filled = !!r[side][k];
+        return `<div style="width:8px;height:8px;border-radius:2px;background:${filled ? textCol : 'var(--bg-deep)'}"></div>`;
+      }).join('')
+    ).join('');
+
+    return `<div onclick="switchTab('rmd')" style="background:${bg};border:1px solid ${border};border-radius:8px;padding:8px 10px;cursor:pointer;transition:all 0.1s;min-width:80px" title="RMD-${rmdNum}: ${used}/${maxSlots} slots used">
+      <div style="font:700 12px var(--font-mono);color:${textCol};margin-bottom:6px">RMD-${rmdNum}</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:5px">${slotDots}</div>
+      <div style="font-size:10px;font-weight:600;color:${textCol}">${used}/${maxSlots}</div>
+    </div>`;
+  }).join('');
+
+  const totalUsed = STATE.rmdSlots.reduce((sum, r) =>
+    sum + ['A','B'].reduce((s2, side) => s2 + slotKeys.filter(k => !!r[side][k]).length, 0), 0);
+  const totalCapacity = STATE.rmdSlots.length * maxSlots;
+  const overallPct = Math.round(totalUsed / totalCapacity * 100);
+
+  return `<div class="card" style="margin-bottom:14px">
+    <div class="flex-between" style="margin-bottom:10px">
+      <div class="card-title" style="margin:0">🗄 RMD Capacity Overview</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:12px;color:var(--text-muted)">${totalUsed} / ${totalCapacity} slots used</div>
+        <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;padding:3px 12px;font:700 13px var(--font-mono);color:${overallPct>=90?'var(--red)':overallPct>=70?'var(--orange)':'var(--green)'}">${overallPct}%</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:10px;font-size:10px;align-items:center;flex-wrap:wrap">
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:3px;background:#e6f5ec;border:1px solid #b0dcc0;display:inline-block"></span>Empty</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:3px;background:#fdf5dc;border:1px solid #e0d8a0;display:inline-block"></span>Partial</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:3px;background:#fff0e0;border:1px solid #e8c8a0;display:inline-block"></span>Mostly full</span>
+      <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:12px;height:12px;border-radius:3px;background:#fce8e8;border:1px solid #e8b0b0;display:inline-block"></span>Full</span>
+      <span style="margin-left:6px;font-size:10px;color:var(--text-muted)">Each dot = one cage slot · Click any bay to manage</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">${cards}</div>
   </div>`;
 }
 
@@ -852,6 +912,7 @@ function renderDashboard() {
       <div class="stat-card"><div class="stat-val" style="color:var(--orange)">${todayMoves}</div><div class="stat-lbl">Today's Moves</div></div>
       <div class="stat-card"><div class="stat-val" style="color:var(--yellow)">${pending}</div><div class="stat-lbl">Pending Plans</div></div>
     </div>
+    ${renderRMDHeatmap()}
     ${renderNextDueDelivery()}
     ${renderDashboardFrames()}
     <div style="display:grid;grid-template-columns:1fr;gap:14px">
@@ -1012,6 +1073,7 @@ let cageFormOpen = false;
 let cageSearch = '';
 let cageFilter = 'all';
 let cageSort = 'number'; // 'number' | 'name'
+let cageHeightFilter = 'all'; // 'all' | 'short' | 'medium' | 'tall'
 let cageEditing = null;
 let cageSelected = new Set(); // for multi-delete
 let cageHideShipped = true;
@@ -1023,6 +1085,9 @@ function renderCages() {
     if (cageFilter === 'has-departure') return !!c.departureDate;
     if (cageFilter === 'has-shipday') return !!c.proposedShipDay;
     if (cageFilter !== 'all' && c.location !== cageFilter) return false;
+    if (cageHeightFilter === 'short' && hCat(c.height) !== 'Short') return false;
+    if (cageHeightFilter === 'medium' && hCat(c.height) !== 'Medium') return false;
+    if (cageHeightFilter === 'tall' && hCat(c.height) !== 'Tall') return false;
     return true;
   }).sort((a, b) => {
     if (cageSort === 'number') {
@@ -1181,6 +1246,12 @@ function renderCages() {
       <button class="filter-btn ${cageFilter==='has-departure'?'active':''}" onclick="cageFilter='has-departure';render()" title="Cages with a Leaves Facility date set">📅 Has Departure</button>
       <button class="filter-btn ${cageFilter==='has-shipday'?'active':''}" onclick="cageFilter='has-shipday';render()" title="Cages with a Proposed Ship Day set">🚢 Has Ship Day</button>
       <button class="filter-btn ${cageHideShipped?'active':''}" onclick="cageHideShipped=!cageHideShipped;render()" title="Toggle visibility of shipped cages" style="${cageHideShipped?'':'opacity:0.6'}">🚫 Hide Shipped</button>
+      <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
+      <span style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;white-space:nowrap">Height:</span>
+      <button class="filter-btn ${cageHeightFilter==='all'?'active':''}" onclick="cageHeightFilter='all';render()">All</button>
+      <button class="filter-btn ${cageHeightFilter==='short'?'active':''}" onclick="cageHeightFilter='short';render()" style="color:var(--green)">Short</button>
+      <button class="filter-btn ${cageHeightFilter==='medium'?'active':''}" onclick="cageHeightFilter='medium';render()" style="color:var(--yellow)">Medium</button>
+      <button class="filter-btn ${cageHeightFilter==='tall'?'active':''}" onclick="cageHeightFilter='tall';render()" style="color:var(--red)">Tall</button>
       <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
         <span style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase">Sort:</span>
         <button class="filter-btn ${cageSort==='number'?'active':''}" onclick="cageSort='number';render()" title="Sort by cage number"># Number</button>
@@ -1507,21 +1578,44 @@ async function handleExcelImport(input) {
         imported++;
       });
 
-      let msg = `Import complete!\n\n✓ ${imported} cages imported`;
-      if (duplicates > 0) msg += `\n⚠ ${duplicates} duplicates skipped`;
-      if (skipped > 0) msg += `\n— ${skipped} rows skipped (no production number)`;
-      if (colHeight === -1) msg += `\n⚠ Height column not found`;
-      if (colWidth === -1) msg += `\n⚠ Width column not found`;
-      if (colLength === -1) msg += `\n⚠ Length column not found`;
-      if (colWeight === -1) msg += `\n⚠ Weight column not found`;
-      alert(msg);
+      // ── Validation: filter out formula/header rows ──
+      const validCages = [];
+      const invalidRows = [];
+      let duplicates2 = 0, skipped2 = 0;
+      const existingNames2 = new Set(STATE.cages.map(c => String(c.name).toLowerCase().trim()));
 
-      render();
-      // Batch-insert new cages via API
-      const newCages = STATE.cages.slice(-imported);
-      for (const cage of newCages) {
-        await addCageToAPI(cage);
-      }
+      const dataRows2 = allRows.slice(headerIdx + 1);
+      dataRows2.forEach(row => {
+        const rawProd = row[colProdNum];
+        if (rawProd === undefined || rawProd === null || String(rawProd).trim() === '') { skipped2++; return; }
+        const name = String(rawProd).trim();
+        // Reject formula cells, header repeats, and non-numeric names that look like metadata
+        if (name.startsWith('=') || name.toLowerCase() === 'production number' || name.toLowerCase() === 'prod number') {
+          invalidRows.push({ name, reason: 'Formula or header cell' }); return;
+        }
+        if (existingNames2.has(name.toLowerCase())) { duplicates2++; return; }
+        const parseMM = (val) => {
+          if (val === undefined || val === null || String(val).trim() === '') return 0;
+          const n = parseFloat(String(val).replace(/[^\d.-]/g, ''));
+          return isNaN(n) ? 0 : Math.round((n / 1000) * 1000) / 1000;
+        };
+        const parseWt = (val) => {
+          if (val === undefined || val === null || String(val).trim() === '') return 0;
+          const n = parseFloat(String(val).replace(/[^\d.-]/g, ''));
+          if (isNaN(n)) return 0;
+          return n > 100 ? Math.round((n / 1000) * 100) / 100 : Math.round(n * 100) / 100;
+        };
+        const height = colHeight !== -1 ? parseMM(row[colHeight]) : 0;
+        const width = colWidth !== -1 ? parseMM(row[colWidth]) : 0;
+        const length = colLength !== -1 ? parseMM(row[colLength]) : 0;
+        const weight = colWeight !== -1 ? parseWt(row[colWeight]) : 0;
+        existingNames2.add(name.toLowerCase());
+        validCages.push({ id: uid(), name, height, width, length, weight, notes: 'Imported from Excel', location: 'facility', locationDetail: '', createdAt: new Date().toISOString() });
+      });
+
+      // Show review modal
+      showImportReviewModal(validCages, invalidRows, duplicates2, skipped2, colHeight, colWidth, colLength, colWeight);
+
     } catch(err) {
       alert('Error reading Excel file: ' + err.message);
       console.error(err);
@@ -1529,6 +1623,104 @@ async function handleExcelImport(input) {
   };
   reader.readAsArrayBuffer(file);
   input.value = '';
+}
+
+function showImportReviewModal(validCages, invalidRows, duplicates, skipped, colH, colW, colL, colWt) {
+  // Remove existing modal if any
+  const existing = document.getElementById('import-review-modal');
+  if (existing) existing.remove();
+
+  const missingCols = [];
+  if (colH === -1) missingCols.push('Height');
+  if (colW === -1) missingCols.push('Width');
+  if (colL === -1) missingCols.push('Length');
+  if (colWt === -1) missingCols.push('Weight');
+
+  const previewRows = validCages.slice(0, 20).map(c => `
+    <tr>
+      <td style="font-family:var(--font-mono);font-weight:600">${esc(c.name)}</td>
+      <td style="font-family:var(--font-mono)">${c.height}m</td>
+      <td style="font-family:var(--font-mono)">${c.width}m</td>
+      <td style="font-family:var(--font-mono)">${c.length}m</td>
+      <td style="font-family:var(--font-mono)">${c.weight}t</td>
+      <td><span class="badge badge-blue">Facility</span></td>
+    </tr>`).join('');
+
+  const invalidHTML = invalidRows.length > 0
+    ? `<div style="margin-top:12px;padding:8px 12px;background:#fce8e8;border:1px solid #e8b0b0;border-radius:6px">
+        <div style="font:600 11px var(--font-mono);color:var(--red);margin-bottom:4px">⚠ ${invalidRows.length} invalid row${invalidRows.length>1?'s':''} will be skipped (formulas/headers detected):</div>
+        ${invalidRows.slice(0,5).map(r=>`<div style="font-size:11px;color:var(--red)">"${esc(r.name)}" — ${r.reason}</div>`).join('')}
+        ${invalidRows.length > 5 ? `<div style="font-size:11px;color:var(--red)">...and ${invalidRows.length-5} more</div>` : ''}
+      </div>` : '';
+
+  const modal = document.createElement('div');
+  modal.id = 'import-review-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(10,15,30,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:var(--bg-card);border-radius:var(--radius-lg);padding:24px;max-width:700px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="font:700 16px var(--font-display);color:var(--text-primary)">📥 Review Import</div>
+        <button onclick="document.getElementById('import-review-modal').remove()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--text-muted)">✕</button>
+      </div>
+
+      <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+        <div style="background:#e6f5ec;border:1px solid #b0dcc0;border-radius:6px;padding:8px 14px;text-align:center">
+          <div style="font:700 20px var(--font-mono);color:var(--green)">${validCages.length}</div>
+          <div style="font-size:10px;color:var(--green);font-weight:600">Valid Cages</div>
+        </div>
+        <div style="background:#fce8e8;border:1px solid #e8b0b0;border-radius:6px;padding:8px 14px;text-align:center">
+          <div style="font:700 20px var(--font-mono);color:var(--red)">${invalidRows.length}</div>
+          <div style="font-size:10px;color:var(--red);font-weight:600">Invalid Rows</div>
+        </div>
+        <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:8px 14px;text-align:center">
+          <div style="font:700 20px var(--font-mono);color:var(--text-muted)">${duplicates}</div>
+          <div style="font-size:10px;color:var(--text-muted);font-weight:600">Duplicates Skipped</div>
+        </div>
+        <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:8px 14px;text-align:center">
+          <div style="font:700 20px var(--font-mono);color:var(--text-muted)">${skipped}</div>
+          <div style="font-size:10px;color:var(--text-muted);font-weight:600">Empty Rows</div>
+        </div>
+      </div>
+
+      ${missingCols.length > 0 ? `<div style="margin-bottom:12px;padding:8px 12px;background:#fff7ed;border:1px solid #e8c8a0;border-radius:6px;font-size:12px;color:var(--orange)">⚠ Columns not found — will import as 0: ${missingCols.join(', ')}</div>` : ''}
+      ${invalidHTML}
+
+      ${validCages.length > 0 ? `
+      <div style="margin-top:14px;font:600 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Preview (first ${Math.min(validCages.length,20)} of ${validCages.length})</div>
+      <div style="overflow-x:auto;max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:6px">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead style="position:sticky;top:0;background:var(--bg-elevated)">
+            <tr><th style="padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase">Name</th>
+            <th style="padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase">H</th>
+            <th style="padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase">W</th>
+            <th style="padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase">L</th>
+            <th style="padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase">Wt</th>
+            <th style="padding:6px 10px;text-align:left;border-bottom:1px solid var(--border);font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase">Location</th></tr>
+          </thead>
+          <tbody>${previewRows}${validCages.length > 20 ? `<tr><td colspan="6" style="padding:8px 10px;text-align:center;color:var(--text-muted);font-size:11px;font-style:italic">...and ${validCages.length - 20} more cages</td></tr>` : ''}</tbody>
+        </table>
+      </div>` : '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:13px">No valid cages to import.</div>'}
+
+      <div style="display:flex;gap:10px;margin-top:18px;justify-content:flex-end">
+        <button class="btn btn-secondary" onclick="document.getElementById('import-review-modal').remove()">Cancel</button>
+        ${validCages.length > 0 ? `<button class="btn btn-primary" onclick="commitExcelImport(window._pendingImport)">✅ Import ${validCages.length} Cage${validCages.length!==1?'s':''}</button>` : ''}
+      </div>
+    </div>
+  `;
+  window._pendingImport = validCages;
+  document.body.appendChild(modal);
+}
+
+async function commitExcelImport(cages) {
+  document.getElementById('import-review-modal')?.remove();
+  if (!cages || cages.length === 0) return;
+  cages.forEach(c => STATE.cages.push(c));
+  render();
+  showSuccess(`✅ Imported ${cages.length} cage${cages.length!==1?'s':''}`);
+  for (const cage of cages) {
+    await addCageToAPI(cage);
+  }
+  window._pendingImport = null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2802,6 +2994,156 @@ async function clearReportMovements() {
   STATE.plannedMovements = STATE.plannedMovements.filter(m => !(m.date >= reportFrom && m.date <= reportTo));
   render();
   await Promise.all(ids.map(id => deleteMovementFromAPI(id)));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AUDIT LOG
+// ═══════════════════════════════════════════════════════════════════════════════
+let auditFilter = 'all'; // 'all' | 'completed' | 'pending' | 'rmd-to-frame' | 'frame-to-rmd' | 'facility-to-frame'
+let auditSearch = '';
+let auditSort = 'date-desc'; // 'date-desc' | 'date-asc'
+
+function renderAuditLog() {
+  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','facility-to-frame':'#2563b0','frame-fix-shipping':'#c08520'};
+  const MVLABELS = {'rmd-to-frame':'RMD → Frame','frame-to-rmd':'Frame → RMD','facility-to-frame':'Facility → Frame','frame-fix-shipping':'Fix for Shipping'};
+
+  let movements = [...STATE.plannedMovements];
+
+  // Apply filters
+  if (auditFilter === 'completed') movements = movements.filter(m => m.completed);
+  else if (auditFilter === 'pending') movements = movements.filter(m => !m.completed);
+  else if (auditFilter !== 'all') movements = movements.filter(m => m.typeKey === auditFilter);
+
+  if (auditSearch) {
+    const q = auditSearch.toLowerCase();
+    movements = movements.filter(m => {
+      const cage = getCage(m.cageId);
+      return m.description?.toLowerCase().includes(q)
+        || cage?.name?.toLowerCase().includes(q)
+        || m.type?.toLowerCase().includes(q)
+        || m.notes?.toLowerCase().includes(q);
+    });
+  }
+
+  // Sort
+  movements.sort((a, b) => {
+    const da = a.date || '', db = b.date || '';
+    const ca = a.completedAt || '', cb = b.completedAt || '';
+    if (auditSort === 'date-asc') return da.localeCompare(db) || ca.localeCompare(cb);
+    return db.localeCompare(da) || cb.localeCompare(ca);
+  });
+
+  // Stats
+  const total = STATE.plannedMovements.length;
+  const completed = STATE.plannedMovements.filter(m => m.completed).length;
+  const pending = total - completed;
+  const byType = {};
+  STATE.plannedMovements.forEach(m => { byType[m.typeKey] = (byType[m.typeKey]||0)+1; });
+
+  const typeFilterBtns = [
+    {k:'all', label:`All (${total})`},
+    {k:'completed', label:`✅ Done (${completed})`},
+    {k:'pending', label:`⏳ Pending (${pending})`},
+    {k:'rmd-to-frame', label:`RMD→Frame (${byType['rmd-to-frame']||0})`},
+    {k:'frame-to-rmd', label:`Frame→RMD (${byType['frame-to-rmd']||0})`},
+    {k:'facility-to-frame', label:`Facility→Frame (${byType['facility-to-frame']||0})`},
+    {k:'frame-fix-shipping', label:`Fix Ship (${byType['frame-fix-shipping']||0})`},
+  ].map(b => `<button class="filter-btn ${auditFilter===b.k?'active':''}" onclick="auditFilter='${b.k}';render()">${b.label}</button>`).join('');
+
+  const rows = movements.length === 0
+    ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted);font-style:italic">No movements match this filter</td></tr>`
+    : movements.map(m => {
+        const cage = getCage(m.cageId);
+        const frame = getFrame(m.frameId);
+        const col = MVCOLS[m.typeKey] || 'var(--accent)';
+        const typeLabel = MVLABELS[m.typeKey] || m.type || m.typeKey;
+        const statusBadge = m.completed
+          ? `<span class="badge badge-green">✅ Done</span>`
+          : `<span class="badge badge-yellow">⏳ Pending</span>`;
+        const completedAtStr = m.completedAt
+          ? `<div style="font-size:9px;color:var(--text-muted);margin-top:2px">Completed ${new Date(m.completedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>`
+          : '';
+        return `<tr style="opacity:${m.completed?0.75:1}">
+          <td style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);white-space:nowrap">${m.date ? fmt(m.date) : '—'}
+            ${m.shift === 'night' ? '<span style="font-size:9px;color:#7040c0;margin-left:4px">🌙 Night</span>' : '<span style="font-size:9px;color:#c08520;margin-left:4px">☀ Day</span>'}
+          </td>
+          <td>
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${col};margin-right:5px"></span>
+            <span style="font-size:12px;font-weight:600;color:${col}">${esc(typeLabel)}</span>
+          </td>
+          <td style="font:700 12px var(--font-mono)">${cage ? esc(cage.name) : '—'}</td>
+          <td style="font-size:12px;color:var(--text-secondary)">${esc(m.description||'')}</td>
+          <td style="font-size:11px;color:var(--text-muted)">${m.notes ? esc(m.notes) : '—'}</td>
+          <td>${statusBadge}${completedAtStr}</td>
+          <td style="white-space:nowrap">
+            ${!m.completed ? `<button class="btn btn-primary btn-xs" onclick="completeMove('${m.id}')">✓ Done</button>` : ''}
+            <button class="btn btn-danger btn-xs" style="margin-left:3px" onclick="deleteMovement('${m.id}')">✕</button>
+          </td>
+        </tr>`;
+      }).join('');
+
+  return `
+    <div class="flex-between" style="margin-bottom:16px">
+      <h2 class="section-title" style="margin:0">📋 Audit Log</h2>
+      <div style="font-size:12px;color:var(--text-muted)">${total} total movement${total!==1?'s':''} recorded</div>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <div class="stat-card" style="flex:0 0 auto;min-width:110px">
+        <div class="stat-val" style="color:var(--green)">${completed}</div>
+        <div class="stat-lbl">Completed</div>
+      </div>
+      <div class="stat-card" style="flex:0 0 auto;min-width:110px">
+        <div class="stat-val" style="color:var(--orange)">${pending}</div>
+        <div class="stat-lbl">Pending</div>
+      </div>
+      <div class="stat-card" style="flex:0 0 auto;min-width:110px">
+        <div class="stat-val" style="color:var(--accent)">${total > 0 ? Math.round(completed/total*100) : 0}%</div>
+        <div class="stat-lbl">Complete Rate</div>
+      </div>
+      <div class="stat-card" style="flex:0 0 auto;min-width:110px">
+        <div class="stat-val" style="color:var(--blue)">${byType['rmd-to-frame']||0}</div>
+        <div class="stat-lbl">RMD→Frame</div>
+      </div>
+      <div class="stat-card" style="flex:0 0 auto;min-width:110px">
+        <div class="stat-val" style="color:var(--purple)">${byType['frame-to-rmd']||0}</div>
+        <div class="stat-lbl">Frame→RMD</div>
+      </div>
+      <div class="stat-card" style="flex:0 0 auto;min-width:110px">
+        <div class="stat-val" style="color:var(--blue)">${byType['facility-to-frame']||0}</div>
+        <div class="stat-lbl">Fac→Frame</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+      ${typeFilterBtns}
+      <div style="display:flex;gap:6px;margin-left:auto;align-items:center">
+        <input placeholder="Search movements…" value="${esc(auditSearch)}" style="width:200px;font-size:12px"
+          oninput="auditSearch=this.value;render()"/>
+        <select style="font-size:12px;padding:6px 10px" onchange="auditSort=this.value;render()">
+          <option value="date-desc" ${auditSort==='date-desc'?'selected':''}>Newest first</option>
+          <option value="date-asc" ${auditSort==='date-asc'?'selected':''}>Oldest first</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Date / Shift</th><th>Type</th><th>Cage</th><th>Description</th><th>Notes</th><th>Status</th><th>Actions</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:var(--text-muted);text-align:right">Showing ${movements.length} of ${total} movements</div>
+  `;
+}
+
+async function deleteMovement(id) {
+  if (!confirm('Delete this movement record? This cannot be undone.')) return;
+  STATE.plannedMovements = STATE.plannedMovements.filter(m => m.id !== id);
+  render();
+  await deleteMovementFromAPI(id);
 }
 
 function renderReport() {
