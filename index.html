@@ -395,6 +395,13 @@ tr:hover td { background: #f8f9fb; }
 .zoom-btn:hover { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
 .zoom-btn:disabled { opacity: 0.3; cursor: default; }
 .zoom-label { font: 700 12px var(--font-mono); color: var(--accent); min-width: 38px; text-align: center; }
+.zoom-wrap {
+  transform-origin: top left;
+  transition: transform 0.15s ease;
+}
+.zoom-outer {
+  overflow: hidden; /* clip sides */ width: 100%;
+}
 
 /* ── Overview / Presentation tab ── */
 .overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
@@ -526,8 +533,8 @@ function initState() {
 // ═══════════════════════════════════════════════════════════════════════════════
 let STATE = initState();
 let activeTab = 'dashboard';
-const tabZoom = { dashboard: 1, rmd: 0.75, movements: 0.75 };
-const ZOOM_STEPS = [0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2];
+const tabZoom = { dashboard: 1, rmd: 1, movements: 1 };
+const ZOOM_STEPS = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2];
 
 // ── API config ──────────────────────────────────────────────────────────────
 // Set this to your Worker URL, e.g. https://cage-tracker-api.yourname.workers.dev
@@ -693,33 +700,17 @@ function getCage(id) { return STATE.cages.find(c=>c.id===id); }
 function getFrame(id) { return STATE.frames.find(f=>f.id===id); }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ZOOM HELPERS  — uses CSS `zoom` property so layout reflows correctly
+// ZOOM HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
 function zoomBarHTML(tab) {
   const z = tabZoom[tab] || 1;
   const idx = ZOOM_STEPS.indexOf(z);
   const pct = Math.round(z * 100);
-  const isDefault = z === (TAB_ZOOM_DEFAULT[tab] || 1);
   return `<div class="zoom-bar">
     <button class="zoom-btn" onclick="applyZoom('${tab}',-1)" ${idx <= 0 ? 'disabled' : ''} title="Zoom out">−</button>
     <span class="zoom-label">${pct}%</span>
     <button class="zoom-btn" onclick="applyZoom('${tab}',1)" ${idx >= ZOOM_STEPS.length-1 ? 'disabled' : ''} title="Zoom in">+</button>
-    ${!isDefault ? `<button class="zoom-btn" style="font-size:10px;width:auto;padding:0 8px;border-radius:8px" onclick="resetZoom('${tab}')" title="Reset zoom">↺</button>` : ''}
-  </div>`;
-}
-
-const TAB_ZOOM_DEFAULT = { dashboard: 1, rmd: 0.75, movements: 0.75 };
-
-function zoomBarHTML(tab) {
-  const z = tabZoom[tab] || 1;
-  const idx = ZOOM_STEPS.indexOf(z);
-  const pct = Math.round(z * 100);
-  const isDefault = z === (TAB_ZOOM_DEFAULT[tab] || 1);
-  return `<div class="zoom-bar">
-    <button class="zoom-btn" onclick="applyZoom('${tab}',-1)" ${idx <= 0 ? 'disabled' : ''} title="Zoom out">−</button>
-    <span class="zoom-label">${pct}%</span>
-    <button class="zoom-btn" onclick="applyZoom('${tab}',1)" ${idx >= ZOOM_STEPS.length-1 ? 'disabled' : ''} title="Zoom in">+</button>
-    ${!isDefault ? `<button class="zoom-btn" style="font-size:10px;width:auto;padding:0 8px;border-radius:8px" onclick="resetZoom('${tab}')" title="Reset to default">↺</button>` : ''}
+    ${z !== 1 ? `<button class="zoom-btn" style="font-size:10px;width:auto;padding:0 6px;border-radius:8px" onclick="resetZoom('${tab}')" title="Reset zoom">↺</button>` : ''}
   </div>`;
 }
 
@@ -728,44 +719,31 @@ function applyZoom(tab, dir) {
   const idx = ZOOM_STEPS.indexOf(z);
   const newIdx = Math.max(0, Math.min(ZOOM_STEPS.length - 1, idx + dir));
   tabZoom[tab] = ZOOM_STEPS[newIdx];
+  _applyZoomTransform(tab);
+  // Re-render just the zoom bar so buttons update (cheap, no full re-render)
   const bar = document.getElementById('zoom-bar-' + tab);
-  if (bar) bar.innerHTML = zoomBarHTML(tab);
-  if (tab === 'movements') {
-    // Reset scale to 1 first so getBoundingClientRect works correctly for arrow positions
-    const canvas = document.getElementById('zoom-canvas-movements');
-    if (canvas) { canvas.style.transform = 'scale(1)'; }
-    setTimeout(() => { mvRedraw(); setTimeout(() => _applyZoomToContent('movements'), 30); }, 20);
-  } else {
-    _applyZoomToContent(tab);
-  }
+  if (bar) bar.outerHTML = `<div id="zoom-bar-${tab}">${zoomBarHTML(tab)}</div>`;
+  // Redraw arrows if on movements tab
+  if (tab === 'movements') setTimeout(mvRedraw, 50);
 }
 
 function resetZoom(tab) {
-  tabZoom[tab] = TAB_ZOOM_DEFAULT[tab] || 1;
+  tabZoom[tab] = 1;
+  _applyZoomTransform(tab);
   const bar = document.getElementById('zoom-bar-' + tab);
-  if (bar) bar.innerHTML = zoomBarHTML(tab);
-  if (tab === 'movements') {
-    const canvas = document.getElementById('zoom-canvas-movements');
-    if (canvas) { canvas.style.transform = 'scale(1)'; }
-    setTimeout(() => { mvRedraw(); setTimeout(() => _applyZoomToContent('movements'), 30); }, 20);
-  } else {
-    _applyZoomToContent(tab);
-  }
+  if (bar) bar.outerHTML = `<div id="zoom-bar-${tab}">${zoomBarHTML(tab)}</div>`;
+  if (tab === 'movements') setTimeout(mvRedraw, 50);
 }
 
-function _applyZoomToContent(tab) {
-  const canvas = document.getElementById('zoom-canvas-' + tab);
-  const shell  = document.getElementById('zoom-shell-' + tab);
-  if (!canvas || !shell) return;
+function _applyZoomTransform(tab) {
+  const wrap = document.getElementById('zoom-wrap-' + tab);
+  const outer = document.getElementById('zoom-outer-' + tab);
+  if (!wrap || !outer) return;
   const z = tabZoom[tab] || 1;
-  canvas.style.transform = `scale(${z})`;
-  canvas.style.transformOrigin = 'top left';
-  // Make the shell tall/wide enough so scrollbars work correctly
-  // We read the natural (un-scaled) size then multiply by z
-  const naturalW = canvas.scrollWidth;
-  const naturalH = canvas.scrollHeight;
-  shell.style.width  = Math.ceil(naturalW * z) + 'px';
-  shell.style.height = Math.ceil(naturalH * z) + 'px';
+  wrap.style.transform = `scale(${z})`;
+  // Adjust outer height so scrolling still works correctly
+  const naturalH = wrap.scrollHeight;
+  outer.style.height = Math.ceil(naturalH * z) + 'px';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -794,16 +772,13 @@ function renderMain() {
       ${renderTab(activeTab)}
     </div>
   `;
+  // Schedule arrow draw after DOM settles when on movements tab
   if (activeTab === 'movements') {
-    // Draw arrows first, then scale — arrows use getBoundingClientRect on the unscaled canvas
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        mvRedraw();
-        setTimeout(() => _applyZoomToContent('movements'), 30);
-      }, 50);
-    });
-  } else if (tabZoom[activeTab] !== undefined) {
-    requestAnimationFrame(() => setTimeout(() => _applyZoomToContent(activeTab), 30));
+    requestAnimationFrame(() => { setTimeout(mvRedraw, 50); });
+  }
+  // Apply zoom transform on zoomable tabs
+  if (tabZoom[activeTab] !== undefined) {
+    requestAnimationFrame(() => { setTimeout(() => _applyZoomTransform(activeTab), 30); });
   }
 }
 
@@ -1002,12 +977,12 @@ function renderDashboard() {
   `).join('') || '<div class="empty-msg">No movements planned for today</div>';
 
   return `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <h2 class="section-title" style="margin:0">Dashboard Overview</h2>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
       <div id="zoom-bar-dashboard">${zoomBarHTML('dashboard')}</div>
     </div>
-    <div id="zoom-shell-dashboard" style="position:relative">
-      <div id="zoom-canvas-dashboard" style="transform-origin:top left">
+    <div id="zoom-outer-dashboard" class="zoom-outer">
+      <div id="zoom-wrap-dashboard" class="zoom-wrap">
+        <h2 class="section-title">Dashboard Overview</h2>
         <div class="stat-row">
           <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${cages.length}</div><div class="stat-lbl">Total Cages</div></div>
           <div class="stat-card"><div class="stat-val" style="color:var(--blue)">${inFac}</div><div class="stat-lbl">In Facility</div></div>
@@ -2089,12 +2064,12 @@ function renderRMD() {
   }).join('');
 
   return `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <h2 class="section-title" style="margin:0">RMD Storage Bays</h2>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
       <div id="zoom-bar-rmd">${zoomBarHTML('rmd')}</div>
     </div>
-    <div id="zoom-shell-rmd" style="position:relative">
-      <div id="zoom-canvas-rmd" style="transform-origin:top left">
+    <div id="zoom-outer-rmd" class="zoom-outer">
+      <div id="zoom-wrap-rmd" class="zoom-wrap">
+        <h2 class="section-title">RMD Storage Bays</h2>
         <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Each side has 2 inside and 2 outside spaces. Combined length per inside or outside row must be ≤${RMD_MAX_LENGTH}m. Cages are filtered accordingly.</div>
         ${shipmentLegendHTML(_rmdTabShipDays)}
         <div class="rmd-site-layout">
@@ -2104,6 +2079,7 @@ function renderRMD() {
               const r2 = STATE.rmdSlots[idx2];
               if(!r2) return '';
               const cnt2 = [r2.A.cage1,r2.A.cage2,r2.A.cage3,r2.A.cage4,r2.B.cage1,r2.B.cage2,r2.B.cage3,r2.B.cage4].filter(Boolean).length;
+
               function renderCompact(side, slot, posLabel, groupSlots) {
                 const sObj2 = r2[side];
                 const cid2 = sObj2[slot];
@@ -2120,6 +2096,7 @@ function renderRMD() {
                   return '<div class="rmd-slot"><span class="rmd-slot-label">'+posLabel+'</span><select class="rmd-slot" style="flex:1;font-size:11px;padding:4px 8px" onchange="assignToRMD('+idx2+',\''+side+'\',\''+slot+'\',this.value,\''+gs2+'\');this.value=\'\'"><option value="">≤'+rem2+'m</option>'+opts2+'</select></div>';
                 }
               }
+
               const insA = getSideGroupLength(r2.A,'cage1','cage3');
               const outA = getSideGroupLength(r2.A,'cage2','cage4');
               const insB = getSideGroupLength(r2.B,'cage1','cage3');
@@ -2139,6 +2116,7 @@ function renderRMD() {
                 + '<div style="font:600 8px var(--font-mono);color:var(--green);margin-bottom:3px">OUTSIDE ('+outB.toFixed(1)+'m)</div>'
                 + pairRow(renderCompact('B','cage2','OUT1',['cage2','cage4']), renderCompact('B','cage4','OUT2',['cage2','cage4']))
                 + '</div>';
+
               return '<div class="rmd-site-card"><div class="card"><div class="flex-between" style="margin-bottom:8px"><span style="font:700 16px var(--font-mono);color:var(--accent)">RMD-'+r2.number+'</span><span style="font-size:11px;color:var(--text-muted)">'+cnt2+'/8</span></div>'+sideAhtml+sideBhtml+(r2.A.overridden||r2.B.overridden?'<span class="badge badge-yellow">⚠ Override</span>':'')+'</div></div>';
             }).join('');
             return '<div class="rmd-site-row row-'+row.row+'">'+items+'</div>';
@@ -4184,15 +4162,21 @@ function renderMovementsMap() {
       <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">${filtered.length} movement${filtered.length!==1?'s':''}</span>
     </div>
 
-    <div id="zoom-shell-movements" style="position:relative">
-      <div id="zoom-canvas-movements" style="transform-origin:top left">
+    <div id="zoom-outer-movements" class="zoom-outer">
+      <div id="zoom-wrap-movements" class="zoom-wrap">
         <div style="display:grid;grid-template-columns:1fr 260px;gap:16px;align-items:start">
+
+          <!-- Canvas map -->
           <div style="position:relative">
             <div id="mv-content">
+
+              <!-- RMD zone -->
               <div style="display:flex;gap:16px;align-items:flex-start">
                 <div style="flex:1">
                   <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🗄 RMD Storage</div>
-                  <div id="mv-rmd-zone">${rmdRowsHTML}</div>
+                  <div id="mv-rmd-zone">
+                    ${rmdRowsHTML}
+                  </div>
                 </div>
                 <div>
                   <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🏭 Facility</div>
@@ -4239,15 +4223,25 @@ function renderMovementsMap() {
                   })()}
                 </div>
               </div>
+
+              <!-- Divider -->
               <div style="border-top:2px dashed var(--border);margin:20px 0 16px;position:relative">
                 <span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--bg-deep);padding:0 12px;font:600 10px var(--font-mono);color:var(--text-muted);letter-spacing:.06em">FRAMES AT FACILITY</span>
               </div>
-              <div id="mv-frame-zone" style="display:flex;gap:6px;flex-wrap:wrap;">${framesHTML}</div>
+
+              <!-- Frames zone -->
+              <div id="mv-frame-zone" style="display:flex;gap:6px;flex-wrap:wrap;">
+                ${framesHTML}
+              </div>
             </div>
+
+            <!-- SVG overlay: absolutely positioned within mv-content for reliable arrow drawing -->
             <svg id="mv-svg-arrows" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;overflow:visible"></svg>
           </div>
+
+          <!-- Sidebar -->
           <div>
-            <div class="card" style="max-height:calc(100vh - 220px);overflow-y:auto">
+            <div class="card" style="position:sticky;top:20px;max-height:calc(100vh - 120px);overflow-y:auto">
               <div class="card-title" style="margin-bottom:10px">Planned Movements</div>
               ${moveListHTML||'<div class="empty-msg">No movements match filter</div>'}
             </div>
@@ -4256,7 +4250,7 @@ function renderMovementsMap() {
       </div>
     </div>
   `;
-  // Note: mvRedraw is called by renderMain() after DOM update
+  // Note: mvRedraw is now called by renderMain() after DOM update
 }
 
 
@@ -4282,25 +4276,22 @@ function mvRedraw() {
     'frame-return-from-client': '#0e7490',
   };
 
-  // Account for zoom scale — getBoundingClientRect returns scaled viewport coords
-  // We need unscaled canvas coords, so divide by the current zoom
-  const z = tabZoom['movements'] || 1;
   const cRect = container.getBoundingClientRect();
 
-  // Get element position relative to the mv-content container, corrected for scale
+  // Get element position relative to the mv-content container
   function getPos(id) {
     const el = document.getElementById(id);
     if (!el) return null;
     const r = el.getBoundingClientRect();
     return {
-      left:   (r.left - cRect.left) / z,
-      right:  (r.right - cRect.left) / z,
-      top:    (r.top - cRect.top) / z,
-      bottom: (r.bottom - cRect.top) / z,
-      cx:     ((r.left + r.right) / 2 - cRect.left) / z,
-      cy:     ((r.top + r.bottom) / 2 - cRect.top) / z,
-      w:      r.width / z,
-      h:      r.height / z
+      left:   r.left - cRect.left,
+      right:  r.right - cRect.left,
+      top:    r.top - cRect.top,
+      bottom: r.bottom - cRect.top,
+      cx:     (r.left + r.right) / 2 - cRect.left,
+      cy:     (r.top + r.bottom) / 2 - cRect.top,
+      w:      r.width,
+      h:      r.height
     };
   }
 
