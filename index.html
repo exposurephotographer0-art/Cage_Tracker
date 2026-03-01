@@ -695,6 +695,10 @@ function renderMain() {
       ${renderTab(activeTab)}
     </div>
   `;
+  // Schedule arrow draw after DOM settles when on movements tab
+  if (activeTab === 'movements') {
+    requestAnimationFrame(() => { setTimeout(mvRedraw, 50); });
+  }
 }
 
 function renderTab(id) {
@@ -3409,32 +3413,36 @@ function renderMovementsMap() {
     const movesForRmd = filtered.filter(m => String(m.rmdSlot).replace(/[ABab]$/,'') === String(rmdNum));
     const sides = ['A','B'];
     const slotKeys = ['cage1','cage2','cage3','cage4'];
+    const slotLabels = {cage1:'In 1', cage2:'Out 1', cage3:'In 2', cage4:'Out 2'};
     let slotsHTML = '';
     sides.forEach(side => {
-      const hasCages = slotKeys.some(sk => r[side][sk]);
-      if (!hasCages) return;
       slotsHTML += `<div style="font:700 8px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin:5px 0 3px">Side ${side}</div>`;
+      let sideHasContent = false;
       slotKeys.forEach(sk => {
         const cid = r[side][sk];
-        if (!cid) return;
-        const cage = getCage(cid);
-        if (!cage) return;
-        const mvOut = movesForRmd.some(m => m.cageId===cid && m.typeKey==='rmd-to-frame');
-        const mvIn  = movesForRmd.some(m => m.cageId===cid && m.typeKey==='frame-to-rmd');
-        const bg = mvOut ? 'background:#fff7ed;border-color:#f5a742;' : mvIn ? 'background:#f0faf4;border-color:#4aad72;' : 'border-color:var(--border);';
-        const arrow = mvOut ? '<span style="color:#c08520;font-weight:800;margin-right:4px">→</span>'
-                    : mvIn  ? '<span style="color:#27a060;font-weight:800;margin-right:4px">←</span>' : '';
-        slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;background:var(--bg-input);margin-bottom:2px;display:flex;align-items:center;${bg}">
-          ${arrow}<span style="font:600 10px var(--font-mono)">${esc(cage.name)}</span>
-          <span style="color:var(--text-muted);margin-left:5px">${cage.height}m</span>
-        </div>`;
+        const cage = cid ? getCage(cid) : null;
+        if (cage) {
+          sideHasContent = true;
+          const mvOut = movesForRmd.some(m => m.cageId===cid && m.typeKey==='rmd-to-frame');
+          const mvIn  = movesForRmd.some(m => m.cageId===cid && m.typeKey==='frame-to-rmd');
+          const bg = mvOut ? 'background:#fff7ed;border-color:#f5a742;' : mvIn ? 'background:#f0faf4;border-color:#4aad72;' : 'border-color:var(--border);';
+          const arrow = mvOut ? '<span style="color:#c08520;font-weight:800;margin-right:4px">→</span>'
+                      : mvIn  ? '<span style="color:#27a060;font-weight:800;margin-right:4px">←</span>' : '';
+          slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;background:var(--bg-input);margin-bottom:2px;display:flex;align-items:center;${bg}">
+            ${arrow}<span style="font:600 10px var(--font-mono)">${esc(cage.name)}</span>
+            <span style="color:var(--text-muted);margin-left:5px">${cage.height}m</span>
+          </div>`;
+        }
       });
+      if (!sideHasContent) {
+        slotsHTML += `<div style="font-size:10px;color:var(--text-muted);font-style:italic;padding:2px 6px;margin-bottom:2px">empty</div>`;
+      }
     });
 
     const border = isActive ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);' : 'border:1px solid var(--border);';
     return `<div id="mvr-${rmdNum}" style="background:var(--bg-card);${border}border-radius:8px;padding:9px 11px;min-width:145px;flex:0 0 auto;">
       <div style="font:700 13px var(--font-mono);color:${isActive?'var(--accent)':'var(--text-primary)'};margin-bottom:1px;">RMD-${rmdNum}</div>
-      ${slotsHTML||'<div style="font-size:10px;color:var(--text-muted);font-style:italic;margin-top:4px">empty</div>'}
+      ${slotsHTML}
     </div>`;
   }
 
@@ -3563,8 +3571,7 @@ function renderMovementsMap() {
       </div>
     </div>
   `;
-  // Schedule canvas draw after DOM settles
-  setTimeout(mvRedraw, 100);
+  // Note: mvRedraw is now called by renderMain() after DOM update
 }
 
 
@@ -3597,11 +3604,13 @@ function mvRedraw() {
   if (!MOVES.length) return;
 
   // Raw viewport coords — canvas is fixed so no offset needed
+  // Allow generous margin so arrows can be drawn to partially visible elements
   function getRect(id) {
     const el = document.getElementById(id);
     if (!el) return null;
     const r = el.getBoundingClientRect();
-    if (r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) return null;
+    const margin = 200;
+    if (r.bottom < -margin || r.top > vh+margin || r.right < -margin || r.left > vw+margin) return null;
     return { left:r.left, right:r.right, top:r.top, bottom:r.bottom,
              cx:r.left+r.width/2, cy:r.top+r.height/2, w:r.width, h:r.height };
   }
@@ -3645,11 +3654,28 @@ function mvRedraw() {
       const rX = rRect.left + rRect.w * (rTot>1 ? (0.2+0.6*ri/(rTot-1)) : 0.5);
       const fX = fRect.left + fRect.w * (fTot>1 ? (0.2+0.6*fi/(fTot-1)) : 0.5);
 
-      const x1=rX, y1=rRect.bottom, x2=fX, y2=fRect.top;
+      // Determine start/end based on direction
+      let x1, y1, x2, y2;
+      if (m.typeKey === 'rmd-to-frame') {
+        // Arrow FROM RMD bottom TO Frame top
+        x1=rX; y1=rRect.bottom; x2=fX; y2=fRect.top;
+      } else {
+        // Arrow FROM Frame top TO RMD bottom (frame-to-rmd)
+        x1=fX; y1=fRect.top; x2=rX; y2=rRect.bottom;
+      }
+
       const dy=y2-y1, dx=x2-x1;
       const pad = Math.max(Math.abs(dy)*0.4, 50);
-      const cp1x=x1+dx*0.1, cp1y=y1+pad;
-      const cp2x=x2-dx*0.1, cp2y=y2-pad;
+      // Control points: curve downward for rmd-to-frame, upward for frame-to-rmd
+      let cp1x, cp1y, cp2x, cp2y;
+      if (m.typeKey === 'rmd-to-frame') {
+        cp1x=x1+dx*0.1; cp1y=y1+pad;
+        cp2x=x2-dx*0.1; cp2y=y2-pad;
+      } else {
+        // frame-to-rmd: curve upward from frame to RMD
+        cp1x=x1+dx*0.1; cp1y=y1-pad;
+        cp2x=x2-dx*0.1; cp2y=y2+pad;
+      }
 
       ctx.save();
       ctx.strokeStyle=color; ctx.lineWidth=2.8; ctx.lineCap='round';
@@ -3712,6 +3738,18 @@ window.addEventListener('scroll', function() {
     window._mvScrollRAF = requestAnimationFrame(mvRedraw);
   }
 }, { passive: true });
+// The .main container is the actual scrollable element, so attach there too
+document.addEventListener('DOMContentLoaded', function() {
+  const mainEl = document.querySelector('.main');
+  if (mainEl) {
+    mainEl.addEventListener('scroll', function() {
+      if (typeof activeTab !== 'undefined' && activeTab === 'movements') {
+        cancelAnimationFrame(window._mvScrollRAF);
+        window._mvScrollRAF = requestAnimationFrame(mvRedraw);
+      }
+    }, { passive: true });
+  }
+});
 
 function updateUKClock() {
   const now = new Date();
