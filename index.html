@@ -377,6 +377,32 @@ tr:hover td { background: #f8f9fb; }
   background: var(--bg-elevated); border: 1px solid var(--border);
 }
 
+/* ── Zoom control ── */
+.zoom-bar {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 20px; padding: 4px 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  user-select: none;
+}
+.zoom-btn {
+  width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--bg-elevated); color: var(--text-secondary);
+  font-size: 15px; font-weight: 700; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.1s; line-height: 1;
+}
+.zoom-btn:hover { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+.zoom-btn:disabled { opacity: 0.3; cursor: default; }
+.zoom-label { font: 700 12px var(--font-mono); color: var(--accent); min-width: 38px; text-align: center; }
+.zoom-wrap {
+  transform-origin: top left;
+  transition: transform 0.15s ease;
+}
+.zoom-outer {
+  overflow: hidden; /* clip sides */ width: 100%;
+}
+
 /* ── Overview / Presentation tab ── */
 .overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 .overview-rmd-row {
@@ -507,6 +533,8 @@ function initState() {
 // ═══════════════════════════════════════════════════════════════════════════════
 let STATE = initState();
 let activeTab = 'dashboard';
+const tabZoom = { dashboard: 1, rmd: 1, movements: 1 };
+const ZOOM_STEPS = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2];
 
 // ── API config ──────────────────────────────────────────────────────────────
 // Set this to your Worker URL, e.g. https://cage-tracker-api.yourname.workers.dev
@@ -672,6 +700,53 @@ function getCage(id) { return STATE.cages.find(c=>c.id===id); }
 function getFrame(id) { return STATE.frames.find(f=>f.id===id); }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// ZOOM HELPERS
+// ═══════════════════════════════════════════════════════════════════════════════
+function zoomBarHTML(tab) {
+  const z = tabZoom[tab] || 1;
+  const idx = ZOOM_STEPS.indexOf(z);
+  const pct = Math.round(z * 100);
+  return `<div class="zoom-bar">
+    <button class="zoom-btn" onclick="applyZoom('${tab}',-1)" ${idx <= 0 ? 'disabled' : ''} title="Zoom out">−</button>
+    <span class="zoom-label">${pct}%</span>
+    <button class="zoom-btn" onclick="applyZoom('${tab}',1)" ${idx >= ZOOM_STEPS.length-1 ? 'disabled' : ''} title="Zoom in">+</button>
+    ${z !== 1 ? `<button class="zoom-btn" style="font-size:10px;width:auto;padding:0 6px;border-radius:8px" onclick="resetZoom('${tab}')" title="Reset zoom">↺</button>` : ''}
+  </div>`;
+}
+
+function applyZoom(tab, dir) {
+  const z = tabZoom[tab] || 1;
+  const idx = ZOOM_STEPS.indexOf(z);
+  const newIdx = Math.max(0, Math.min(ZOOM_STEPS.length - 1, idx + dir));
+  tabZoom[tab] = ZOOM_STEPS[newIdx];
+  _applyZoomTransform(tab);
+  // Re-render just the zoom bar so buttons update (cheap, no full re-render)
+  const bar = document.getElementById('zoom-bar-' + tab);
+  if (bar) bar.outerHTML = `<div id="zoom-bar-${tab}">${zoomBarHTML(tab)}</div>`;
+  // Redraw arrows if on movements tab
+  if (tab === 'movements') setTimeout(mvRedraw, 50);
+}
+
+function resetZoom(tab) {
+  tabZoom[tab] = 1;
+  _applyZoomTransform(tab);
+  const bar = document.getElementById('zoom-bar-' + tab);
+  if (bar) bar.outerHTML = `<div id="zoom-bar-${tab}">${zoomBarHTML(tab)}</div>`;
+  if (tab === 'movements') setTimeout(mvRedraw, 50);
+}
+
+function _applyZoomTransform(tab) {
+  const wrap = document.getElementById('zoom-wrap-' + tab);
+  const outer = document.getElementById('zoom-outer-' + tab);
+  if (!wrap || !outer) return;
+  const z = tabZoom[tab] || 1;
+  wrap.style.transform = `scale(${z})`;
+  // Adjust outer height so scrolling still works correctly
+  const naturalH = wrap.scrollHeight;
+  outer.style.height = Math.ceil(naturalH * z) + 'px';
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // RENDER ENGINE
 // ═══════════════════════════════════════════════════════════════════════════════
 function renderSidebar() {
@@ -700,6 +775,10 @@ function renderMain() {
   // Schedule arrow draw after DOM settles when on movements tab
   if (activeTab === 'movements') {
     requestAnimationFrame(() => { setTimeout(mvRedraw, 50); });
+  }
+  // Apply zoom transform on zoomable tabs
+  if (tabZoom[activeTab] !== undefined) {
+    requestAnimationFrame(() => { setTimeout(() => _applyZoomTransform(activeTab), 30); });
   }
 }
 
@@ -898,33 +977,40 @@ function renderDashboard() {
   `).join('') || '<div class="empty-msg">No movements planned for today</div>';
 
   return `
-    <h2 class="section-title">Dashboard Overview</h2>
-    <div class="stat-row">
-      <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${cages.length}</div><div class="stat-lbl">Total Cages</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--blue)">${inFac}</div><div class="stat-lbl">In Facility</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--green)">${inRMD}</div><div class="stat-lbl">In RMD</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--orange)">${inFrm}</div><div class="stat-lbl">In Frames</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--red)">${ready}</div><div class="stat-lbl">Ready to Ship</div></div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+      <div id="zoom-bar-dashboard">${zoomBarHTML('dashboard')}</div>
     </div>
-    <div class="stat-row">
-      <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${fFac}</div><div class="stat-lbl">Frames at Facility</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--blue)">${fBoat}</div><div class="stat-lbl">Frames on Boat</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--purple)">${fClient}</div><div class="stat-lbl">Frames w/ Client</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--orange)">${todayMoves}</div><div class="stat-lbl">Today's Moves</div></div>
-      <div class="stat-card"><div class="stat-val" style="color:var(--yellow)">${pending}</div><div class="stat-lbl">Pending Plans</div></div>
-    </div>
-    ${renderRMDHeatmap()}
-    ${renderNextDueDelivery()}
-    ${renderDashboardFrames()}
-    <div style="display:grid;grid-template-columns:1fr;gap:14px">
-      <div class="card" style="overflow-x:auto">
-        <div class="card-title">RMD Storage — Live View <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(click any bay to manage)</span></div>
-        ${rmdLegendHTML}
-        <div class="rmd-site-layout" style="min-width:700px">${rmdMiniHTML}</div>
-      </div>
-      <div class="card">
-        <div class="card-title">Today's Planned Movements</div>
-        ${todayMovesHTML}
+    <div id="zoom-outer-dashboard" class="zoom-outer">
+      <div id="zoom-wrap-dashboard" class="zoom-wrap">
+        <h2 class="section-title">Dashboard Overview</h2>
+        <div class="stat-row">
+          <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${cages.length}</div><div class="stat-lbl">Total Cages</div></div>
+          <div class="stat-card"><div class="stat-val" style="color:var(--blue)">${inFac}</div><div class="stat-lbl">In Facility</div></div>
+          <div class="stat-card"><div class="stat-val" style="color:var(--green)">${inRMD}</div><div class="stat-lbl">In RMD</div></div>
+          <div class="stat-card"><div class="stat-val" style="color:var(--orange)">${inFrm}</div><div class="stat-lbl">In Frames</div></div>
+          <div class="stat-card"><div class="stat-val" style="color:var(--red)">${ready}</div><div class="stat-lbl">Ready to Ship</div></div>
+        </div>
+        <div class="stat-row">
+          <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${fFac}</div><div class="stat-lbl">Frames at Facility</div></div>
+          <div class="stat-card"><div class="stat-val" style="color:var(--blue)">${fBoat}</div><div class="stat-lbl">Frames on Boat</div></div>
+          <div class="stat-card"><div class="stat-val" style="color:var(--purple)">${fClient}</div><div class="stat-lbl">Frames w/ Client</div></div>
+          <div class="stat-card"><div class="stat-val" style="color:var(--orange)">${todayMoves}</div><div class="stat-lbl">Today's Moves</div></div>
+          <div class="stat-card"><div class="stat-val" style="color:var(--yellow)">${pending}</div><div class="stat-lbl">Pending Plans</div></div>
+        </div>
+        ${renderRMDHeatmap()}
+        ${renderNextDueDelivery()}
+        ${renderDashboardFrames()}
+        <div style="display:grid;grid-template-columns:1fr;gap:14px">
+          <div class="card" style="overflow-x:auto">
+            <div class="card-title">RMD Storage — Live View <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(click any bay to manage)</span></div>
+            ${rmdLegendHTML}
+            <div class="rmd-site-layout" style="min-width:700px">${rmdMiniHTML}</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Today's Planned Movements</div>
+            ${todayMovesHTML}
+          </div>
+        </div>
       </div>
     </div>
   `;
@@ -1978,58 +2064,65 @@ function renderRMD() {
   }).join('');
 
   return `
-    <h2 class="section-title">RMD Storage Bays</h2>
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Each side has 2 inside and 2 outside spaces. Combined length per inside or outside row must be ≤${RMD_MAX_LENGTH}m. Cages are filtered accordingly.</div>
-    ${shipmentLegendHTML(_rmdTabShipDays)}
-    <div class="rmd-site-layout">
-      ${RMD_LAYOUT.map(row=>{
-        let items = row.items.map(item=>{
-          const idx2 = STATE.rmdSlots.findIndex(rr=>rr.number===item);
-          const r2 = STATE.rmdSlots[idx2];
-          if(!r2) return '';
-          const cnt2 = [r2.A.cage1,r2.A.cage2,r2.A.cage3,r2.A.cage4,r2.B.cage1,r2.B.cage2,r2.B.cage3,r2.B.cage4].filter(Boolean).length;
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+      <div id="zoom-bar-rmd">${zoomBarHTML('rmd')}</div>
+    </div>
+    <div id="zoom-outer-rmd" class="zoom-outer">
+      <div id="zoom-wrap-rmd" class="zoom-wrap">
+        <h2 class="section-title">RMD Storage Bays</h2>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Each side has 2 inside and 2 outside spaces. Combined length per inside or outside row must be ≤${RMD_MAX_LENGTH}m. Cages are filtered accordingly.</div>
+        ${shipmentLegendHTML(_rmdTabShipDays)}
+        <div class="rmd-site-layout">
+          ${RMD_LAYOUT.map(row=>{
+            let items = row.items.map(item=>{
+              const idx2 = STATE.rmdSlots.findIndex(rr=>rr.number===item);
+              const r2 = STATE.rmdSlots[idx2];
+              if(!r2) return '';
+              const cnt2 = [r2.A.cage1,r2.A.cage2,r2.A.cage3,r2.A.cage4,r2.B.cage1,r2.B.cage2,r2.B.cage3,r2.B.cage4].filter(Boolean).length;
 
-          function renderCompact(side, slot, posLabel, groupSlots) {
-            const sObj2 = r2[side];
-            const cid2 = sObj2[slot];
-            const cage2 = cid2 ? getCage(cid2) : null;
-            if(cage2) {
-              const _s = shipmentShadeClass(cage2, _rmdTabShipDays);
-              const _b = _s ? shipmentShadeBg(_s)+'border-radius:4px;padding:1px 4px;' : '';
-              return '<div class="rmd-slot" style="'+_b+'"><span class="rmd-slot-label">'+posLabel+'</span><div class="rmd-slot-content"><span class="rmd-cage-info"><span class="rmd-cage-name" style="'+shipmentShadeNameColor(_s)+'">'+esc(cage2.name)+'</span><span class="rmd-cage-detail" style="'+shipmentShadeDetailColor(_s)+'">'+cage2.height+'m·'+cage2.length+'m</span></span><button class="remove-btn" onclick="removeFromRMD('+idx2+',\''+side+'\',\''+slot+'\')">&#215;</button></div></div>';
-            } else {
-              const used2 = groupSlots.filter(s=>s!==slot).reduce((sum,s)=>{const c2=sObj2[s]?getCage(sObj2[s]):null;return sum+(c2?c2.length||0:0);},0);
-              const rem2 = (RMD_MAX_LENGTH-used2).toFixed(1);
-              const opts2 = avail.filter(c2=>(c2.length||0)+used2<=RMD_MAX_LENGTH).map(c2=>`<option value="${c2.id}">${esc(c2.name)} (${c2.length}m)</option>`).join('');
-              const gs2 = groupSlots.join(',');
-              return '<div class="rmd-slot"><span class="rmd-slot-label">'+posLabel+'</span><select class="rmd-slot" style="flex:1;font-size:11px;padding:4px 8px" onchange="assignToRMD('+idx2+',\''+side+'\',\''+slot+'\',this.value,\''+gs2+'\');this.value=\'\'"><option value="">≤'+rem2+'m</option>'+opts2+'</select></div>';
-            }
-          }
+              function renderCompact(side, slot, posLabel, groupSlots) {
+                const sObj2 = r2[side];
+                const cid2 = sObj2[slot];
+                const cage2 = cid2 ? getCage(cid2) : null;
+                if(cage2) {
+                  const _s = shipmentShadeClass(cage2, _rmdTabShipDays);
+                  const _b = _s ? shipmentShadeBg(_s)+'border-radius:4px;padding:1px 4px;' : '';
+                  return '<div class="rmd-slot" style="'+_b+'"><span class="rmd-slot-label">'+posLabel+'</span><div class="rmd-slot-content"><span class="rmd-cage-info"><span class="rmd-cage-name" style="'+shipmentShadeNameColor(_s)+'">'+esc(cage2.name)+'</span><span class="rmd-cage-detail" style="'+shipmentShadeDetailColor(_s)+'">'+cage2.height+'m·'+cage2.length+'m</span></span><button class="remove-btn" onclick="removeFromRMD('+idx2+',\''+side+'\',\''+slot+'\')">&#215;</button></div></div>';
+                } else {
+                  const used2 = groupSlots.filter(s=>s!==slot).reduce((sum,s)=>{const c2=sObj2[s]?getCage(sObj2[s]):null;return sum+(c2?c2.length||0:0);},0);
+                  const rem2 = (RMD_MAX_LENGTH-used2).toFixed(1);
+                  const opts2 = avail.filter(c2=>(c2.length||0)+used2<=RMD_MAX_LENGTH).map(c2=>`<option value="${c2.id}">${esc(c2.name)} (${c2.length}m)</option>`).join('');
+                  const gs2 = groupSlots.join(',');
+                  return '<div class="rmd-slot"><span class="rmd-slot-label">'+posLabel+'</span><select class="rmd-slot" style="flex:1;font-size:11px;padding:4px 8px" onchange="assignToRMD('+idx2+',\''+side+'\',\''+slot+'\',this.value,\''+gs2+'\');this.value=\'\'"><option value="">≤'+rem2+'m</option>'+opts2+'</select></div>';
+                }
+              }
 
-          const insA = getSideGroupLength(r2.A,'cage1','cage3');
-          const outA = getSideGroupLength(r2.A,'cage2','cage4');
-          const insB = getSideGroupLength(r2.B,'cage1','cage3');
-          const outB = getSideGroupLength(r2.B,'cage2','cage4');
-          function pairRow(s1, s2) {
-            return '<div style="display:flex;gap:6px;margin-bottom:4px"><div style="flex:1;min-width:0">'+s1+'</div><div style="flex:1;min-width:0">'+s2+'</div></div>';
-          }
-          const sideAhtml = '<div style="margin-bottom:8px"><div style="font:700 10px var(--font-mono);color:var(--text-muted);margin-bottom:4px">SIDE A</div>'
-            + '<div style="font:600 8px var(--font-mono);color:var(--blue);margin-bottom:3px">INSIDE ('+insA.toFixed(1)+'m)</div>'
-            + pairRow(renderCompact('A','cage1','IN1',['cage1','cage3']), renderCompact('A','cage3','IN2',['cage1','cage3']))
-            + '<div style="font:600 8px var(--font-mono);color:var(--green);margin-bottom:3px">OUTSIDE ('+outA.toFixed(1)+'m)</div>'
-            + pairRow(renderCompact('A','cage2','OUT1',['cage2','cage4']), renderCompact('A','cage4','OUT2',['cage2','cage4']))
-            + '</div>';
-          const sideBhtml = '<div><div style="font:700 10px var(--font-mono);color:var(--text-muted);margin-bottom:4px">SIDE B</div>'
-            + '<div style="font:600 8px var(--font-mono);color:var(--blue);margin-bottom:3px">INSIDE ('+insB.toFixed(1)+'m)</div>'
-            + pairRow(renderCompact('B','cage1','IN1',['cage1','cage3']), renderCompact('B','cage3','IN2',['cage1','cage3']))
-            + '<div style="font:600 8px var(--font-mono);color:var(--green);margin-bottom:3px">OUTSIDE ('+outB.toFixed(1)+'m)</div>'
-            + pairRow(renderCompact('B','cage2','OUT1',['cage2','cage4']), renderCompact('B','cage4','OUT2',['cage2','cage4']))
-            + '</div>';
+              const insA = getSideGroupLength(r2.A,'cage1','cage3');
+              const outA = getSideGroupLength(r2.A,'cage2','cage4');
+              const insB = getSideGroupLength(r2.B,'cage1','cage3');
+              const outB = getSideGroupLength(r2.B,'cage2','cage4');
+              function pairRow(s1, s2) {
+                return '<div style="display:flex;gap:6px;margin-bottom:4px"><div style="flex:1;min-width:0">'+s1+'</div><div style="flex:1;min-width:0">'+s2+'</div></div>';
+              }
+              const sideAhtml = '<div style="margin-bottom:8px"><div style="font:700 10px var(--font-mono);color:var(--text-muted);margin-bottom:4px">SIDE A</div>'
+                + '<div style="font:600 8px var(--font-mono);color:var(--blue);margin-bottom:3px">INSIDE ('+insA.toFixed(1)+'m)</div>'
+                + pairRow(renderCompact('A','cage1','IN1',['cage1','cage3']), renderCompact('A','cage3','IN2',['cage1','cage3']))
+                + '<div style="font:600 8px var(--font-mono);color:var(--green);margin-bottom:3px">OUTSIDE ('+outA.toFixed(1)+'m)</div>'
+                + pairRow(renderCompact('A','cage2','OUT1',['cage2','cage4']), renderCompact('A','cage4','OUT2',['cage2','cage4']))
+                + '</div>';
+              const sideBhtml = '<div><div style="font:700 10px var(--font-mono);color:var(--text-muted);margin-bottom:4px">SIDE B</div>'
+                + '<div style="font:600 8px var(--font-mono);color:var(--blue);margin-bottom:3px">INSIDE ('+insB.toFixed(1)+'m)</div>'
+                + pairRow(renderCompact('B','cage1','IN1',['cage1','cage3']), renderCompact('B','cage3','IN2',['cage1','cage3']))
+                + '<div style="font:600 8px var(--font-mono);color:var(--green);margin-bottom:3px">OUTSIDE ('+outB.toFixed(1)+'m)</div>'
+                + pairRow(renderCompact('B','cage2','OUT1',['cage2','cage4']), renderCompact('B','cage4','OUT2',['cage2','cage4']))
+                + '</div>';
 
-          return '<div class="rmd-site-card"><div class="card"><div class="flex-between" style="margin-bottom:8px"><span style="font:700 16px var(--font-mono);color:var(--accent)">RMD-'+r2.number+'</span><span style="font-size:11px;color:var(--text-muted)">'+cnt2+'/8</span></div>'+sideAhtml+sideBhtml+(r2.A.overridden||r2.B.overridden?'<span class="badge badge-yellow">⚠ Override</span>':'')+'</div></div>';
-        }).join('');
-        return '<div class="rmd-site-row row-'+row.row+'">'+items+'</div>';
-      }).join('')}
+              return '<div class="rmd-site-card"><div class="card"><div class="flex-between" style="margin-bottom:8px"><span style="font:700 16px var(--font-mono);color:var(--accent)">RMD-'+r2.number+'</span><span style="font-size:11px;color:var(--text-muted)">'+cnt2+'/8</span></div>'+sideAhtml+sideBhtml+(r2.A.overridden||r2.B.overridden?'<span class="badge badge-yellow">⚠ Override</span>':'')+'</div></div>';
+            }).join('');
+            return '<div class="rmd-site-row row-'+row.row+'">'+items+'</div>';
+          }).join('')}
+        </div>
+      </div>
     </div>
   `;
 }
@@ -4058,6 +4151,7 @@ function renderMovementsMap() {
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
       ${filterBtns}
       <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="mvRedraw()">↺ Redraw</button>
+      <div id="zoom-bar-movements">${zoomBarHTML('movements')}</div>
     </div>
 
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
@@ -4068,86 +4162,90 @@ function renderMovementsMap() {
       <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">${filtered.length} movement${filtered.length!==1?'s':''}</span>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 260px;gap:16px;align-items:start">
+    <div id="zoom-outer-movements" class="zoom-outer">
+      <div id="zoom-wrap-movements" class="zoom-wrap">
+        <div style="display:grid;grid-template-columns:1fr 260px;gap:16px;align-items:start">
 
-      <!-- Canvas map -->
-      <div style="position:relative">
-        <div id="mv-content">
+          <!-- Canvas map -->
+          <div style="position:relative">
+            <div id="mv-content">
 
-          <!-- RMD zone -->
-          <div style="display:flex;gap:16px;align-items:flex-start">
-            <div style="flex:1">
-              <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🗄 RMD Storage</div>
-              <div id="mv-rmd-zone">
-                ${rmdRowsHTML}
+              <!-- RMD zone -->
+              <div style="display:flex;gap:16px;align-items:flex-start">
+                <div style="flex:1">
+                  <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🗄 RMD Storage</div>
+                  <div id="mv-rmd-zone">
+                    ${rmdRowsHTML}
+                  </div>
+                </div>
+                <div>
+                  <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🏭 Facility</div>
+                  <div id="mv-facility-box" style="background:var(--bg-card);border:${facilityMoves.length?'2px solid #2563b0;box-shadow:0 0 0 3px rgba(37,99,176,0.12);':'1px solid var(--border);'}border-radius:8px;padding:12px 16px;min-width:130px;">
+                    <div style="font:700 13px var(--font-mono);color:${facilityMoves.length?'#2563b0':'var(--text-muted)'};margin-bottom:8px">Facility</div>
+                    ${facilityMoves.length ? facilityMoves.map(m=>{
+                      const c=getCage(m.cageId); if(!c) return '';
+                      return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #93c5fd;background:#eff6ff;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
+                        <span style="color:#2563b0;font-weight:800">→</span>
+                        <span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
+                        <span style="color:var(--text-muted)">${c.height}m</span>
+                      </div>`;
+                    }).join('') : '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no movements</div>'}
+                  </div>
+                </div>
+                <div>
+                  <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🚢 Boat / Client</div>
+                  ${(() => {
+                    const framesWithReturn = STATE.frames
+                      .filter(f => (f.location==='client'||f.location==='boat') && f.returnDate)
+                      .sort((a,b) => a.returnDate.localeCompare(b.returnDate));
+                    const hasAny = framesWithReturn.length > 0 || boatMoves.length > 0;
+                    return `<div id="mv-boat-box" style="background:var(--bg-card);border:${hasAny?'2px solid #0e7490;box-shadow:0 0 0 3px rgba(14,116,144,0.12);':'1px solid var(--border);'}border-radius:8px;padding:12px 16px;min-width:145px;">
+                      <div style="font:700 13px var(--font-mono);color:#0e7490;margin-bottom:8px">Boat / Client</div>
+                      ${boatMoves.map(m=>{
+                        const fr=getFrame(m.frameId); if(!fr) return '';
+                        return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #a5f3fc;background:#ecfeff;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
+                          <span style="color:#0e7490;font-weight:800">→</span>
+                          <span style="font:600 10px var(--font-mono)">${esc(fr.name)}</span>
+                          <span style="color:var(--text-muted)">${fr.width}m</span>
+                        </div>`;
+                      }).join('')}
+                      ${framesWithReturn.map(f=>{
+                        const daysLeft = Math.ceil((new Date(f.returnDate+'T12:00:00') - new Date()) / 86400000);
+                        const retCol = daysLeft < 0 ? 'var(--red)' : daysLeft <= 7 ? 'var(--orange)' : '#0e7490';
+                        const retStr = fmt(f.returnDate) + ` (${daysLeft < 0 ? Math.abs(daysLeft)+'d OVR' : daysLeft+'d'})`;
+                        return `<div id="mvboat-${f.id}" style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #a5f3fc;background:#ecfeff;margin-bottom:3px;">
+                          <div style="font:700 10px var(--font-mono);color:#0e7490">${esc(f.name)} <span style="font-weight:400;font-size:9px;color:var(--text-muted)">${f.location}</span></div>
+                          <div style="font-size:9px;color:${retCol};font-family:var(--font-mono)">↩ ${retStr}</div>
+                        </div>`;
+                      }).join('')}
+                      ${!hasAny ? '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no frames away</div>' : ''}
+                    </div>`;
+                  })()}
+                </div>
+              </div>
+
+              <!-- Divider -->
+              <div style="border-top:2px dashed var(--border);margin:20px 0 16px;position:relative">
+                <span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--bg-deep);padding:0 12px;font:600 10px var(--font-mono);color:var(--text-muted);letter-spacing:.06em">FRAMES AT FACILITY</span>
+              </div>
+
+              <!-- Frames zone -->
+              <div id="mv-frame-zone" style="display:flex;gap:6px;flex-wrap:wrap;">
+                ${framesHTML}
               </div>
             </div>
-            <div>
-              <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🏭 Facility</div>
-              <div id="mv-facility-box" style="background:var(--bg-card);border:${facilityMoves.length?'2px solid #2563b0;box-shadow:0 0 0 3px rgba(37,99,176,0.12);':'1px solid var(--border);'}border-radius:8px;padding:12px 16px;min-width:130px;">
-                <div style="font:700 13px var(--font-mono);color:${facilityMoves.length?'#2563b0':'var(--text-muted)'};margin-bottom:8px">Facility</div>
-                ${facilityMoves.length ? facilityMoves.map(m=>{
-                  const c=getCage(m.cageId); if(!c) return '';
-                  return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #93c5fd;background:#eff6ff;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
-                    <span style="color:#2563b0;font-weight:800">→</span>
-                    <span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
-                    <span style="color:var(--text-muted)">${c.height}m</span>
-                  </div>`;
-                }).join('') : '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no movements</div>'}
-              </div>
-            </div>
-            <div>
-              <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🚢 Boat / Client</div>
-              ${(() => {
-                const framesWithReturn = STATE.frames
-                  .filter(f => (f.location==='client'||f.location==='boat') && f.returnDate)
-                  .sort((a,b) => a.returnDate.localeCompare(b.returnDate));
-                const hasAny = framesWithReturn.length > 0 || boatMoves.length > 0;
-                return `<div id="mv-boat-box" style="background:var(--bg-card);border:${hasAny?'2px solid #0e7490;box-shadow:0 0 0 3px rgba(14,116,144,0.12);':'1px solid var(--border);'}border-radius:8px;padding:12px 16px;min-width:145px;">
-                  <div style="font:700 13px var(--font-mono);color:#0e7490;margin-bottom:8px">Boat / Client</div>
-                  ${boatMoves.map(m=>{
-                    const fr=getFrame(m.frameId); if(!fr) return '';
-                    return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #a5f3fc;background:#ecfeff;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
-                      <span style="color:#0e7490;font-weight:800">→</span>
-                      <span style="font:600 10px var(--font-mono)">${esc(fr.name)}</span>
-                      <span style="color:var(--text-muted)">${fr.width}m</span>
-                    </div>`;
-                  }).join('')}
-                  ${framesWithReturn.map(f=>{
-                    const daysLeft = Math.ceil((new Date(f.returnDate+'T12:00:00') - new Date()) / 86400000);
-                    const retCol = daysLeft < 0 ? 'var(--red)' : daysLeft <= 7 ? 'var(--orange)' : '#0e7490';
-                    const retStr = fmt(f.returnDate) + ` (${daysLeft < 0 ? Math.abs(daysLeft)+'d OVR' : daysLeft+'d'})`;
-                    return `<div id="mvboat-${f.id}" style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #a5f3fc;background:#ecfeff;margin-bottom:3px;">
-                      <div style="font:700 10px var(--font-mono);color:#0e7490">${esc(f.name)} <span style="font-weight:400;font-size:9px;color:var(--text-muted)">${f.location}</span></div>
-                      <div style="font-size:9px;color:${retCol};font-family:var(--font-mono)">↩ ${retStr}</div>
-                    </div>`;
-                  }).join('')}
-                  ${!hasAny ? '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no frames away</div>' : ''}
-                </div>`;
-              })()}
+
+            <!-- SVG overlay: absolutely positioned within mv-content for reliable arrow drawing -->
+            <svg id="mv-svg-arrows" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;overflow:visible"></svg>
+          </div>
+
+          <!-- Sidebar -->
+          <div>
+            <div class="card" style="position:sticky;top:20px;max-height:calc(100vh - 120px);overflow-y:auto">
+              <div class="card-title" style="margin-bottom:10px">Planned Movements</div>
+              ${moveListHTML||'<div class="empty-msg">No movements match filter</div>'}
             </div>
           </div>
-
-          <!-- Divider -->
-          <div style="border-top:2px dashed var(--border);margin:20px 0 16px;position:relative">
-            <span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--bg-deep);padding:0 12px;font:600 10px var(--font-mono);color:var(--text-muted);letter-spacing:.06em">FRAMES AT FACILITY</span>
-          </div>
-
-          <!-- Frames zone -->
-          <div id="mv-frame-zone" style="display:flex;gap:6px;flex-wrap:wrap;">
-            ${framesHTML}
-          </div>
-        </div>
-
-        <!-- SVG overlay: absolutely positioned within mv-content for reliable arrow drawing -->
-        <svg id="mv-svg-arrows" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10;overflow:visible"></svg>
-      </div>
-
-      <!-- Sidebar -->
-      <div>
-        <div class="card" style="position:sticky;top:20px;max-height:calc(100vh - 120px);overflow-y:auto">
-          <div class="card-title" style="margin-bottom:10px">Planned Movements</div>
-          ${moveListHTML||'<div class="empty-msg">No movements match filter</div>'}
         </div>
       </div>
     </div>
