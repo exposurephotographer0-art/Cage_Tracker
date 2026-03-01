@@ -2512,6 +2512,7 @@ function renderPlanner() {
     <div class="flex-between" style="margin-bottom:16px">
       <h2 class="section-title" style="margin:0">Movement Planner</h2>
       <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary btn-sm" onclick="openMovementsWindow()" title="Open Movements Map in a pop-out window">🗺 Open Movements</button>
         <button class="btn btn-secondary btn-sm" onclick="openDashboardWindow()" title="Open Dashboard in a second window">📊 Open Dashboard</button>
         <button class="btn btn-secondary btn-sm" onclick="autoplanDepartures()" title="Auto-plan cages due to leave the facility into suitable frames">⚡ Auto-Plan Departures</button>
         <button class="btn btn-danger btn-sm" onclick="blankCanvasPlanner()" title="Clear all planned movements and reset calendar">🗑 Blank Canvas</button>
@@ -2603,6 +2604,19 @@ function openDashboardWindow() {
         try { win.activeTab = 'dashboard'; win.render(); } catch(e) {}
       }, 100);
     } catch(e) { console.warn('Dashboard sync error:', e); }
+  });
+}
+
+function openMovementsWindow() {
+  const html = document.documentElement.outerHTML;
+  const blob = new Blob([html], {type: 'text/html'});
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, 'cage-tracker-movements', 'width=1400,height=900,scrollbars=yes,resizable=yes');
+  if (!win) { alert('Pop-up blocked. Please allow pop-ups for this page.'); return; }
+  win.addEventListener('load', () => {
+    setTimeout(() => {
+      try { win.activeTab = 'movements'; win.render(); } catch(e) {}
+    }, 100);
   });
 }
 
