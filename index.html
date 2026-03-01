@@ -451,6 +451,7 @@ const TABS = [
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
 function hCat(h) { return h < H_SHORT ? 'Short' : h <= H_MED ? 'Medium' : 'Tall'; }
+function lCat(l) { return l < 6.5 ? 'Stumpy' : 'Long'; }
 function hBadge(h) { const c = hCat(h); return c === 'Short' ? 'green' : c === 'Medium' ? 'yellow' : 'red'; }
 function locBadge(l) { return {facility:'blue', rmd:'green', frame:'orange', shipped:'purple'}[l] || 'accent'; }
 function locLabel(c) {
@@ -845,7 +846,7 @@ function renderDashboard() {
       return `<div class="rmd-slot" style="${slotBg}">
         <span class="rmd-slot-label">${posLabel}</span>
         <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${nameColor}">${esc(cage.name)}</span><span class="rmd-cage-detail" style="${detailColor}">${cage.height}m ${hCat(cage.height)}</span></span>
+          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${nameColor}">${esc(cage.name)}</span><span class="rmd-cage-detail" style="${detailColor}">${cage.width}m · ${lCat(cage.length)} · ${hCat(cage.height)}</span></span>
         </div>
       </div>`;
     } else {
@@ -1035,7 +1036,7 @@ function renderDashboardFrames() {
           const depColor = daysLeft !== null && daysLeft <= 3 ? 'var(--red)' : 'var(--orange)';
           return `<div style="font-size:11px;padding:3px 0;display:flex;justify-content:space-between;align-items:center">
             <span style="font-weight:600;font-family:var(--font-mono);${shadeBg}">${esc(c.name)}${shipLabel}</span>
-            <span style="color:${dep ? depColor : 'var(--text-muted)'}">${hCat(c.height)}${depStr}</span>
+            <span style="color:${dep ? depColor : 'var(--text-muted)'}">${c.width}m · ${lCat(c.length)} · ${hCat(c.height)}${depStr}</span>
           </div>`;
         }).join('')
       : '<div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>';
