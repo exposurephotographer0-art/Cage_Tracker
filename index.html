@@ -680,7 +680,13 @@ function renderSidebar() {
   `).join('');
 }
 
-function switchTab(id) { activeTab=id; renderSidebar(); renderMain(); }
+function switchTab(id) {
+  if (id !== 'movements') {
+    const c = document.getElementById('mv-canvas');
+    if (c) { const ctx=c.getContext('2d'); ctx.clearRect(0,0,c.width,c.height); }
+  }
+  activeTab=id; renderSidebar(); renderMain();
+}
 
 function renderMain() {
   const el = document.getElementById('main-content');
@@ -3392,7 +3398,7 @@ function renderMovementsMap() {
     {k:'frame-fix-shipping',label:`Fix Shipping (${ct['frame-fix-shipping']||0})`},
   ].map(b=>`<button class="filter-btn ${mvFilter===b.k?'active':''}" onclick="mvFilter='${b.k}';render()">${b.label}</button>`).join('');
 
-  const activeRmds   = new Set(filtered.filter(m=>m.rmdSlot).map(m=>String(m.rmdSlot)));
+  const activeRmds   = new Set(filtered.filter(m=>m.rmdSlot).map(m=>String(m.rmdSlot).replace(/[ABab]$/,'')));
   const activeFrames = new Set(filtered.filter(m=>m.frameId).map(m=>m.frameId));
 
   // ── RMD cards HTML ──
@@ -3400,7 +3406,7 @@ function renderMovementsMap() {
     const r = getRMDByNum(rmdNum);
     if (!r) return '';
     const isActive = activeRmds.has(String(rmdNum));
-    const movesForRmd = filtered.filter(m => String(m.rmdSlot) === String(rmdNum));
+    const movesForRmd = filtered.filter(m => String(m.rmdSlot).replace(/[ABab]$/,'') === String(rmdNum));
     const sides = ['A','B'];
     const slotKeys = ['cage1','cage2','cage3','cage4'];
     let slotsHTML = '';
@@ -3525,7 +3531,7 @@ function renderMovementsMap() {
 
       <!-- Canvas map -->
       <div style="position:relative">
-        <div id="mv-content" style="position:relative;z-index:2">
+        <div id="mv-content">
 
           <!-- RMD zone -->
           <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🗄 RMD Storage</div>
@@ -3544,8 +3550,8 @@ function renderMovementsMap() {
           </div>
         </div>
 
-        <!-- Canvas overlay -->
-        <canvas id="mv-canvas" style="position:absolute;top:0;left:0;pointer-events:none;z-index:10" width="10" height="10"></canvas>
+        <!-- Canvas overlay: fixed over entire viewport, draws arrows using raw getBoundingClientRect coords -->
+        <canvas id="mv-canvas" style="position:fixed;top:0;left:0;pointer-events:none;z-index:9999" width="10" height="10"></canvas>
       </div>
 
       <!-- Sidebar -->
@@ -3563,14 +3569,14 @@ function renderMovementsMap() {
 
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// MOVEMENTS CANVAS DRAW — top-level so it works after innerHTML injection
+// ═══════════════════════════════════════════════════════════════════════════════
+// MOVEMENTS CANVAS DRAW — fixed canvas uses raw viewport coords (no offset math)
 // ═══════════════════════════════════════════════════════════════════════════════
 function mvRedraw() {
-  const canvas  = document.getElementById('mv-canvas');
-  const content = document.getElementById('mv-content');
-  if (!canvas || !content) return;
+  const canvas = document.getElementById('mv-canvas');
+  if (!canvas) return;
 
-  const MOVES  = window._mvMovesData || [];
+  const MOVES = window._mvMovesData || [];
   const COLORS = {
     'rmd-to-frame':        '#27a060',
     'frame-to-rmd':        '#7040c0',
@@ -3578,194 +3584,134 @@ function mvRedraw() {
     'frame-fix-shipping':  '#c08520',
   };
 
-  // Measure element relative to mv-content div
+  // Canvas is position:fixed — size it to full viewport
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  canvas.width  = vw;
+  canvas.height = vh;
+  canvas.style.width  = vw + 'px';
+  canvas.style.height = vh + 'px';
+
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, vw, vh);
+  if (!MOVES.length) return;
+
+  // Raw viewport coords — canvas is fixed so no offset needed
   function getRect(id) {
     const el = document.getElementById(id);
     if (!el) return null;
-    const wr = content.getBoundingClientRect();
-    const er = el.getBoundingClientRect();
-    return {
-      left:   er.left   - wr.left,
-      right:  er.right  - wr.left,
-      top:    er.top    - wr.top,
-      bottom: er.bottom - wr.top,
-      cx: er.left - wr.left + er.width  / 2,
-      cy: er.top  - wr.top  + er.height / 2,
-      w: er.width, h: er.height
-    };
+    const r = el.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) return null;
+    return { left:r.left, right:r.right, top:r.top, bottom:r.bottom,
+             cx:r.left+r.width/2, cy:r.top+r.height/2, w:r.width, h:r.height };
   }
 
-  // Size canvas to exactly cover the content div
-  const cr = content.getBoundingClientRect();
-  canvas.width  = Math.ceil(cr.width);
-  canvas.height = Math.ceil(cr.height);
-  canvas.style.width  = canvas.width  + 'px';
-  canvas.style.height = canvas.height + 'px';
-
-  const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  if (!MOVES.length) return;
-
-  // Count arrows per node for stagger
-  const rmdExitTotal={}, frameEntryTotal={}, frameExitTotal={}, rmdEntryTotal={};
+  // Count per node
+  const rET={}, fET={}, fXT={}, rNT={};
   MOVES.forEach(m => {
-    const rk=String(m.rmdSlot), fk=String(m.frameId);
-    if (m.typeKey==='rmd-to-frame')  { rmdExitTotal[rk]=(rmdExitTotal[rk]||0)+1; frameEntryTotal[fk]=(frameEntryTotal[fk]||0)+1; }
-    if (m.typeKey==='frame-to-rmd')  { frameExitTotal[fk]=(frameExitTotal[fk]||0)+1; rmdEntryTotal[rk]=(rmdEntryTotal[rk]||0)+1; }
+    const rk=String(m.rmdSlot||'').replace(/[ABab]$/,''), fk=String(m.frameId);
+    if (m.typeKey==='rmd-to-frame') { rET[rk]=(rET[rk]||0)+1; fET[fk]=(fET[fk]||0)+1; }
+    if (m.typeKey==='frame-to-rmd') { fXT[fk]=(fXT[fk]||0)+1; rNT[rk]=(rNT[rk]||0)+1; }
   });
-  const rmdExitIdx={}, frameEntryIdx={}, frameExitIdx={}, rmdEntryIdx={};
+  const rEI={}, fEI={}, fXI={}, rNI={};
 
   MOVES.forEach((m, idx) => {
-    const color  = COLORS[m.typeKey] || '#c08520';
-    const cage   = getCage(m.cageId);
+    const color = COLORS[m.typeKey] || '#c08520';
+    const cage  = getCage(m.cageId);
     const cLabel = cage ? cage.name : '';
-    const num    = idx + 1;
+    const num   = idx + 1;
 
     if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-to-rmd') {
-      const rk = String(m.rmdSlot);
-      const fk = String(m.frameId);
+      const rk    = String(m.rmdSlot||'').replace(/[ABab]$/,'');
+      const fk    = String(m.frameId);
       const rRect = getRect('mvr-' + rk);
       const fRect = getRect('mvf-' + fk);
-      if (!rRect || !fRect) { console.warn('mvRedraw: missing element', 'mvr-'+rk, 'mvf-'+fk); return; }
+      if (!rRect || !fRect) {
+        console.warn('[mvRedraw] missing:', !rRect?'mvr-'+rk:'', !fRect?'mvf-'+fk:'', 'rmdSlot='+m.rmdSlot);
+        return;
+      }
 
       let ri, fi, rTot, fTot;
       if (m.typeKey === 'rmd-to-frame') {
-        ri = (rmdExitIdx[rk]   = (rmdExitIdx[rk]   || 0)); rmdExitIdx[rk]++;
-        fi = (frameEntryIdx[fk]= (frameEntryIdx[fk] || 0)); frameEntryIdx[fk]++;
-        rTot = rmdExitTotal[rk]   || 1;
-        fTot = frameEntryTotal[fk] || 1;
+        ri=(rEI[rk]=(rEI[rk]||0)); rEI[rk]++;
+        fi=(fEI[fk]=(fEI[fk]||0)); fEI[fk]++;
+        rTot=rET[rk]||1; fTot=fET[fk]||1;
       } else {
-        ri = (rmdEntryIdx[rk]  = (rmdEntryIdx[rk]  || 0)); rmdEntryIdx[rk]++;
-        fi = (frameExitIdx[fk] = (frameExitIdx[fk]  || 0)); frameExitIdx[fk]++;
-        rTot = rmdEntryTotal[rk]  || 1;
-        fTot = frameExitTotal[fk] || 1;
+        ri=(rNI[rk]=(rNI[rk]||0)); rNI[rk]++;
+        fi=(fXI[fk]=(fXI[fk]||0)); fXI[fk]++;
+        rTot=rNT[rk]||1; fTot=fXT[fk]||1;
       }
 
-      // Spread connection points horizontally within card width
-      const rX = rRect.left + rRect.w * (rTot > 1 ? (0.2 + 0.6 * ri / (rTot - 1)) : 0.5);
-      const fX = fRect.left + fRect.w * (fTot > 1 ? (0.2 + 0.6 * fi / (fTot - 1)) : 0.5);
+      const rX = rRect.left + rRect.w * (rTot>1 ? (0.2+0.6*ri/(rTot-1)) : 0.5);
+      const fX = fRect.left + fRect.w * (fTot>1 ? (0.2+0.6*fi/(fTot-1)) : 0.5);
 
-      // Exit bottom of RMD, enter top of Frame
-      const x1 = rX, y1 = rRect.bottom;
-      const x2 = fX, y2 = fRect.top;
+      const x1=rX, y1=rRect.bottom, x2=fX, y2=fRect.top;
+      const dy=y2-y1, dx=x2-x1;
+      const pad = Math.max(Math.abs(dy)*0.4, 50);
+      const cp1x=x1+dx*0.1, cp1y=y1+pad;
+      const cp2x=x2-dx*0.1, cp2y=y2-pad;
 
-      // S-curve control points
-      const dy = y2 - y1;
-      const dx = x2 - x1;
-      const cp1x = x1 + dx * 0.15;
-      const cp1y = y1 + dy * 0.4;
-      const cp2x = x2 - dx * 0.15;
-      const cp2y = y2 - dy * 0.4;
-
-      // Draw curve
       ctx.save();
-      ctx.strokeStyle = color;
-      ctx.lineWidth   = 2.8;
-      ctx.lineCap     = 'round';
-      ctx.shadowColor = 'rgba(0,0,0,0.15)';
-      ctx.shadowBlur  = 3;
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x2, y2);
-      ctx.stroke();
+      ctx.strokeStyle=color; ctx.lineWidth=2.8; ctx.lineCap='round';
+      ctx.shadowColor='rgba(0,0,0,0.2)'; ctx.shadowBlur=3;
+      ctx.beginPath(); ctx.moveTo(x1,y1);
+      ctx.bezierCurveTo(cp1x,cp1y,cp2x,cp2y,x2,y2); ctx.stroke();
 
-      // Arrowhead
-      const aAngle = Math.atan2(y2 - cp2y, x2 - cp2x);
-      const aLen = 12, aWid = 0.42;
-      ctx.fillStyle = color;
-      ctx.shadowBlur = 0;
-      ctx.beginPath();
-      ctx.moveTo(x2, y2);
-      ctx.lineTo(x2 - aLen * Math.cos(aAngle - aWid), y2 - aLen * Math.sin(aAngle - aWid));
-      ctx.lineTo(x2 - aLen * Math.cos(aAngle + aWid), y2 - aLen * Math.sin(aAngle + aWid));
-      ctx.closePath();
-      ctx.fill();
+      const aA=Math.atan2(y2-cp2y,x2-cp2x), aL=12, aW=0.42;
+      ctx.fillStyle=color; ctx.shadowBlur=0;
+      ctx.beginPath(); ctx.moveTo(x2,y2);
+      ctx.lineTo(x2-aL*Math.cos(aA-aW),y2-aL*Math.sin(aA-aW));
+      ctx.lineTo(x2-aL*Math.cos(aA+aW),y2-aL*Math.sin(aA+aW));
+      ctx.closePath(); ctx.fill();
 
-      // Number bubble at bezier midpoint (t=0.5)
-      const t=0.5, mt=0.5;
-      const bx = mt*mt*mt*x1 + 3*mt*mt*t*cp1x + 3*mt*t*t*cp2x + t*t*t*x2;
-      const by = mt*mt*mt*y1 + 3*mt*mt*t*cp1y + 3*mt*t*t*cp2y + t*t*t*y2;
+      const t=0.5,mt=0.5;
+      const bx=mt*mt*mt*x1+3*mt*mt*t*cp1x+3*mt*t*t*cp2x+t*t*t*x2;
+      const by=mt*mt*mt*y1+3*mt*mt*t*cp1y+3*mt*t*t*cp2y+t*t*t*y2;
+      ctx.shadowBlur=5; ctx.shadowColor='rgba(0,0,0,0.25)';
+      ctx.beginPath(); ctx.arc(bx,by,12,0,Math.PI*2); ctx.fillStyle=color; ctx.fill();
+      ctx.shadowBlur=0; ctx.fillStyle='#fff'; ctx.font='bold 11px monospace';
+      ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(String(num),bx,by);
 
-      ctx.shadowBlur = 5;
-      ctx.shadowColor = 'rgba(0,0,0,0.2)';
-      ctx.beginPath();
-      ctx.arc(bx, by, 12, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
-
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 11px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(String(num), bx, by);
-
-      // Cage name label
       if (cLabel) {
-        ctx.font = 'bold 10px monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 3;
-        ctx.shadowColor = '#fff';
-        ctx.shadowBlur = 4;
-        ctx.strokeText(cLabel, bx, by + 18);
-        ctx.fillStyle = color;
-        ctx.shadowBlur = 0;
-        ctx.fillText(cLabel, bx, by + 18);
+        ctx.font='bold 10px monospace'; ctx.textAlign='center'; ctx.textBaseline='top';
+        ctx.strokeStyle='#fff'; ctx.lineWidth=3; ctx.shadowColor='#fff'; ctx.shadowBlur=4;
+        ctx.strokeText(cLabel,bx,by+18); ctx.fillStyle=color; ctx.shadowBlur=0; ctx.fillText(cLabel,bx,by+18);
       }
       ctx.restore();
 
-    } else if (m.typeKey === 'facility-to-frame' || m.typeKey === 'frame-fix-shipping') {
-      const fk = String(m.frameId);
-      const fRect = getRect('mvf-' + fk);
+    } else if (m.typeKey==='facility-to-frame' || m.typeKey==='frame-fix-shipping') {
+      const fRect = getRect('mvf-'+String(m.frameId));
       if (!fRect) return;
-      const x = fRect.cx;
-      const y2 = fRect.top;
-      const y1 = Math.max(10, y2 - 52);
-
+      const x=fRect.cx, y2=fRect.top, y1=Math.max(10,y2-52);
       ctx.save();
-      ctx.strokeStyle = color;
-      ctx.fillStyle   = color;
-      ctx.lineWidth   = 2.5;
-      ctx.setLineDash([7, 4]);
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(x, y1);
-      ctx.lineTo(x, y2 - 5);
-      ctx.stroke();
+      ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=2.5;
+      ctx.setLineDash([7,4]); ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(x,y1); ctx.lineTo(x,y2-5); ctx.stroke();
       ctx.setLineDash([]);
-
-      // Arrowhead
-      ctx.beginPath();
-      ctx.moveTo(x, y2 + 1);
-      ctx.lineTo(x - 7, y2 - 11);
-      ctx.lineTo(x + 7, y2 - 11);
-      ctx.closePath();
-      ctx.fill();
-
-      // Label
-      ctx.font = 'bold 9px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 3;
-      ctx.strokeText(cLabel || (m.typeKey==='frame-fix-shipping'?'FIX':'FAC'), x, y1 - 2);
-      ctx.fillStyle = color;
-      ctx.fillText(cLabel || (m.typeKey==='frame-fix-shipping'?'FIX':'FAC'), x, y1 - 2);
+      ctx.beginPath(); ctx.moveTo(x,y2+1); ctx.lineTo(x-7,y2-11); ctx.lineTo(x+7,y2-11); ctx.closePath(); ctx.fill();
+      ctx.font='bold 9px monospace'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+      ctx.strokeStyle='#fff'; ctx.lineWidth=3;
+      const lbl=cLabel||(m.typeKey==='frame-fix-shipping'?'FIX':'FAC');
+      ctx.strokeText(lbl,x,y1-2); ctx.fillStyle=color; ctx.fillText(lbl,x,y1-2);
       ctx.restore();
     }
   });
 }
 
-// Global resize handler for movements tab
+
+// Global resize + scroll handlers — redraw arrows as page scrolls/resizes
 window.addEventListener('resize', function() {
   if (typeof activeTab !== 'undefined' && activeTab === 'movements') {
     clearTimeout(window._mvResizeT);
     window._mvResizeT = setTimeout(mvRedraw, 120);
   }
 });
+window.addEventListener('scroll', function() {
+  if (typeof activeTab !== 'undefined' && activeTab === 'movements') {
+    cancelAnimationFrame(window._mvScrollRAF);
+    window._mvScrollRAF = requestAnimationFrame(mvRedraw);
+  }
+}, { passive: true });
 
 function updateUKClock() {
   const now = new Date();
