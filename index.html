@@ -2212,6 +2212,21 @@ async function addMovement() {
     if(autoFrame) resolvedFrameId = autoFrame.id;
   }
 
+  // For frame-to-rmd, auto-find the frame the cage is in (or pending into)
+  if (type === 'frame-to-rmd' && cage && !resolvedFrameId) {
+    // First check: cage is currently in a frame
+    const currentFrame = STATE.frames.find(f => f.cages.includes(cageId));
+    if (currentFrame) {
+      resolvedFrameId = currentFrame.id;
+    } else {
+      // Second check: cage has a pending facility-to-frame movement — use that target frame
+      const pendingMove = STATE.plannedMovements.find(
+        m => !m.completed && m.cageId === cageId && m.typeKey === 'facility-to-frame' && m.frameId
+      );
+      if (pendingMove) resolvedFrameId = pendingMove.frameId;
+    }
+  }
+
   const frame = getFrame(resolvedFrameId);
   const parts = [];
   if(cage) parts.push(cage.name);
@@ -3403,7 +3418,25 @@ function renderMovementsMap() {
   ].map(b=>`<button class="filter-btn ${mvFilter===b.k?'active':''}" onclick="mvFilter='${b.k}';render()">${b.label}</button>`).join('');
 
   const activeRmds   = new Set(filtered.filter(m=>m.rmdSlot).map(m=>String(m.rmdSlot).replace(/[ABab]$/,'')));
-  const activeFrames = new Set(filtered.filter(m=>m.frameId).map(m=>m.frameId));
+
+  // Helper: resolve frameId for a movement (handles old data where frame-to-rmd has no frameId)
+  function resolveFrameId(m) {
+    if (m.frameId) return m.frameId;
+    if (m.typeKey === 'frame-to-rmd' || m.typeKey === 'rmd-to-frame') {
+      const cage = getCage(m.cageId);
+      if (cage && cage.location === 'frame') {
+        const f = STATE.frames.find(fr => fr.cages.includes(m.cageId));
+        if (f) return f.id;
+      }
+      const pending = STATE.plannedMovements.find(
+        pm => !pm.completed && pm.cageId === m.cageId && pm.typeKey === 'facility-to-frame' && pm.frameId
+      );
+      if (pending) return pending.frameId;
+    }
+    return '';
+  }
+
+  const activeFrames = new Set(filtered.map(m => resolveFrameId(m)).filter(Boolean));
 
   // ── RMD cards HTML ──
   function buildRmdCard(rmdNum) {
@@ -3458,7 +3491,7 @@ function renderMovementsMap() {
 
   function buildFrameCard(f) {
     const isActive = activeFrames.has(f.id);
-    const movesForFrame = filtered.filter(m=>m.frameId===f.id);
+    const movesForFrame = filtered.filter(m => resolveFrameId(m) === f.id);
     const fCages = f.cages.map(cid=>getCage(cid)).filter(Boolean);
     const outIds = movesForFrame.filter(m=>m.typeKey==='frame-to-rmd').map(m=>m.cageId);
     const inIds  = movesForFrame.filter(m=>m.typeKey==='rmd-to-frame'||m.typeKey==='facility-to-frame').map(m=>m.cageId);
@@ -3496,7 +3529,19 @@ function renderMovementsMap() {
   const moveListHTML = filtered.map((m,i)=>{
     const col = MVCOLS[m.typeKey]||'var(--accent)';
     const cage = getCage(m.cageId);
-    const frame = getFrame(m.frameId);
+    // Resolve frame: use stored frameId, or find from cage location / pending moves
+    let frame = getFrame(m.frameId);
+    if (!frame && cage && (m.typeKey === 'frame-to-rmd' || m.typeKey === 'rmd-to-frame')) {
+      if (cage.location === 'frame') {
+        frame = STATE.frames.find(f => f.cages.includes(m.cageId)) || null;
+      }
+      if (!frame) {
+        const pending = STATE.plannedMovements.find(
+          pm => !pm.completed && pm.cageId === m.cageId && pm.typeKey === 'facility-to-frame' && pm.frameId
+        );
+        if (pending) frame = getFrame(pending.frameId);
+      }
+    }
     const dir = m.typeKey==='rmd-to-frame' ? `RMD-${m.rmdSlot} → ${frame?frame.name:'?'}`
               : m.typeKey==='frame-to-rmd' ? `${frame?frame.name:'?'} → RMD-${m.rmdSlot}`
               : m.typeKey==='facility-to-frame' ? `Facility → ${frame?frame.name:'?'}`
@@ -3512,11 +3557,30 @@ function renderMovementsMap() {
   }).join('');
 
   // Store moves globally so the draw function can access them after DOM update
-  window._mvMovesData = filtered.map(m=>({
-    id:m.id, typeKey:m.typeKey, cageId:m.cageId,
-    rmdSlot:m.rmdSlot, frameId:m.frameId,
-    description:m.description, date:m.date,
-  }));
+  // Resolve missing frameId for frame-to-rmd movements (older data may lack it)
+  window._mvMovesData = filtered.map(m=>{
+    let frameId = m.frameId || '';
+    if (!frameId && (m.typeKey === 'frame-to-rmd' || m.typeKey === 'rmd-to-frame')) {
+      // Try to find the frame from the cage's current location
+      const cage = getCage(m.cageId);
+      if (cage && cage.location === 'frame') {
+        const f = STATE.frames.find(fr => fr.cages.includes(m.cageId));
+        if (f) frameId = f.id;
+      }
+      // Or from a pending facility-to-frame movement
+      if (!frameId) {
+        const pending = STATE.plannedMovements.find(
+          pm => !pm.completed && pm.cageId === m.cageId && pm.typeKey === 'facility-to-frame' && pm.frameId
+        );
+        if (pending) frameId = pending.frameId;
+      }
+    }
+    return {
+      id:m.id, typeKey:m.typeKey, cageId:m.cageId,
+      rmdSlot:m.rmdSlot, frameId:frameId,
+      description:m.description, date:m.date,
+    };
+  });
 
 
   return `
