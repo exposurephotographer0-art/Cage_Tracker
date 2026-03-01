@@ -1773,7 +1773,17 @@ function renderFrames() {
       actionsHTML = `<button class="btn btn-secondary btn-sm btn-block" style="margin-top:6px" onclick="updateFrameLoc('${f.id}','facility')">Return to Facility</button>`;
     }
     if (f.location === 'client') {
-      actionsHTML = `<button class="btn btn-primary btn-sm btn-block" style="margin-top:6px" onclick="returnFromClient('${f.id}')">🏭 Return to Facility (unload cage)</button>`;
+      const retDaysLeft = f.returnDate ? Math.ceil((new Date(f.returnDate+'T12:00:00') - new Date()) / 86400000) : null;
+      const retBadge = retDaysLeft !== null ? (retDaysLeft < 0 ? '<span style="color:var(--red);font-size:10px">OVERDUE</span>' : retDaysLeft <= 7 ? `<span style="color:var(--orange);font-size:10px">⚠ ${retDaysLeft}d</span>` : `<span style="color:var(--text-muted);font-size:10px">${retDaysLeft}d</span>`) : '';
+      actionsHTML = `<div style="margin-top:8px">
+        <label style="font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;display:block">📅 Expected Return</label>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+          <input type="date" value="${f.returnDate||''}" style="font-size:11px;padding:4px 8px;flex:1" onchange="setFrameReturnDate('${f.id}',this.value)" placeholder="Set return date"/>
+          ${f.returnDate ? `<span style="font-size:10px;white-space:nowrap;font-family:var(--font-mono);color:#0e7490">${fmt(f.returnDate)}</span>` : ''}
+          ${retBadge}
+        </div>
+        <button class="btn btn-primary btn-sm btn-block" onclick="returnFromClient('${f.id}')">🏭 Return to Facility (unload cage)</button>
+      </div>`;
     }
 
     return `<div class="card frame-card ${f.fixedForShipping?'shipping-ready':''}">
@@ -1809,6 +1819,8 @@ async function updateFrameLoc(fid,loc) {
   const f=getFrame(fid);
   f.location=loc;
   if(loc!=='facility') f.fixedForShipping=false;
+  // Clear returnDate when frame returns to facility
+  if(loc==='facility') f.returnDate = null;
   if(loc!=='facility') {
     f.cages.forEach(cid=>{
       const c=getCage(cid);
@@ -1860,6 +1872,14 @@ function toggleShipping(fid) {
   }
   f.fixedForShipping = !f.fixedForShipping;
   render(); saveFrame(f);
+}
+
+async function setFrameReturnDate(fid, dateStr) {
+  const f = getFrame(fid);
+  if (!f) return;
+  f.returnDate = dateStr || null;
+  render();
+  await saveFrame(f);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2213,14 +2233,24 @@ function renderPlanner() {
     }
   });
 
+  // Build frame return-date index (frames with client that have a returnDate set)
+  const returnByDay = {};
+  STATE.frames.forEach(f => {
+    if (f.returnDate && (f.location === 'client' || f.location === 'boat')) {
+      if (!returnByDay[f.returnDate]) returnByDay[f.returnDate] = [];
+      returnByDay[f.returnDate].push(f.name);
+    }
+  });
+
   function renderWeekDay(day) {
     const dayMoves = STATE.plannedMovements.filter(m=>m.date===day);
     const pending = dayMoves.filter(m=>!m.completed).length;
     const isToday = day===todayStr();
     const dow = new Date(day+'T12:00:00').getDay();
     const isWeekend = dow===0||dow===6;
-    const hasMoves = dayMoves.length > 0;
     const departures = depByDay[day] || [];
+    const frameReturns = returnByDay[day] || [];
+    const hasMoves = dayMoves.length > 0 || departures.length > 0 || frameReturns.length > 0;
 
     let movesHTML = dayMoves.map(m=>`
       <div class="week-move-item ${m.completed?'completed':''}" title="${esc(m.notes||m.description)}" style="${m.typeKey==='frame-return-from-client'?'background:#ecfeff;border:1px solid #a5f3fc;color:#0e7490;':''}">
@@ -2232,6 +2262,7 @@ function renderPlanner() {
       <div class="week-day-hdr">${fmtShort(day)}</div>
       ${pending>0 ? `<div class="week-move-count ${pending>MAX_MOVES?'over-limit':''}" style="color:${pending>MAX_MOVES?'var(--red)':'var(--green)'}">${pending} moves${pending>MAX_MOVES?' ⚠ OVER':''}</div>` : ''}
       ${departures.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Cage ${n} leaves facility">🚚 ${esc(n)}</div>`).join('')}
+      ${frameReturns.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#ecfeff;color:#0e7490;border:1px solid #a5f3fc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Frame ${n} expected back">🚢 ${esc(n)} returns</div>`).join('')}
       ${movesHTML}
     </div>`;
   }
@@ -2367,6 +2398,27 @@ function renderPlanner() {
           <div class="card-title">Cages in Frames (at facility)</div>
           ${frameSummary}
         </div>
+        ${(() => {
+          const clientFrames = STATE.frames.filter(f => f.location === 'client' || f.location === 'boat');
+          if (!clientFrames.length) return '';
+          const today = todayStr();
+          const rows = clientFrames.map(f => {
+            const daysLeft = f.returnDate ? Math.ceil((new Date(f.returnDate+'T12:00:00') - new Date()) / 86400000) : null;
+            const retCol = daysLeft === null ? 'color:var(--text-muted)' : daysLeft < 0 ? 'color:var(--red)' : daysLeft <= 7 ? 'color:var(--orange)' : 'color:#0e7490';
+            const retLabel = f.returnDate ? fmt(f.returnDate) : '—';
+            const retDaysStr = daysLeft !== null ? (daysLeft < 0 ? ` (${Math.abs(daysLeft)}d overdue)` : daysLeft === 0 ? ' (today)' : ` (${daysLeft}d)`) : '';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);font-size:11px">
+              <span style="font:700 11px var(--font-mono)">${esc(f.name)}</span>
+              <span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${f.location==='client'?'#f0e8fa':'#e6f0fa'};color:${f.location==='client'?'var(--purple)':'var(--blue)'};font-weight:600">${f.location}</span>
+              <span style="${retCol};font-family:var(--font-mono)">${retLabel}${retDaysStr}</span>
+            </div>`;
+          }).join('');
+          return `<div class="card">
+            <div class="card-title">🚢 Frames Away (Client / Boat)</div>
+            ${rows}
+            ${clientFrames.length === 0 ? '<div class="empty-msg">None away</div>' : ''}
+          </div>`;
+        })()}
       </div>
     </div>
   `;
@@ -3969,6 +4021,18 @@ function renderMovementsMap() {
     };
   });
 
+  // Also inject virtual "frame-return-from-client" entries for frames that have a returnDate set
+  // These appear as arrows in the map without needing a planned movement
+  STATE.frames.forEach(f => {
+    if ((f.location === 'client' || f.location === 'boat') && f.returnDate) {
+      window._mvMovesData.push({
+        id: 'ret-' + f.id, typeKey: 'frame-return-from-client', cageId: null,
+        rmdSlot: '', frameId: f.id,
+        description: f.name + ' → Facility', date: f.returnDate, isReturnDate: true,
+      });
+    }
+  });
+
 
   return `
     <h2 class="section-title" style="margin-bottom:4px">↔ Movements Map</h2>
@@ -4017,8 +4081,8 @@ function renderMovementsMap() {
             </div>
             <div>
               <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🚢 Boat / Client</div>
-              <div id="mv-boat-box" style="background:var(--bg-card);border:${boatMoves.length?'2px solid #0e7490;box-shadow:0 0 0 3px rgba(14,116,144,0.12);':'1px solid var(--border);'}border-radius:8px;padding:12px 16px;min-width:130px;">
-                <div style="font:700 13px var(--font-mono);color:${boatMoves.length?'#0e7490':'var(--text-muted)'};margin-bottom:8px">Boat / Client</div>
+              <div id="mv-boat-box" style="background:var(--bg-card);border:${(boatMoves.length||STATE.frames.some(f=>(f.location==='client'||f.location==='boat')&&f.returnDate))?'2px solid #0e7490;box-shadow:0 0 0 3px rgba(14,116,144,0.12);':'1px solid var(--border);'}border-radius:8px;padding:12px 16px;min-width:145px;">
+                <div style="font:700 13px var(--font-mono);color:#0e7490;margin-bottom:8px">Boat / Client</div>
                 ${boatMoves.length ? boatMoves.map(m=>{
                   const fr=getFrame(m.frameId); if(!fr) return '';
                   return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #a5f3fc;background:#ecfeff;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
@@ -4026,7 +4090,17 @@ function renderMovementsMap() {
                     <span style="font:600 10px var(--font-mono)">${esc(fr.name)}</span>
                     <span style="color:var(--text-muted)">${fr.width}m</span>
                   </div>`;
-                }).join('') : '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no returns</div>'}
+                }).join('') : ''}
+                ${STATE.frames.filter(f=>(f.location==='client'||f.location==='boat')).map(f=>{
+                  const daysLeft = f.returnDate ? Math.ceil((new Date(f.returnDate+'T12:00:00') - new Date()) / 86400000) : null;
+                  const retCol = daysLeft === null ? '#8895a7' : daysLeft < 0 ? 'var(--red)' : daysLeft <= 7 ? 'var(--orange)' : '#0e7490';
+                  const retStr = f.returnDate ? fmt(f.returnDate) + (daysLeft !== null ? ` (${daysLeft < 0 ? Math.abs(daysLeft)+'d OVR' : daysLeft+'d'})` : '') : 'no return date';
+                  return `<div id="mvboat-${f.id}" style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid ${f.returnDate?'#a5f3fc':'var(--border)'};background:${f.returnDate?'#ecfeff':'var(--bg-elevated)'};margin-bottom:3px;">
+                    <div style="font:700 10px var(--font-mono);color:${f.returnDate?'#0e7490':'var(--text-primary)'}">${esc(f.name)} <span style="font-weight:400;font-size:9px;color:var(--text-muted)">${f.location}</span></div>
+                    ${f.returnDate ? `<div style="font-size:9px;color:${retCol};font-family:var(--font-mono)">↩ ${retStr}</div>` : '<div style="font-size:9px;color:var(--text-muted);font-style:italic">set return date in Frames tab</div>'}
+                  </div>`;
+                }).join('')}
+                ${!boatMoves.length && !STATE.frames.some(f=>f.location==='client'||f.location==='boat') ? '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no frames away</div>' : ''}
               </div>
             </div>
           </div>
@@ -4225,9 +4299,35 @@ function mvRedraw() {
       }
 
     } else if (m.typeKey === 'frame-return-from-client') {
-      // Arrow from Boat box → Frame card
-      const boatPos = getPos('mv-boat-box');
+      // For isReturnDate frames: draw a dashed arrow from the individual frame's card in the boat box
+      // pointing downward toward the facility frames zone (using mv-facility-box as anchor)
       const fk = String(m.frameId||'');
+      const boatFramePos = getPos('mvboat-' + fk);
+      const boatPos = getPos('mv-boat-box');
+      const facilityPos = getPos('mv-facility-box');
+
+      if (m.isReturnDate) {
+        // Draw a short dashed arrow below/from the individual frame card inside the boat box
+        const refPos = boatFramePos || boatPos;
+        if (!refPos) return;
+        const x = refPos.cx;
+        const y1 = refPos.bottom + 4;
+        const y2 = y1 + 36;
+        const line = svgEl('line', { x1:x, y1:y1, x2:x, y2:y2-5, stroke:'#0e7490', 'stroke-width':'2.5', 'stroke-dasharray':'6,4', 'stroke-linecap':'round' });
+        svg.appendChild(line);
+        const tri = svgEl('polygon', { points:`${x},${y2+1} ${x-7},${y2-11} ${x+7},${y2-11}`, fill:'#0e7490' });
+        svg.appendChild(tri);
+        // Date label
+        if (m.date) {
+          const fr = getFrame(m.frameId);
+          const lbl = (fr ? fr.name : '') + ' ↩ ' + fmt(m.date);
+          const t1 = svgEl('text',{x:x,y:y1-2,fill:'#fff','font-size':'8','font-weight':'bold','font-family':'monospace','text-anchor':'middle',stroke:'#fff','stroke-width':'3','paint-order':'stroke'}); t1.textContent=lbl; svg.appendChild(t1);
+          const t2 = svgEl('text',{x:x,y:y1-2,fill:'#0e7490','font-size':'8','font-weight':'bold','font-family':'monospace','text-anchor':'middle'}); t2.textContent=lbl; svg.appendChild(t2);
+        }
+        return;
+      }
+
+      // Arrow from Boat box → Frame card (planned frame-return-from-client movement)
       const fPos = getPos('mvf-' + fk);
       if (!boatPos || !fPos) return;
       const sx = boatPos.cx;
