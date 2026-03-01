@@ -241,6 +241,27 @@ tr:hover td { background: #f8f9fb; }
 .shipment-row { padding: 12px 0; border-bottom: 1px solid var(--border); }
 .shipment-row:last-child { border:none; }
 
+/* ── Boat Trip Diary ── */
+.bt-week-grid { display: grid; grid-template-columns: repeat(7,1fr); gap:4px; margin-bottom:8px; }
+.bt-week-day {
+  min-height: 80px; border-radius: var(--radius); padding: 6px;
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  font-size: 11px;
+}
+.bt-week-day.today { border-color: var(--accent); background: var(--accent-dim); }
+.bt-week-day.has-events { border-color: #2563b0; background: #eff6ff; }
+.bt-week-day-hdr { font: 700 10px var(--font-mono); color: var(--text-muted); margin-bottom:4px; }
+.bt-event {
+  padding: 2px 5px; border-radius: 3px; margin-bottom: 2px;
+  font-size: 9px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: pointer;
+}
+.bt-event.load   { background: #e0f2fe; color: #075985; border: 1px solid #7dd3fc; }
+.bt-event.depart { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+.bt-event.return { background: #fce7f3; color: #9d174d; border: 1px solid #f9a8d4; }
+.bt-nav { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.bt-week-label { font:600 13px var(--font-mono); color: var(--accent); }
+
 /* ── Report ── */
 .report-day-header {
   font: 700 13px var(--font-mono); color: var(--accent);
@@ -524,6 +545,7 @@ function initState() {
     }),
     plannedMovements: [],
     shipments: [],
+    boatTrips: [],
     settings: { movementsPerDay: MAX_MOVES }
   };
 }
@@ -571,6 +593,7 @@ async function loadState() {
     })),
     plannedMovements: PRELOAD_STATE.plannedMovements || [],
     shipments: PRELOAD_STATE.shipments || [],
+    boatTrips: PRELOAD_STATE.boatTrips || [],
     settings: PRELOAD_STATE.settings || { movementsPerDay: MAX_MOVES },
   };
 
@@ -588,6 +611,7 @@ async function loadState() {
       })),
       plannedMovements: data.plannedMovements,
       shipments: data.shipments,
+      boatTrips: data.boatTrips || [],
       settings: { movementsPerDay: parseInt(data.settings?.movementsPerDay) || MAX_MOVES }
     };
     console.log('[CageTracker] State synced from API:', STATE.cages.length, 'cages');
@@ -694,6 +718,18 @@ async function updateShipmentInAPI(s) {
 async function deleteShipmentFromAPI(id) {
   try { await api('/api/shipments', 'DELETE', { id }); }
   catch(e) { showError('Failed to delete shipment: ' + e.message); }
+}
+async function addBoatTripToAPI(t) {
+  try { await api('/api/boattrips', 'POST', t); }
+  catch(e) { showError('Failed to add boat trip: ' + e.message); }
+}
+async function updateBoatTripInAPI(t) {
+  try { await api('/api/boattrips', 'PUT', t); }
+  catch(e) { showError('Failed to update boat trip: ' + e.message); }
+}
+async function deleteBoatTripFromAPI(id) {
+  try { await api('/api/boattrips', 'DELETE', { id }); }
+  catch(e) { showError('Failed to delete boat trip: ' + e.message); }
 }
 
 function getCage(id) { return STATE.cages.find(c=>c.id===id); }
@@ -2352,6 +2388,14 @@ function renderPlanner() {
     }
   });
 
+  // Build boat trip indexes for planner calendar
+  const btLoadByDay={}, btDepartByDay={}, btReturnByDay={};
+  STATE.boatTrips.forEach(t=>{
+    if(t.loadDate) { if(!btLoadByDay[t.loadDate]) btLoadByDay[t.loadDate]=[]; btLoadByDay[t.loadDate].push(t.label); }
+    if(t.departDate) { if(!btDepartByDay[t.departDate]) btDepartByDay[t.departDate]=[]; btDepartByDay[t.departDate].push(t.label); }
+    if(t.returnDate) { if(!btReturnByDay[t.returnDate]) btReturnByDay[t.returnDate]=[]; btReturnByDay[t.returnDate].push(t.label); }
+  });
+
   function renderWeekDay(day) {
     const dayMoves = STATE.plannedMovements.filter(m=>m.date===day);
     const pending = dayMoves.filter(m=>!m.completed).length;
@@ -2360,7 +2404,10 @@ function renderPlanner() {
     const isWeekend = dow===0||dow===6;
     const departures = depByDay[day] || [];
     const frameReturns = returnByDay[day] || [];
-    const hasMoves = dayMoves.length > 0 || departures.length > 0 || frameReturns.length > 0;
+    const btLoads = btLoadByDay[day] || [];
+    const btDeparts = btDepartByDay[day] || [];
+    const btReturns = btReturnByDay[day] || [];
+    const hasMoves = dayMoves.length > 0 || departures.length > 0 || frameReturns.length > 0 || btLoads.length > 0 || btDeparts.length > 0 || btReturns.length > 0;
 
     let movesHTML = dayMoves.map(m=>`
       <div class="week-move-item ${m.completed?'completed':''}" title="${esc(m.notes||m.description)}" style="${m.typeKey==='frame-return-from-client'?'background:#ecfeff;border:1px solid #a5f3fc;color:#0e7490;':''}">
@@ -2373,6 +2420,9 @@ function renderPlanner() {
       ${pending>0 ? `<div class="week-move-count ${pending>MAX_MOVES?'over-limit':''}" style="color:${pending>MAX_MOVES?'var(--red)':'var(--green)'}">${pending} moves${pending>MAX_MOVES?' ⚠ OVER':''}</div>` : ''}
       ${departures.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Cage ${n} leaves facility">🚚 ${esc(n)}</div>`).join('')}
       ${frameReturns.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#ecfeff;color:#0e7490;border:1px solid #a5f3fc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Frame ${n} expected back">🚢 ${esc(n)} returns</div>`).join('')}
+      ${btLoads.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Boat loaded: ${n}">⬇ ${esc(n)}</div>`).join('')}
+      ${btDeparts.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#dcfce7;color:#166534;border:1px solid #86efac;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Boat departs: ${n}">⛵ ${esc(n)}</div>`).join('')}
+      ${btReturns.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Boat returns: ${n}">🏠 ${esc(n)}</div>`).join('')}
       ${movesHTML}
     </div>`;
   }
@@ -2480,7 +2530,9 @@ function renderPlanner() {
           <div style="display:flex;gap:12px;margin-bottom:8px;font-size:10px;align-items:center;flex-wrap:wrap">
             <span style="padding:2px 6px;background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;border-radius:3px">🚚 Cage leaves facility</span>
             <span style="padding:2px 6px;background:#ecfeff;color:#0e7490;border:1px solid #a5f3fc;border-radius:3px">🚢 Frame returns</span>
-            <span style="color:var(--text-muted)">Departure dates and frame returns shown in calendar</span>
+            <span style="padding:2px 6px;background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;border-radius:3px">⬇ Boat loaded</span>
+            <span style="padding:2px 6px;background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:3px">⛵ Boat departs</span>
+            <span style="padding:2px 6px;background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4;border-radius:3px">🏠 Boat returns</span>
           </div>
           <div style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Week 1</div>
           <div class="week-grid" style="margin-bottom:10px">${week1HTML}</div>
@@ -2914,6 +2966,166 @@ function shiftWeek(dir) {
 let shipFormOpen = false;
 let shipSelected = [];
 
+// ── Boat Trip Diary state ────────────────────────────────────────────────────
+let btFormOpen = false;
+let btEditId = null;
+let btWeekStart = (() => { const d=new Date(); d.setDate(d.getDate()-d.getDay()+1); return toISO(d); })();
+
+async function saveBoatTrip() {
+  const label = document.getElementById('bt-label').value.trim() || 'Trip';
+  const loadDate = document.getElementById('bt-load').value;
+  const departDate = document.getElementById('bt-depart').value;
+  const returnDate = document.getElementById('bt-return').value;
+  const notes = document.getElementById('bt-notes').value.trim();
+  if (!loadDate && !departDate && !returnDate) return alert('Please set at least one date.');
+  if (btEditId) {
+    const t = STATE.boatTrips.find(t=>t.id===btEditId);
+    if (t) { t.label=label; t.loadDate=loadDate||null; t.departDate=departDate||null; t.returnDate=returnDate||null; t.notes=notes; }
+    btEditId=null; btFormOpen=false; render();
+    await updateBoatTripInAPI(t);
+  } else {
+    const t = {id:uid(), label, loadDate:loadDate||null, departDate:departDate||null, returnDate:returnDate||null, notes, createdAt:new Date().toISOString()};
+    STATE.boatTrips.push(t);
+    btFormOpen=false; render();
+    await addBoatTripToAPI(t);
+  }
+}
+async function deleteBoatTrip(id) {
+  if (!confirm('Delete this boat trip entry?')) return;
+  STATE.boatTrips = STATE.boatTrips.filter(t=>t.id!==id);
+  render();
+  await deleteBoatTripFromAPI(id);
+}
+function editBoatTrip(id) {
+  btEditId=id; btFormOpen=true; render();
+  setTimeout(()=>{
+    const t=STATE.boatTrips.find(t=>t.id===id);
+    if(!t) return;
+    document.getElementById('bt-label').value=t.label||'';
+    document.getElementById('bt-load').value=t.loadDate||'';
+    document.getElementById('bt-depart').value=t.departDate||'';
+    document.getElementById('bt-return').value=t.returnDate||'';
+    document.getElementById('bt-notes').value=t.notes||'';
+  },50);
+}
+function shiftBtWeek(dir) {
+  const d=new Date(btWeekStart+'T12:00:00');
+  d.setDate(d.getDate()+dir*7);
+  btWeekStart=toISO(d);
+  render();
+}
+
+function renderBoatDiary() {
+  // Build 3-week calendar
+  const ws = new Date(btWeekStart+'T12:00:00');
+  let allDays = [];
+  for(let i=0;i<21;i++) { const d=new Date(ws); d.setDate(d.getDate()+i); allDays.push(toISO(d)); }
+
+  // Index boat trip events by date
+  const loadByDay={}, departByDay={}, returnByDay2={};
+  STATE.boatTrips.forEach(t=>{
+    if(t.loadDate) { if(!loadByDay[t.loadDate]) loadByDay[t.loadDate]=[]; loadByDay[t.loadDate].push(t); }
+    if(t.departDate) { if(!departByDay[t.departDate]) departByDay[t.departDate]=[]; departByDay[t.departDate].push(t); }
+    if(t.returnDate) { if(!returnByDay2[t.returnDate]) returnByDay2[t.returnDate]=[]; returnByDay2[t.returnDate].push(t); }
+  });
+
+  function renderBtDay(day) {
+    const isToday = day===todayStr();
+    const loads = loadByDay[day]||[];
+    const departs = departByDay[day]||[];
+    const returns = returnByDay2[day]||[];
+    const hasEvents = loads.length+departs.length+returns.length>0;
+    let evHTML = '';
+    loads.forEach(t=>{ evHTML+=`<div class="bt-event load" onclick="editBoatTrip('${t.id}')" title="${esc(t.label)}${t.notes?': '+t.notes:''}">⬇ ${esc(t.label)}</div>`; });
+    departs.forEach(t=>{ evHTML+=`<div class="bt-event depart" onclick="editBoatTrip('${t.id}')" title="${esc(t.label)}${t.notes?': '+t.notes:''}">⛵ ${esc(t.label)}</div>`; });
+    returns.forEach(t=>{ evHTML+=`<div class="bt-event return" onclick="editBoatTrip('${t.id}')" title="${esc(t.label)}${t.notes?': '+t.notes:''}">🏠 ${esc(t.label)}</div>`; });
+    return `<div class="bt-week-day ${isToday?'today':''} ${hasEvents?'has-events':''}">
+      <div class="bt-week-day-hdr">${fmtShort(day)}</div>
+      ${evHTML}
+    </div>`;
+  }
+
+  const week1HTML = allDays.slice(0,7).map(renderBtDay).join('');
+  const week2HTML = allDays.slice(7,14).map(renderBtDay).join('');
+  const week3HTML = allDays.slice(14,21).map(renderBtDay).join('');
+
+  const endDate = allDays[20];
+
+  // Sorted trip list
+  const sorted = [...STATE.boatTrips].sort((a,b)=>{
+    const da=a.loadDate||a.departDate||a.returnDate||'';
+    const db=b.loadDate||b.departDate||b.returnDate||'';
+    return da.localeCompare(db);
+  });
+
+  let tripRows = sorted.length===0
+    ? '<div class="empty-msg">No boat trips planned yet.</div>'
+    : sorted.map(t=>{
+        return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;flex-wrap:wrap">
+          <span style="font:700 13px var(--font-mono);color:var(--text-primary);min-width:100px">${esc(t.label)}</span>
+          ${t.loadDate?`<span style="padding:2px 8px;border-radius:10px;background:#e0f2fe;color:#075985;font-weight:600;font-size:11px">⬇ Load: ${fmt(t.loadDate)}</span>`:''}
+          ${t.departDate?`<span style="padding:2px 8px;border-radius:10px;background:#dcfce7;color:#166534;font-weight:600;font-size:11px">⛵ Depart: ${fmt(t.departDate)}</span>`:''}
+          ${t.returnDate?`<span style="padding:2px 8px;border-radius:10px;background:#fce7f3;color:#9d174d;font-weight:600;font-size:11px">🏠 Return: ${fmt(t.returnDate)}</span>`:''}
+          ${t.notes?`<span style="color:var(--text-muted);font-size:11px;flex:1">${esc(t.notes)}</span>`:''}
+          <span style="margin-left:auto;display:flex;gap:4px">
+            <button class="btn btn-secondary btn-xs" onclick="editBoatTrip('${t.id}')">Edit</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteBoatTrip('${t.id}')">Del</button>
+          </span>
+        </div>`;
+      }).join('');
+
+  let formHTML = '';
+  if (btFormOpen) {
+    const editing = btEditId ? STATE.boatTrips.find(t=>t.id===btEditId) : null;
+    formHTML = `<div class="card" style="border-color:var(--accent)">
+      <div class="card-title">${editing?'Edit':'Add'} Boat Trip</div>
+      <div class="form-grid form-grid-3">
+        <div><label>Trip Label</label><input id="bt-label" placeholder="e.g. Trip 1, Run A..." value="${esc(editing?.label||'')}"/></div>
+        <div><label>🔵 Load Date <span style="font-weight:400;font-size:10px;color:var(--text-muted)">(boat filled at facility)</span></label><input id="bt-load" type="date" value="${editing?.loadDate||''}"/></div>
+        <div><label>🟢 Depart Date <span style="font-weight:400;font-size:10px;color:var(--text-muted)">(boat sets sail)</span></label><input id="bt-depart" type="date" value="${editing?.departDate||''}"/></div>
+        <div><label>🔴 Return Date <span style="font-weight:400;font-size:10px;color:var(--text-muted)">(boat returns from client)</span></label><input id="bt-return" type="date" value="${editing?.returnDate||''}"/></div>
+        <div style="grid-column:span 2"><label>Notes</label><input id="bt-notes" placeholder="Optional notes..." value="${esc(editing?.notes||'')}"/></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="saveBoatTrip()">${editing?'Save Changes':'Add Trip'}</button>
+        <button class="btn btn-secondary" onclick="btFormOpen=false;btEditId=null;render()">Cancel</button>
+      </div>
+    </div>`;
+  }
+
+  return `
+    <div style="margin-bottom:16px">
+      <div class="flex-between" style="margin-bottom:8px">
+        <h3 style="font-size:16px;font-weight:700;margin:0">🚢 Boat Schedule Diary</h3>
+        <button class="btn btn-primary btn-sm" onclick="btFormOpen=!btFormOpen;btEditId=null;render()">+ Add Trip</button>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:8px;font-size:10px;align-items:center;flex-wrap:wrap">
+        <span style="padding:2px 8px;background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;border-radius:3px;font-weight:600">⬇ Boat loaded at facility</span>
+        <span style="padding:2px 8px;background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:3px;font-weight:600">⛵ Boat sets sail</span>
+        <span style="padding:2px 8px;background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4;border-radius:3px;font-weight:600">🏠 Boat returns from client</span>
+      </div>
+      ${formHTML}
+      <div class="card" style="padding:12px">
+        <div class="bt-nav">
+          <button class="btn btn-secondary btn-sm" onclick="shiftBtWeek(-1)">◄ Prev 3 Weeks</button>
+          <span class="bt-week-label">${fmt(allDays[0])} — ${fmt(endDate)}</span>
+          <button class="btn btn-secondary btn-sm" onclick="shiftBtWeek(1)">Next 3 Weeks ►</button>
+        </div>
+        <div style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Week 1</div>
+        <div class="bt-week-grid" style="margin-bottom:10px">${week1HTML}</div>
+        <div style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Week 2</div>
+        <div class="bt-week-grid" style="margin-bottom:10px">${week2HTML}</div>
+        <div style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Week 3</div>
+        <div class="bt-week-grid">${week3HTML}</div>
+      </div>
+      <div class="card">
+        <div class="card-title">All Planned Boat Trips</div>
+        ${tripRows}
+      </div>
+    </div>
+  `;
+}
+
 function renderShipping() {
   const ready = STATE.frames.filter(f=>f.fixedForShipping && f.location==='facility');
 
@@ -2970,6 +3182,7 @@ function renderShipping() {
       <h2 class="section-title" style="margin:0">Shipping Management</h2>
       <button class="btn btn-primary" onclick="shipFormOpen=!shipFormOpen;shipSelected=[];render()">+ New Shipment</button>
     </div>
+    ${renderBoatDiary()}
     <div class="card">
       <div class="card-title">Ready to Ship (${ready.length} frames fixed)</div>
       ${readyHTML}
