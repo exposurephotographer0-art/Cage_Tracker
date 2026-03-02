@@ -749,12 +749,12 @@ function tripSelectHTML(cageId, currentTripId) {
     .concat((STATE.boatTrips||[])
       .slice()
       .sort((a,b)=>{
-        const da=a.loadDate||a.departDate||a.returnDate||'';
-        const db=b.loadDate||b.departDate||b.returnDate||'';
+        const da=a.departDate||a.loadDate||a.returnDate||'';
+        const db=b.departDate||b.loadDate||b.returnDate||'';
         return da.localeCompare(db);
       })
       .map(t=>{
-        const dateStr = t.loadDate ? ` (Load: ${fmt(t.loadDate)})` : t.departDate ? ` (Depart: ${fmt(t.departDate)})` : '';
+        const dateStr = t.departDate ? ` (Depart: ${fmt(t.departDate)})` : t.loadDate ? ` (Load: ${fmt(t.loadDate)})` : '';
         return `<option value="${t.id}" ${currentTripId===t.id?'selected':''}>${esc(t.label||'Trip')}${dateStr}</option>`;
       })
     ).join('');
@@ -771,8 +771,8 @@ async function setCageTrip(cageId, tripId) {
     const trip = getBoatTrip(tripId);
     if (!trip) return;
     c.proposedTripId = tripId;
-    // Store the load date (or depart date) as proposedShipDay for backward-compat sorting/filtering
-    c.proposedShipDay = trip.loadDate || trip.departDate || null;
+    // Store the depart date (or load date) as proposedShipDay for backward-compat sorting/filtering
+    c.proposedShipDay = trip.departDate || trip.loadDate || null;
   }
   render();
   await saveCage(c);
@@ -2054,10 +2054,20 @@ function renderFrames() {
     if (f.location === 'client') {
       const retDaysLeft = f.returnDate ? Math.ceil((new Date(f.returnDate+'T12:00:00') - new Date()) / 86400000) : null;
       const retBadge = retDaysLeft !== null ? (retDaysLeft < 0 ? '<span style="color:var(--red);font-size:10px">OVERDUE</span>' : retDaysLeft <= 7 ? `<span style="color:var(--orange);font-size:10px">⚠ ${retDaysLeft}d</span>` : `<span style="color:var(--text-muted);font-size:10px">${retDaysLeft}d</span>`) : '';
+
+      // Build dropdown options from trip unload dates
+      const tripsWithUnload = (STATE.boatTrips||[]).filter(t=>t.unloadDate).sort((a,b)=>a.unloadDate.localeCompare(b.unloadDate));
+      const tripOpts = tripsWithUnload.map(t=>`<option value="${t.unloadDate}" ${f.returnDate===t.unloadDate?'selected':''}>${esc(t.label)} — Unload: ${fmt(t.unloadDate)}</option>`).join('');
+      const noTripsMsg = tripsWithUnload.length === 0 ? '<option value="" disabled>No trips with unload dates — add via Shipping tab</option>' : '';
+
       actionsHTML = `<div style="margin-top:8px">
-        <label style="font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;display:block">📅 Expected Return</label>
+        <label style="font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;display:block">📅 Expected Return (linked to trip unload date)</label>
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-          <input type="date" value="${f.returnDate||''}" style="font-size:11px;padding:4px 8px;flex:1" onchange="setFrameReturnDate('${f.id}',this.value)" placeholder="Set return date"/>
+          <select style="flex:1;font-size:11px;padding:4px 8px" onchange="setFrameReturnDate('${f.id}',this.value)">
+            <option value="" ${!f.returnDate?'selected':''}>— Not set —</option>
+            ${noTripsMsg}
+            ${tripOpts}
+          </select>
           ${f.returnDate ? `<span style="font-size:10px;white-space:nowrap;font-family:var(--font-mono);color:#0e7490">${fmt(f.returnDate)}</span>` : ''}
           ${retBadge}
         </div>
@@ -3137,16 +3147,17 @@ async function saveBoatTrip() {
   const label = document.getElementById('bt-label').value.trim() || 'Trip';
   const loadDate = document.getElementById('bt-load').value;
   const departDate = document.getElementById('bt-depart').value;
+  const unloadDate = document.getElementById('bt-unload').value;
   const returnDate = document.getElementById('bt-return').value;
   const notes = document.getElementById('bt-notes').value.trim();
-  if (!loadDate && !departDate && !returnDate) return alert('Please set at least one date.');
+  if (!loadDate && !departDate && !unloadDate && !returnDate) return alert('Please set at least one date.');
   if (btEditId) {
     const t = STATE.boatTrips.find(t=>t.id===btEditId);
-    if (t) { t.label=label; t.loadDate=loadDate||null; t.departDate=departDate||null; t.returnDate=returnDate||null; t.notes=notes; }
+    if (t) { t.label=label; t.loadDate=loadDate||null; t.departDate=departDate||null; t.unloadDate=unloadDate||null; t.returnDate=returnDate||null; t.notes=notes; }
     btEditId=null; btFormOpen=false; render();
     await updateBoatTripInAPI(t);
   } else {
-    const t = {id:uid(), label, loadDate:loadDate||null, departDate:departDate||null, returnDate:returnDate||null, notes, createdAt:new Date().toISOString()};
+    const t = {id:uid(), label, loadDate:loadDate||null, departDate:departDate||null, unloadDate:unloadDate||null, returnDate:returnDate||null, notes, createdAt:new Date().toISOString()};
     STATE.boatTrips.push(t);
     btFormOpen=false; render();
     await addBoatTripToAPI(t);
@@ -3166,6 +3177,7 @@ function editBoatTrip(id) {
     document.getElementById('bt-label').value=t.label||'';
     document.getElementById('bt-load').value=t.loadDate||'';
     document.getElementById('bt-depart').value=t.departDate||'';
+    document.getElementById('bt-unload').value=t.unloadDate||'';
     document.getElementById('bt-return').value=t.returnDate||'';
     document.getElementById('bt-notes').value=t.notes||'';
   },50);
@@ -3227,6 +3239,7 @@ function renderBoatDiary() {
           <span style="font:700 13px var(--font-mono);color:var(--text-primary);min-width:100px">${esc(t.label)}</span>
           ${t.loadDate?`<span style="padding:2px 8px;border-radius:10px;background:#e0f2fe;color:#075985;font-weight:600;font-size:11px">⬇ Load: ${fmt(t.loadDate)}</span>`:''}
           ${t.departDate?`<span style="padding:2px 8px;border-radius:10px;background:#dcfce7;color:#166534;font-weight:600;font-size:11px">⛵ Depart: ${fmt(t.departDate)}</span>`:''}
+          ${t.unloadDate?`<span style="padding:2px 8px;border-radius:10px;background:#fff7ed;color:#9a3412;font-weight:600;font-size:11px">📦 Unload: ${fmt(t.unloadDate)}</span>`:''}
           ${t.returnDate?`<span style="padding:2px 8px;border-radius:10px;background:#fce7f3;color:#9d174d;font-weight:600;font-size:11px">🏠 Return: ${fmt(t.returnDate)}</span>`:''}
           ${t.notes?`<span style="color:var(--text-muted);font-size:11px;flex:1">${esc(t.notes)}</span>`:''}
           <span style="margin-left:auto;display:flex;gap:4px">
@@ -3245,8 +3258,9 @@ function renderBoatDiary() {
         <div><label>Trip Label</label><input id="bt-label" placeholder="e.g. Trip 1, Run A..." value="${esc(editing?.label||'')}"/></div>
         <div><label>🔵 Load Date <span style="font-weight:400;font-size:10px;color:var(--text-muted)">(boat filled at facility)</span></label><input id="bt-load" type="date" value="${editing?.loadDate||''}"/></div>
         <div><label>🟢 Depart Date <span style="font-weight:400;font-size:10px;color:var(--text-muted)">(boat sets sail)</span></label><input id="bt-depart" type="date" value="${editing?.departDate||''}"/></div>
+        <div><label>🟠 Unload Date <span style="font-weight:400;font-size:10px;color:var(--text-muted)">(cages offloaded at client)</span></label><input id="bt-unload" type="date" value="${editing?.unloadDate||''}"/></div>
         <div><label>🔴 Return Date <span style="font-weight:400;font-size:10px;color:var(--text-muted)">(boat returns from client)</span></label><input id="bt-return" type="date" value="${editing?.returnDate||''}"/></div>
-        <div style="grid-column:span 2"><label>Notes</label><input id="bt-notes" placeholder="Optional notes..." value="${esc(editing?.notes||'')}"/></div>
+        <div><label>Notes</label><input id="bt-notes" placeholder="Optional notes..." value="${esc(editing?.notes||'')}"/></div>
       </div>
       <div class="form-actions">
         <button class="btn btn-primary" onclick="saveBoatTrip()">${editing?'Save Changes':'Add Trip'}</button>
