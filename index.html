@@ -629,6 +629,7 @@ function normaliseCage(c) {
     locationDetail: c.location_detail || c.locationDetail || '',
     departureDate: c.departure_date || c.departureDate || null,
     proposedShipDay: c.proposed_ship_day || c.proposedShipDay || null,
+    proposedTripId: c.proposed_trip_id || c.proposedTripId || null,
     notes: c.notes || '',
     createdAt: c.created_at || c.createdAt || new Date().toISOString(),
   };
@@ -734,6 +735,48 @@ async function deleteBoatTripFromAPI(id) {
 
 function getCage(id) { return STATE.cages.find(c=>c.id===id); }
 function getFrame(id) { return STATE.frames.find(f=>f.id===id); }
+function getBoatTrip(id) { return (STATE.boatTrips||[]).find(t=>t.id===id); }
+
+// Return the label for a trip, or a date fallback
+function tripLabel(trip) {
+  if (!trip) return '?';
+  return trip.label || fmt(trip.loadDate||trip.departDate||'');
+}
+
+// Build a <select> for assigning a cage to a boat trip
+function tripSelectHTML(cageId, currentTripId) {
+  const opts = ['<option value="">— No trip —</option>']
+    .concat((STATE.boatTrips||[])
+      .slice()
+      .sort((a,b)=>{
+        const da=a.loadDate||a.departDate||a.returnDate||'';
+        const db=b.loadDate||b.departDate||b.returnDate||'';
+        return da.localeCompare(db);
+      })
+      .map(t=>{
+        const dateStr = t.loadDate ? ` (Load: ${fmt(t.loadDate)})` : t.departDate ? ` (Depart: ${fmt(t.departDate)})` : '';
+        return `<option value="${t.id}" ${currentTripId===t.id?'selected':''}>${esc(t.label||'Trip')}${dateStr}</option>`;
+      })
+    ).join('');
+  return `<select style="font-size:11px;padding:3px 6px;max-width:200px" onchange="setCageTrip('${cageId}',this.value)">${opts}</select>`;
+}
+
+async function setCageTrip(cageId, tripId) {
+  const c = getCage(cageId);
+  if (!c) return;
+  if (!tripId) {
+    c.proposedTripId = null;
+    c.proposedShipDay = null;
+  } else {
+    const trip = getBoatTrip(tripId);
+    if (!trip) return;
+    c.proposedTripId = tripId;
+    // Store the load date (or depart date) as proposedShipDay for backward-compat sorting/filtering
+    c.proposedShipDay = trip.loadDate || trip.departDate || null;
+  }
+  render();
+  await saveCage(c);
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ZOOM HELPERS
@@ -1184,7 +1227,7 @@ function renderNextDueDelivery() {
       <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:var(--text-primary)">${esc(c.name)}</span></div>
       <div style="flex:1;font-size:11px;color:var(--text-muted)">${c.width}m × ${c.height}m × ${c.length}m · ${c.weight}t</div>
       <div style="min-width:80px"><span class="badge badge-${locBadge(c.location)}" style="font-size:9px">${esc(locLabel(c))}</span></div>
-      <div style="font:600 10px var(--font-mono);color:var(--purple);min-width:100px">🚢 ${fmt(c.proposedShipDay)}</div>
+      <div style="font:600 10px var(--font-mono);color:var(--purple);min-width:100px">🚢 ${c.proposedTripId ? esc(tripLabel(getBoatTrip(c.proposedTripId))) : fmt(c.proposedShipDay)}</div>
       <div style="font:600 11px var(--font-mono);color:var(--text-secondary);min-width:90px">${c.departureDate ? fmt(c.departureDate) : '<span style="color:var(--text-muted)">—</span>'}</div>
       <div style="min-width:90px;text-align:right">${urgencyBadge}</div>
     </div>`;
@@ -1411,7 +1454,7 @@ function renderCages() {
           <td><input id="ce-l-${c.id}" type="number" step="0.01" value="${c.length}" style="width:70px;font-size:12px"/></td>
           <td><input id="ce-wt-${c.id}" type="number" step="0.01" value="${c.weight}" style="width:70px;font-size:12px"/></td>
           <td><input id="ce-dep-${c.id}" type="date" value="${c.departureDate||''}" style="width:130px;font-size:12px"/></td>
-          <td><input id="ce-ship-${c.id}" type="date" value="${c.proposedShipDay||''}" style="width:130px;font-size:12px"/></td>
+          <td>${tripSelectHTML(c.id, c.proposedTripId||null)}</td>
           <td><span class="badge badge-${hBadge(c.height)}">${hCat(c.height)}</span></td>
           <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
           <td colspan="2" style="white-space:nowrap">
@@ -1433,7 +1476,7 @@ function renderCages() {
         <td style="font-family:var(--font-mono)"><span class="editable-cell" onclick="startInlineEdit('${c.id}','length',this)">${c.length}</span></td>
         <td style="font-family:var(--font-mono)"><span class="editable-cell" onclick="startInlineEdit('${c.id}','weight',this)">${c.weight}</span></td>
         <td style="font-size:11px"><span class="editable-cell" onclick="startInlineEdit('${c.id}','departureDate',this)" title="Click to edit departure date">${c.departureDate ? fmt(c.departureDate) : '<span style="color:var(--text-muted)">—</span>'}</span> ${depBadge}</td>
-        <td style="font-size:11px"><span class="editable-cell" onclick="startInlineEdit('${c.id}','proposedShipDay',this)" title="Click to edit proposed ship day">${c.proposedShipDay ? `<span style="color:var(--purple);font-family:var(--font-mono)">${fmt(c.proposedShipDay)}</span>` : '<span style="color:var(--text-muted)">—</span>'}</span></td>
+        <td style="font-size:11px">${tripSelectHTML(c.id, c.proposedTripId||null)}</td>
         <td><span class="badge badge-${hBadge(c.height)}">${hCat(c.height)}</span></td>
         <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
         <td style="white-space:nowrap">
@@ -1494,7 +1537,7 @@ function renderCages() {
       <table>
         <thead><tr>
           <th style="width:32px"><input type="checkbox" id="cage-select-all" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)" onchange="toggleAllCages(this.checked,${JSON.stringify(filtered.map(c=>c.id))})"/></th>
-          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Prop. Ship Day</th><th>Category</th><th>Location</th><th>Move</th><th>Del</th>
+          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Boat Trip</th><th>Category</th><th>Location</th><th>Move</th><th>Del</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -1592,8 +1635,6 @@ function saveCageEdit(id) {
   const l = parseFloat(document.getElementById('ce-l-'+id).value);
   const wt = parseFloat(document.getElementById('ce-wt-'+id).value);
   const dep = document.getElementById('ce-dep-'+id).value;
-  const shipEl = document.getElementById('ce-ship-'+id);
-  const ship = shipEl ? shipEl.value : '';
   if (!name) return alert('Name required.');
   c.name = name;
   if (!isNaN(h)) c.height = h;
@@ -1601,7 +1642,6 @@ function saveCageEdit(id) {
   if (!isNaN(l)) c.length = l;
   if (!isNaN(wt)) c.weight = wt;
   c.departureDate = dep || null;
-  c.proposedShipDay = ship || null;
   cageEditing = null;
   render();
   saveCage(c);
@@ -3774,6 +3814,17 @@ function printReport() {
 let bpBoatDate = todayStr();
 let bpSelectedCages = new Set();
 let bpGeneratedMovements = null;
+let bpTripId = null;
+
+function bpSetTrip(tripId) {
+  bpTripId = tripId || null;
+  if (bpTripId) {
+    const trip = getBoatTrip(bpTripId);
+    if (trip) bpBoatDate = trip.loadDate || trip.departDate || bpBoatDate;
+  }
+  bpGeneratedMovements = null;
+  render();
+}
 
 function toggleBPCage(id) {
   if (bpSelectedCages.has(id)) bpSelectedCages.delete(id);
@@ -4044,7 +4095,7 @@ async function commitBoatPlan() {
         type: 'Fix for Shipping',
         typeKey: 'frame-fix-shipping',
         description: step.note,
-        shift: 'day', notes: `Boat plan — load date: ${fmt(bpBoatDate)}`,
+        shift: 'day', notes: `Boat plan — load date: ${fmt(bpBoatDate)}${bpTripId ? ' · Trip: '+(getBoatTrip(bpTripId)?.label||'') : ''}`,
         cageId: null,
         frameId: step.frame?.id || null, completed: false,
       });
@@ -4123,29 +4174,51 @@ function renderBoatPlanner() {
   const cageCardsHTML = (() => {
     if (eligibleCages.length === 0) return '<div class="empty-msg">No cages leaving in the next 7 days, and no cages in RMD or frames.</div>';
 
-    // Group by proposedShipDay
+    // Group by proposedTripId (falling back to proposedShipDay date for legacy cages)
     const groups = {};
     const NO_GROUP = '__none__';
     eligibleCages.forEach(c => {
-      const key = c.proposedShipDay || NO_GROUP;
+      const key = c.proposedTripId || (c.proposedShipDay ? 'legacy:'+c.proposedShipDay : NO_GROUP);
       if (!groups[key]) groups[key] = [];
       groups[key].push(c);
     });
 
-    // Sort group keys: dated groups first (ascending), then ungrouped
+    // Sort group keys: trip groups by load date, then legacy date groups, then ungrouped
     const sortedKeys = Object.keys(groups).sort((a, b) => {
       if (a === NO_GROUP) return 1;
       if (b === NO_GROUP) return -1;
-      return a.localeCompare(b);
+      // Get sort date for each key
+      function keyDate(k) {
+        if (k.startsWith('legacy:')) return k.replace('legacy:','');
+        const trip = getBoatTrip(k);
+        return trip ? (trip.loadDate||trip.departDate||trip.returnDate||'') : '';
+      }
+      return keyDate(a).localeCompare(keyDate(b));
     });
 
     const hasGroups = sortedKeys.some(k => k !== NO_GROUP);
 
     return sortedKeys.map(key => {
       const groupCages = groups[key];
-      const groupHeader = key !== NO_GROUP
-        ? `<div style="grid-column:1/-1;font:700 12px var(--font-mono);color:var(--purple);padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px">🚢 Proposed Ship: ${fmt(key)} <span style="font-weight:400;color:var(--text-muted)">(${groupCages.length} cage${groupCages.length>1?'s':''})</span></div>`
-        : hasGroups ? `<div style="grid-column:1/-1;font:700 12px var(--font-mono);color:var(--text-muted);padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px">No proposed shipping day</div>` : '';
+      let groupHeader = '';
+      if (key !== NO_GROUP) {
+        let headerLabel = '';
+        if (key.startsWith('legacy:')) {
+          const date = key.replace('legacy:','');
+          headerLabel = `🚢 Ship Day: ${fmt(date)}`;
+        } else {
+          const trip = getBoatTrip(key);
+          if (trip) {
+            const dateStr = trip.loadDate ? ` · Load: ${fmt(trip.loadDate)}` : trip.departDate ? ` · Depart: ${fmt(trip.departDate)}` : '';
+            headerLabel = `🚢 Trip: ${esc(trip.label||'Unnamed')}${dateStr}`;
+          } else {
+            headerLabel = '🚢 Unknown Trip';
+          }
+        }
+        groupHeader = `<div style="grid-column:1/-1;font:700 12px var(--font-mono);color:var(--purple);padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px">${headerLabel} <span style="font-weight:400;color:var(--text-muted)">(${groupCages.length} cage${groupCages.length>1?'s':''})</span></div>`;
+      } else if (hasGroups) {
+        groupHeader = `<div style="grid-column:1/-1;font:700 12px var(--font-mono);color:var(--text-muted);padding:6px 0 4px;border-bottom:1px solid var(--border);margin-bottom:4px">No trip assigned</div>`;
+      }
 
       const cards = groupCages.map(c => {
         const sel = bpSelectedCages.has(c.id);
@@ -4212,7 +4285,20 @@ function renderBoatPlanner() {
           <div class="flex-between" style="margin-bottom:12px">
             <div class="card-title" style="margin:0">Select Cages for Next Boat (${bpSelectedCages.size} selected)</div>
             <div style="display:flex;gap:8px;align-items:center">
-              <div><label style="margin-bottom:2px">Boat Date</label><input type="date" value="${bpBoatDate}" onchange="bpBoatDate=this.value;bpGeneratedMovements=null;render()" style="width:160px"/></div>
+              <div>
+                <label style="margin-bottom:2px">Boat Trip</label>
+                <select style="width:220px" onchange="bpSetTrip(this.value)">
+                  <option value="">— Select a trip —</option>
+                  ${(STATE.boatTrips||[]).slice().sort((a,b)=>{const da=a.loadDate||a.departDate||'';const db=b.loadDate||b.departDate||'';return da.localeCompare(db);}).map(t=>{
+                    const dateStr = t.loadDate ? ` (${fmt(t.loadDate)})` : t.departDate ? ` (${fmt(t.departDate)})` : '';
+                    return `<option value="${t.id}" ${bpTripId===t.id?'selected':''}>${esc(t.label||'Trip')}${dateStr}</option>`;
+                  }).join('')}
+                </select>
+              </div>
+              <div style="align-self:flex-end">
+                <label style="margin-bottom:2px">Or manual date</label>
+                <input type="date" value="${bpBoatDate}" onchange="bpBoatDate=this.value;bpTripId=null;bpGeneratedMovements=null;render()" style="width:150px"/>
+              </div>
               ${bpSelectedCages.size > 0 ? `<button class="btn btn-primary" onclick="generateBoatMovements()" style="align-self:flex-end">⚙ Generate Plan</button>` : ''}
               ${bpSelectedCages.size > 0 ? `<button class="btn btn-secondary" onclick="bpSelectedCages.clear();bpGeneratedMovements=null;render()" style="align-self:flex-end">Clear</button>` : ''}
             </div>
