@@ -935,6 +935,93 @@ function renderRMDHeatmap() {
   </div>`;
 }
 
+function renderFrameReturnsStat() {
+  // Frames with an expected return date (returnDate set), not already at facility
+  const returningFrames = STATE.frames.filter(f => f.returnDate && f.location !== 'facility');
+  if (returningFrames.length === 0) return '';
+
+  const today = new Date();
+  // Week boundaries: Mon–Sun of current week
+  const dayOfWeek = today.getDay(); // 0=Sun
+  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const weekStart = new Date(today); weekStart.setDate(today.getDate() + mondayOffset); weekStart.setHours(0,0,0,0);
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6); weekEnd.setHours(23,59,59,999);
+
+  // Next week
+  const nextWeekStart = new Date(weekStart); nextWeekStart.setDate(weekStart.getDate() + 7);
+  const nextWeekEnd = new Date(weekEnd); nextWeekEnd.setDate(weekEnd.getDate() + 7);
+
+  function groupByWidth(frames) {
+    const groups = {};
+    frames.forEach(f => {
+      const key = f.width;
+      if (!groups[key]) groups[key] = 0;
+      groups[key]++;
+    });
+    return Object.entries(groups).sort((a,b) => parseFloat(a[0]) - parseFloat(b[0]));
+  }
+
+  function groupLabel(groups) {
+    if (groups.length === 0) return '<span style="color:var(--text-muted);font-style:italic">none</span>';
+    return groups.map(([w, n]) =>
+      `<span style="display:inline-block;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:2px 10px;margin:1px 3px;font:600 12px var(--font-mono);color:var(--purple)">${n}× ${w}m</span>`
+    ).join('');
+  }
+
+  const thisWeek = returningFrames.filter(f => {
+    const d = new Date(f.returnDate + 'T12:00:00');
+    return d >= weekStart && d <= weekEnd;
+  });
+  const nextWeek = returningFrames.filter(f => {
+    const d = new Date(f.returnDate + 'T12:00:00');
+    return d >= nextWeekStart && d <= nextWeekEnd;
+  });
+  const later = returningFrames.filter(f => {
+    const d = new Date(f.returnDate + 'T12:00:00');
+    return d > nextWeekEnd;
+  });
+  const overdue = returningFrames.filter(f => {
+    const d = new Date(f.returnDate + 'T12:00:00');
+    return d < weekStart;
+  });
+
+  const thisWeekGroups = groupByWidth(thisWeek);
+  const nextWeekGroups = groupByWidth(nextWeek);
+
+  const totalReturning = returningFrames.length;
+
+  return `<div class="card" style="margin-bottom:14px;border-color:${thisWeek.length > 0 ? '#a0c8e8' : 'var(--border)'}">
+    <div class="flex-between" style="margin-bottom:10px">
+      <div class="card-title" style="margin:0;color:var(--purple)">↩ Frames Returning from Client
+        <span style="font:400 11px var(--font-display);color:var(--text-muted);margin-left:8px">${totalReturning} frame${totalReturning!==1?'s':''} with expected return date</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="switchTab('frames')">Manage Frames →</button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
+      <div style="background:#f5f0fa;border:1px solid #d8c8f0;border-radius:8px;padding:12px">
+        <div style="font:700 10px var(--font-mono);color:var(--purple);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">This Week</div>
+        <div style="font:700 22px var(--font-mono);color:var(--purple);margin-bottom:6px">${thisWeek.length}</div>
+        <div>${groupLabel(thisWeekGroups)}</div>
+      </div>
+      <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div style="font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Next Week</div>
+        <div style="font:700 22px var(--font-mono);color:var(--text-secondary);margin-bottom:6px">${nextWeek.length}</div>
+        <div>${groupLabel(nextWeekGroups)}</div>
+      </div>
+      <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:12px">
+        <div style="font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Later</div>
+        <div style="font:700 22px var(--font-mono);color:var(--text-muted);margin-bottom:6px">${later.length}</div>
+        <div style="font-size:11px;color:var(--text-muted)">${later.length > 0 ? later.slice(0,3).map(f=>`${f.name} (${f.width}m) — ${fmt(f.returnDate)}`).join(', ') + (later.length > 3 ? `…` : '') : '—'}</div>
+      </div>
+      ${overdue.length > 0 ? `<div style="background:#fce8e8;border:1px solid #e8b0b0;border-radius:8px;padding:12px">
+        <div style="font:700 10px var(--font-mono);color:var(--red);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">⚠ Overdue</div>
+        <div style="font:700 22px var(--font-mono);color:var(--red);margin-bottom:6px">${overdue.length}</div>
+        <div style="font-size:11px;color:var(--red)">${overdue.slice(0,3).map(f=>`${f.name} — ${fmt(f.returnDate)}`).join(', ')}${overdue.length > 3 ? '…' : ''}</div>
+      </div>` : ''}
+    </div>
+  </div>`;
+}
+
 function renderDashboard() {
   const cages = STATE.cages;
   const inFac = cages.filter(c=>c.location==='facility').length;
@@ -1033,6 +1120,7 @@ function renderDashboard() {
           <div class="stat-card"><div class="stat-val" style="color:var(--orange)">${todayMoves}</div><div class="stat-lbl">Today's Moves</div></div>
           <div class="stat-card"><div class="stat-val" style="color:var(--yellow)">${pending}</div><div class="stat-lbl">Pending Plans</div></div>
         </div>
+        ${renderFrameReturnsStat()}
         ${renderRMDHeatmap()}
         ${renderNextDueDelivery()}
         ${renderDashboardFrames()}
@@ -1195,7 +1283,7 @@ function renderDashboardFrames() {
 let cageFormOpen = false;
 let cageSearch = '';
 let cageFilter = 'all';
-let cageSort = 'number'; // 'number' | 'name'
+let cageSort = 'number'; // 'number' | 'name' | 'departure' | 'shipday'
 let cageHeightFilter = 'all'; // 'all' | 'short' | 'medium' | 'tall'
 let cageEditing = null;
 let cageSelected = new Set(); // for multi-delete
@@ -1215,6 +1303,20 @@ function renderCages() {
   }).sort((a, b) => {
     if (cageSort === 'number') {
       return a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'});
+    }
+    if (cageSort === 'departure') {
+      // Cages with a departure date first, ascending; nulls at end
+      if (a.departureDate && b.departureDate) return a.departureDate.localeCompare(b.departureDate);
+      if (a.departureDate) return -1;
+      if (b.departureDate) return 1;
+      return a.name.localeCompare(b.name, undefined, {numeric: true});
+    }
+    if (cageSort === 'shipday') {
+      // Cages with a ship day first, ascending; nulls at end
+      if (a.proposedShipDay && b.proposedShipDay) return a.proposedShipDay.localeCompare(b.proposedShipDay);
+      if (a.proposedShipDay) return -1;
+      if (b.proposedShipDay) return 1;
+      return a.name.localeCompare(b.name, undefined, {numeric: true});
     }
     return a.name.localeCompare(b.name);
   });
@@ -1379,6 +1481,8 @@ function renderCages() {
         <span style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase">Sort:</span>
         <button class="filter-btn ${cageSort==='number'?'active':''}" onclick="cageSort='number';render()" title="Sort by cage number"># Number</button>
         <button class="filter-btn ${cageSort==='name'?'active':''}" onclick="cageSort='name';render()" title="Sort alphabetically">A–Z</button>
+        <button class="filter-btn ${cageSort==='departure'?'active':''}" onclick="cageSort='departure';render()" title="Sort by Leaves Facility date">📅 Departure</button>
+        <button class="filter-btn ${cageSort==='shipday'?'active':''}" onclick="cageSort='shipday';render()" title="Sort by Proposed Ship Day">🚢 Ship Day</button>
       </div>
     </div>
     ${cageSelected.size > 0 ? `<div style="display:flex;align-items:center;gap:12px;background:#fef0e6;border:1px solid #e8c8a0;border-radius:8px;padding:8px 14px;margin-bottom:10px">
@@ -2273,7 +2377,11 @@ function renderPlanner() {
   if (planFormType === 'facility-to-frame') {
     // Cages in facility
     cageOpts = [...STATE.cages.filter(c=>c.location==='facility')].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(c=>`<option value="${c.id}">${esc(c.name)} (${hCat(c.height)}, ${c.width}m)</option>`).join('');
-    frameOpts = STATE.frames.filter(f=>f.location==='facility'&&f.cages.length<2).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f=>`<option value="${f.id}">${esc(f.name)} (${f.width}m)</option>`).join('');
+    // Include ALL facility frames — even full ones — because you may plan ahead for when a frame will be empty
+    frameOpts = STATE.frames.filter(f=>f.location==='facility').sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f=>{
+      const fullNote = f.cages.length >= 2 ? ' ⚠ FULL' : f.cages.length === 1 ? ' (1 cage)' : ' (empty)';
+      return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${fullNote}</option>`;
+    }).join('');
     showRmd = false;
   } else if (planFormType === 'frame-to-rmd') {
     // Cages in frames, PLUS cages in facility that have a pending facility-to-frame movement planned
@@ -2338,9 +2446,9 @@ function renderPlanner() {
 
   // For RMD→Frame, annotate frames with suitability note
   if (planFormType === 'rmd-to-frame') {
-    frameOpts = STATE.frames.filter(f => f.location === 'facility' && f.cages.length < 2).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f => {
+    frameOpts = STATE.frames.filter(f => f.location === 'facility').sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f => {
       const existing = f.cages.length === 1 ? getCage(f.cages[0]) : null;
-      const note = existing ? ` [has ${existing.name}]` : ' [empty]';
+      const note = f.cages.length >= 2 ? ' ⚠ FULL' : existing ? ` [has ${existing.name}]` : ' [empty]';
       return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? ' 🔩' : ''})${note}</option>`;
     }).join('');
   }
