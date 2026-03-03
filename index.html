@@ -2586,6 +2586,11 @@ function renderPlanner() {
     }).join('');
   }
 
+  const frameLbl = planFormType === 'frame-to-frame' ? 'Destination Frame'
+    : planFormType === 'rmd-to-frame' ? 'Frame'
+    : planFormType === 'frame-return-from-client' ? 'Frame (returning from client)'
+    : 'Frame';
+
   let formHTML = '';
   if (planFormOpen) {
     const cageOnChange = planFormType === 'rmd-to-frame' ? 'onchange="updateFrameSuggestion(this.value)"' : '';
@@ -2593,7 +2598,7 @@ function renderPlanner() {
       <div class="form-grid form-grid-3">
         <div><label>Movement Type</label><select id="pf-type" onchange="onPlanTypeChange(this.value)">${typeOpts}</select></div>
         ${planFormType !== 'frame-return-from-client' ? `<div><label>Cage</label><select id="pf-cage" ${cageOnChange}><option value="">Select cage...</option>${cageOpts}</select></div>` : '<div></div>'}
-        ${showFrame ? `<div><label>${planFormType==='frame-to-frame'?'Destination Frame':('Frame'+(planFormType==='rmd-to-frame'?' <span style="font-size:9px;color:var(--accent)">(auto-highlights on cage select)</span>':planFormType==='frame-return-from-client'?' <span style="font-size:9px;color:#0e7490">(returning empty from client/boat)</span>':'')))}</label><select id="pf-frame"><option value="">Select frame...</option>${frameOpts}</select></div>` : '<div id="pf-frame-placeholder"></div>'}
+        ${showFrame ? `<div><label>${frameLbl}</label><select id="pf-frame"><option value="">Select frame...</option>${frameOpts}</select></div>` : '<div id="pf-frame-placeholder"></div>'}
         <div><label>Date</label><input id="pf-date" type="date" value="${todayStr()}"/></div>
         <div><label>Shift</label><select id="pf-shift"><option value="day">Day Shift</option><option value="night">Night Shift</option></select></div>
         ${showRmd ? `<div><label>RMD Slot (Suggested)</label><select id="pf-rmd"><option value="">Select slot...</option>${rmdSlotOpts}</select></div>` : '<div id="pf-rmd-placeholder"></div>'}
