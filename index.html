@@ -2491,11 +2491,11 @@ function renderPlanner() {
       STATE.plannedMovements.filter(m => !m.completed && m.frameId && (m.typeKey === 'rmd-to-frame' || m.typeKey === 'facility-to-frame' || m.typeKey === 'frame-to-frame')).map(m => m.frameId)
     );
     frameOpts = STATE.frames.filter(f => f.location === 'facility' || (f.returnDate && f.location !== 'facility')).sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true})).map(f => {
+      const plannedNote = plannedToFrame_ftf.has(f.id) ? ' 📋 move planned' : '';
       if (f.location !== 'facility') {
         const returnNote = f.returnDate ? ` ↩ returns ${fmt(f.returnDate)}` : ' (away)';
-        return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${returnNote} — pre-plan</option>`;
+        return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${returnNote} — pre-plan${plannedNote}</option>`;
       }
-      const plannedNote = plannedToFrame_ftf.has(f.id) ? ' 📋 move planned' : '';
       const fullNote = f.cages.length >= 2 ? ' ⚠ FULL' : f.cages.length === 1 ? ` (has ${getCage(f.cages[0])?.name || '?'})` : ' (empty)';
       return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${fullNote}${plannedNote}</option>`;
     }).join('');
@@ -2587,12 +2587,12 @@ function renderPlanner() {
       STATE.plannedMovements.filter(m => !m.completed && m.frameId && (m.typeKey === 'rmd-to-frame' || m.typeKey === 'facility-to-frame' || m.typeKey === 'frame-to-frame')).map(m => m.frameId)
     );
     frameOpts = STATE.frames.filter(f => f.location === 'facility' || (f.returnDate && f.location !== 'facility')).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f => {
+      const plannedNote = plannedToFrame_rtf.has(f.id) ? ' 📋 move planned' : '';
       if (f.location !== 'facility') {
         const returnNote = f.returnDate ? ` ↩ returns ${fmt(f.returnDate)}` : ' (away)';
-        return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? ' 🔩' : ''})${returnNote} — pre-plan</option>`;
+        return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? ' 🔩' : ''})${returnNote} — pre-plan${plannedNote}</option>`;
       }
       const existing = f.cages.length === 1 ? getCage(f.cages[0]) : null;
-      const plannedNote = plannedToFrame_rtf.has(f.id) ? ' 📋 move planned' : '';
       const note = f.cages.length >= 2 ? ' ⚠ FULL' : existing ? ` [has ${existing.name}]` : ' [empty]';
       return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? ' 🔩' : ''})${note}${plannedNote}</option>`;
     }).join('');
