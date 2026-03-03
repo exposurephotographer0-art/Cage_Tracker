@@ -2486,10 +2486,18 @@ function renderPlanner() {
       const lbl = currentFrame ? `in ${currentFrame.name}` : '(pending → frame)';
       return `<option value="${c.id}">${esc(c.name)} (${lbl})</option>`;
     }).join('');
-    // Destination frames: all facility frames (excluding the cage's current frame)
-    frameOpts = STATE.frames.filter(f => f.location === 'facility').sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true})).map(f => {
+    // Destination frames: facility frames + frames with a return date (pre-plan)
+    const plannedToFrame_ftf = new Set(
+      STATE.plannedMovements.filter(m => !m.completed && m.frameId && (m.typeKey === 'rmd-to-frame' || m.typeKey === 'facility-to-frame' || m.typeKey === 'frame-to-frame')).map(m => m.frameId)
+    );
+    frameOpts = STATE.frames.filter(f => f.location === 'facility' || (f.returnDate && f.location !== 'facility')).sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true})).map(f => {
+      if (f.location !== 'facility') {
+        const returnNote = f.returnDate ? ` ↩ returns ${fmt(f.returnDate)}` : ' (away)';
+        return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${returnNote} — pre-plan</option>`;
+      }
+      const plannedNote = plannedToFrame_ftf.has(f.id) ? ' 📋 move planned' : '';
       const fullNote = f.cages.length >= 2 ? ' ⚠ FULL' : f.cages.length === 1 ? ` (has ${getCage(f.cages[0])?.name || '?'})` : ' (empty)';
-      return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${fullNote}</option>`;
+      return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${fullNote}${plannedNote}</option>`;
     }).join('');
     showFrame = true;
     showRmd = false;
@@ -2573,16 +2581,20 @@ function renderPlanner() {
     if (!rmdSlotOpts) rmdSlotOpts = '<option value="" disabled>No free RMD slots</option>';
   }
 
-  // For RMD→Frame, annotate frames with suitability note
+  // For RMD→Frame, annotate frames with suitability note + planned movements
   if (planFormType === 'rmd-to-frame') {
+    const plannedToFrame_rtf = new Set(
+      STATE.plannedMovements.filter(m => !m.completed && m.frameId && (m.typeKey === 'rmd-to-frame' || m.typeKey === 'facility-to-frame' || m.typeKey === 'frame-to-frame')).map(m => m.frameId)
+    );
     frameOpts = STATE.frames.filter(f => f.location === 'facility' || (f.returnDate && f.location !== 'facility')).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f => {
       if (f.location !== 'facility') {
         const returnNote = f.returnDate ? ` ↩ returns ${fmt(f.returnDate)}` : ' (away)';
         return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? ' 🔩' : ''})${returnNote} — pre-plan</option>`;
       }
       const existing = f.cages.length === 1 ? getCage(f.cages[0]) : null;
+      const plannedNote = plannedToFrame_rtf.has(f.id) ? ' 📋 move planned' : '';
       const note = f.cages.length >= 2 ? ' ⚠ FULL' : existing ? ` [has ${existing.name}]` : ' [empty]';
-      return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? ' 🔩' : ''})${note}</option>`;
+      return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? ' 🔩' : ''})${note}${plannedNote}</option>`;
     }).join('');
   }
 
