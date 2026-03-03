@@ -630,6 +630,7 @@ function normaliseCage(c) {
     departureDate: c.departure_date || c.departureDate || null,
     proposedShipDay: c.proposed_ship_day || c.proposedShipDay || null,
     proposedTripId: c.proposed_trip_id || c.proposedTripId || null,
+    shippingPreference: !!(c.shipping_preference || c.shippingPreference),
     notes: c.notes || '',
     createdAt: c.created_at || c.createdAt || new Date().toISOString(),
   };
@@ -778,6 +779,14 @@ async function setCageTrip(cageId, tripId) {
   await saveCage(c);
 }
 
+async function toggleShippingPreference(cageId, checked) {
+  const c = getCage(cageId);
+  if (!c) return;
+  c.shippingPreference = checked;
+  render();
+  await saveCage(c);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ZOOM HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -887,7 +896,7 @@ function render() { renderSidebar(); renderMain(); }
 function getShipmentDays() {
   return [...new Set(
     STATE.cages
-      .filter(c => (c.location === 'rmd' || c.location === 'frame') && c.proposedShipDay)
+      .filter(c => c.location !== 'shipped' && c.proposedShipDay)
       .map(c => c.proposedShipDay)
   )].sort();
 }
@@ -912,11 +921,29 @@ function shipmentShadeDetailColor(shade) {
   if (shade === 'second') return 'color:#6a4a9a;';
   return '';
 }
+// Yellow highlight for cages with shippingPreference ticked
+function shipPrefRowBg(cage) {
+  if (!cage || !cage.shippingPreference) return '';
+  return 'background:#fffbea;';
+}
+function shipPrefBorderLeft(cage) {
+  if (!cage || !cage.shippingPreference) return '';
+  return 'border-left:3px solid #e8b800;';
+}
+function shipPrefNameColor(cage) {
+  if (!cage || !cage.shippingPreference) return '';
+  return 'color:#7a5c00;font-weight:700;';
+}
+function shipPrefSlotBg(cage) {
+  if (!cage || !cage.shippingPreference) return '';
+  return 'background:#fff8c5;border:1px solid #e8d850;';
+}
 function shipmentLegendHTML(shipDays) {
   if (!shipDays.length) return '';
   return `<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
     ${shipDays[0] ? `<span style="background:#3b1d6e;color:#e0ccff;font:700 9px var(--font-mono);padding:2px 10px;border-radius:10px">&#9632; Next shipment: ${fmt(shipDays[0])}</span>` : ''}
     ${shipDays[1] ? `<span style="background:#c8b8e8;color:#4a2a7a;font:700 9px var(--font-mono);padding:2px 10px;border-radius:10px">&#9632; 2nd shipment: ${fmt(shipDays[1])}</span>` : ''}
+    <span style="background:#fff8c5;color:#7a5c00;border:1px solid #e8d850;font:700 9px var(--font-mono);padding:2px 10px;border-radius:10px">&#9632; Shipping preference</span>
   </div>`;
 }
 
@@ -1085,8 +1112,8 @@ function renderDashboard() {
     const cage = cid ? getCage(cid) : null;
     if (cage) {
       const shade = shipmentShadeClass(cage, _dashShipDays);
-      const slotBg = shade ? shipmentShadeBg(shade) + 'border-radius:4px;padding:2px 4px;' : '';
-      const nameColor = shipmentShadeNameColor(shade);
+      const slotBg = shade ? shipmentShadeBg(shade) + 'border-radius:4px;padding:2px 4px;' : (cage.shippingPreference ? shipPrefSlotBg(cage)+'border-radius:4px;padding:2px 4px;' : '');
+      const nameColor = shipmentShadeNameColor(shade) || shipPrefNameColor(cage);
       const detailColor = shipmentShadeDetailColor(shade);
       return `<div class="rmd-slot" style="${slotBg}">
         <span class="rmd-slot-label">${posLabel}</span>
@@ -1223,8 +1250,8 @@ function renderNextDueDelivery() {
       urgencyBadge = `<span style="font:600 11px var(--font-mono);color:var(--text-muted)">${daysLeft}d</span>`;
     }
 
-    return `<div style="display:flex;align-items:center;gap:12px;padding:8px 12px;${rowBg}${highlightBar}border-radius:0 6px 6px 0;margin-bottom:4px">
-      <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:var(--text-primary)">${esc(c.name)}</span></div>
+    return `<div style="display:flex;align-items:center;gap:12px;padding:8px 12px;${rowBg}${highlightBar}border-radius:0 6px 6px 0;margin-bottom:4px${c.shippingPreference ? ';outline:2px solid #e8d850;outline-offset:-2px;background:#fffbea' : ''}">
+      <div style="min-width:110px"><span style="font:700 13px var(--font-mono);color:${c.shippingPreference ? '#7a5c00' : 'var(--text-primary)'}">${esc(c.name)}${c.shippingPreference ? ' <span style="font:700 9px var(--font-mono);background:#fff8c5;color:#7a5c00;border:1px solid #e8d850;padding:1px 5px;border-radius:3px">SHIP PREF</span>' : ''}</span></div>
       <div style="flex:1;font-size:11px;color:var(--text-muted)">${c.width}m × ${c.height}m × ${c.length}m · ${c.weight}t</div>
       <div style="min-width:80px"><span class="badge badge-${locBadge(c.location)}" style="font-size:9px">${esc(locLabel(c))}</span></div>
       <div style="font:600 10px var(--font-mono);color:var(--purple);min-width:100px">🚢 ${c.proposedTripId ? esc(tripLabel(getBoatTrip(c.proposedTripId))) : fmt(c.proposedShipDay)}</div>
@@ -1277,11 +1304,15 @@ function renderDashboardFrames() {
             ? 'background:#3b1d6e;color:#e0ccff;border-radius:4px;padding:2px 6px;'
             : shade === 'second'
             ? 'background:#c8b8e8;color:#4a2a7a;border-radius:4px;padding:2px 6px;'
+            : c.shippingPreference
+            ? shipPrefSlotBg(c)+'border-radius:4px;padding:2px 6px;'
             : '';
           const shipLabel = shade === 'next'
             ? `<span style="font:700 9px var(--font-mono);background:#5a2d9a;color:#e0ccff;padding:1px 5px;border-radius:3px;margin-left:4px">NEXT SHIP</span>`
             : shade === 'second'
             ? `<span style="font:700 9px var(--font-mono);background:#c8b8e8;color:#4a2a7a;padding:1px 5px;border-radius:3px;margin-left:4px">2ND SHIP</span>`
+            : c.shippingPreference
+            ? `<span style="font:700 9px var(--font-mono);background:#fff8c5;color:#7a5c00;border:1px solid #e8d850;padding:1px 5px;border-radius:3px;margin-left:4px">SHIP PREF</span>`
             : '';
           const dep = c.departureDate;
           const daysLeft = dep ? Math.ceil((new Date(dep+'T12:00:00') - new Date()) / 86400000) : null;
@@ -1338,6 +1369,7 @@ function renderCages() {
     if (cageSearch && !c.name.toLowerCase().includes(cageSearch.toLowerCase())) return false;
     if (cageFilter === 'has-departure') return !!c.departureDate;
     if (cageFilter === 'has-shipday') return !!c.proposedShipDay;
+    if (cageFilter === 'ship-pref') return !!c.shippingPreference;
     if (cageFilter !== 'all' && c.location !== cageFilter) return false;
     if (cageHeightFilter === 'short' && hCat(c.height) !== 'Short') return false;
     if (cageHeightFilter === 'medium' && hCat(c.height) !== 'Medium') return false;
@@ -1443,7 +1475,7 @@ function renderCages() {
   }
 
   let rows = filtered.length === 0
-    ? `<tr><td colspan="11" style="text-align:center;padding:20px" class="empty-msg">No cages found</td></tr>`
+    ? `<tr><td colspan="12" style="text-align:center;padding:20px" class="empty-msg">No cages found</td></tr>`
     : filtered.map(c=>{
       if (cageEditing === c.id) {
         return `<tr style="background:#fdf8ee">
@@ -1457,6 +1489,7 @@ function renderCages() {
           <td>${tripSelectHTML(c.id, c.proposedTripId||null)}</td>
           <td><span class="badge badge-${hBadge(c.height)}">${hCat(c.height)}</span></td>
           <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
+          <td style="text-align:center"><input type="checkbox" id="ce-sp-${c.id}" ${c.shippingPreference?'checked':''} style="width:15px;height:15px;accent-color:#e8b800" title="Shipping Preference"/></td>
           <td colspan="2" style="white-space:nowrap">
             <button class="btn btn-primary btn-xs" onclick="saveCageEdit('${c.id}')">✓ Save</button>
             <button class="btn btn-secondary btn-xs" style="margin-left:4px" onclick="cageEditing=null;render()">Cancel</button>
@@ -1466,7 +1499,8 @@ function renderCages() {
       const sel = cageSelected.has(c.id);
       const daysLeft = c.departureDate ? Math.ceil((new Date(c.departureDate+'T12:00:00') - new Date()) / 86400000) : null;
       const depBadge = daysLeft !== null ? (daysLeft < 0 ? '<span style="color:var(--red);font-size:10px">OVERDUE</span>' : daysLeft <= 7 ? `<span style="color:var(--orange);font-size:10px">⚠ ${daysLeft}d</span>` : `<span style="color:var(--text-muted);font-size:10px">${daysLeft}d</span>`) : '';
-      return `<tr style="${sel?'background:#fdf8ee':''}">
+      const cageRowStyle = sel ? 'background:#fdf8ee' : c.shippingPreference ? 'background:#fffbea;border-left:3px solid #e8b800' : '';
+      return `<tr style="${cageRowStyle}">
         <td style="width:32px;text-align:center">
           <input type="checkbox" ${sel?'checked':''} onchange="toggleCageSelect('${c.id}',this.checked)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)"/>
         </td>
@@ -1479,6 +1513,9 @@ function renderCages() {
         <td style="font-size:11px">${tripSelectHTML(c.id, c.proposedTripId||null)}</td>
         <td><span class="badge badge-${hBadge(c.height)}">${hCat(c.height)}</span></td>
         <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
+        <td style="text-align:center">
+          <input type="checkbox" title="Shipping Preference — highlights yellow across all views" ${c.shippingPreference?'checked':''} onchange="toggleShippingPreference('${c.id}',this.checked)" style="width:15px;height:15px;cursor:pointer;accent-color:#e8b800"/>
+        </td>
         <td style="white-space:nowrap">
           <select style="font-size:11px;padding:3px 6px;max-width:180px" onchange="changeCageLocation('${c.id}',this.value);this.value=''">
             ${cageLocationOpts(c)}
@@ -1513,6 +1550,7 @@ function renderCages() {
       <button class="filter-btn ${cageFilter==='shipped'?'active':''}" onclick="cageFilter='shipped';cageHideShipped=false;render()">Shipped</button>
       <button class="filter-btn ${cageFilter==='has-departure'?'active':''}" onclick="cageFilter='has-departure';render()" title="Cages with a Leaves Facility date set">📅 Has Departure</button>
       <button class="filter-btn ${cageFilter==='has-shipday'?'active':''}" onclick="cageFilter='has-shipday';render()" title="Cages with a Proposed Ship Day set">🚢 Has Ship Day</button>
+      <button class="filter-btn ${cageFilter==='ship-pref'?'active':''}" onclick="cageFilter='ship-pref';render()" title="Cages marked as Shipping Preference">🟡 Ship Pref</button>
       <button class="filter-btn ${cageHideShipped?'active':''}" onclick="cageHideShipped=!cageHideShipped;render()" title="Toggle visibility of shipped cages" style="${cageHideShipped?'':'opacity:0.6'}">🚫 Hide Shipped</button>
       <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
       <span style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;white-space:nowrap">Height:</span>
@@ -1537,7 +1575,7 @@ function renderCages() {
       <table>
         <thead><tr>
           <th style="width:32px"><input type="checkbox" id="cage-select-all" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)" onchange="toggleAllCages(this.checked,${JSON.stringify(filtered.map(c=>c.id))})"/></th>
-          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Boat Trip</th><th>Category</th><th>Location</th><th>Move</th><th>Del</th>
+          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Boat Trip</th><th>Category</th><th>Location</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th>Move</th><th>Del</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -1635,6 +1673,7 @@ function saveCageEdit(id) {
   const l = parseFloat(document.getElementById('ce-l-'+id).value);
   const wt = parseFloat(document.getElementById('ce-wt-'+id).value);
   const dep = document.getElementById('ce-dep-'+id).value;
+  const spEl = document.getElementById('ce-sp-'+id);
   if (!name) return alert('Name required.');
   c.name = name;
   if (!isNaN(h)) c.height = h;
@@ -1642,6 +1681,7 @@ function saveCageEdit(id) {
   if (!isNaN(l)) c.length = l;
   if (!isNaN(wt)) c.weight = wt;
   c.departureDate = dep || null;
+  if (spEl) c.shippingPreference = spEl.checked;
   cageEditing = null;
   render();
   saveCage(c);
@@ -2022,8 +2062,8 @@ function renderFrames() {
     const _frmShipDays = getShipmentDays();
     let cageListHTML = fCages.map(c=>{
       const _shade = shipmentShadeClass(c, _frmShipDays);
-      const _bg = _shade ? shipmentShadeBg(_shade)+'border-radius:4px;padding:2px 6px;display:flex;justify-content:space-between;align-items:center;' : '';
-      const _nc = shipmentShadeNameColor(_shade);
+      const _bg = _shade ? shipmentShadeBg(_shade)+'border-radius:4px;padding:2px 6px;display:flex;justify-content:space-between;align-items:center;' : (c.shippingPreference ? shipPrefSlotBg(c)+'border-radius:4px;padding:2px 6px;display:flex;justify-content:space-between;align-items:center;' : '');
+      const _nc = shipmentShadeNameColor(_shade) || shipPrefNameColor(c);
       return `<div class="frame-cage-item" style="${_bg}">
         <span style="${_nc}">${esc(c.name)} (${c.width}m, ${c.weight}t)${needsWaler(c) ? ' <span style="color:var(--yellow);font-size:10px" title="Cage < 6.5m needs waler for shipping">⚠ waler req.</span>' : ''}</span>
         ${f.location==='facility'&&!f.fixedForShipping ? `<button class="remove-btn" onclick="removeCageFromFrame('${f.id}','${c.id}')">×</button>` : ''}
@@ -2199,11 +2239,11 @@ function renderRMD() {
     const cage = cid ? getCage(cid) : null;
     if(cage) {
       const _ts = shipmentShadeClass(cage, _rmdTabShipDays);
-      const _tBg = _ts ? shipmentShadeBg(_ts)+'border-radius:4px;padding:1px 4px;' : '';
+      const _tBg = _ts ? shipmentShadeBg(_ts)+'border-radius:4px;padding:1px 4px;' : (cage.shippingPreference ? shipPrefSlotBg(cage)+'border-radius:4px;padding:1px 4px;' : '');
       return `<div class="rmd-slot" style="${_tBg}">
         <span class="rmd-slot-label">${posLabel}</span>
         <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${shipmentShadeNameColor(_ts)}">${esc(cage.name)}</span><span class="rmd-cage-detail" style="${shipmentShadeDetailColor(_ts)}">${cage.height}m · ${cage.length}m</span></span>
+          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${shipmentShadeNameColor(_ts)||shipPrefNameColor(cage)}">${esc(cage.name)}</span><span class="rmd-cage-detail" style="${shipmentShadeDetailColor(_ts)}">${cage.height}m · ${cage.length}m</span></span>
           <button class="remove-btn" onclick="removeFromRMD(${idx},'${side}','${slot}')">×</button>
         </div>
       </div>`;
@@ -2276,8 +2316,9 @@ function renderRMD() {
                 const cage2 = cid2 ? getCage(cid2) : null;
                 if(cage2) {
                   const _s = shipmentShadeClass(cage2, _rmdTabShipDays);
-                  const _b = _s ? shipmentShadeBg(_s)+'border-radius:4px;padding:1px 4px;' : '';
-                  return '<div class="rmd-slot" style="'+_b+'"><span class="rmd-slot-label">'+posLabel+'</span><div class="rmd-slot-content"><span class="rmd-cage-info"><span class="rmd-cage-name" style="'+shipmentShadeNameColor(_s)+'">'+esc(cage2.name)+'</span><span class="rmd-cage-detail" style="'+shipmentShadeDetailColor(_s)+'">'+cage2.height+'m·'+cage2.length+'m</span></span><button class="remove-btn" onclick="removeFromRMD('+idx2+',\''+side+'\',\''+slot+'\')">&#215;</button></div></div>';
+                  const _b = _s ? shipmentShadeBg(_s)+'border-radius:4px;padding:1px 4px;' : (cage2.shippingPreference ? shipPrefSlotBg(cage2)+'border-radius:4px;padding:1px 4px;' : '');
+                  const _nc = shipmentShadeNameColor(_s) || shipPrefNameColor(cage2);
+                  return '<div class="rmd-slot" style="'+_b+'"><span class="rmd-slot-label">'+posLabel+'</span><div class="rmd-slot-content"><span class="rmd-cage-info"><span class="rmd-cage-name" style="'+_nc+'">'+esc(cage2.name)+'</span><span class="rmd-cage-detail" style="'+shipmentShadeDetailColor(_s)+'">'+cage2.height+'m·'+cage2.length+'m</span></span><button class="remove-btn" onclick="removeFromRMD('+idx2+',\''+side+'\',\''+slot+'\')">&#215;</button></div></div>';
                 } else {
                   const used2 = groupSlots.filter(s=>s!==slot).reduce((sum,s)=>{const c2=sObj2[s]?getCage(sObj2[s]):null;return sum+(c2?c2.length||0:0);},0);
                   const rem2 = (RMD_MAX_LENGTH-used2).toFixed(1);
