@@ -2406,6 +2406,7 @@ async function removeFromRMD(idx,side,slot) {
 // ═══════════════════════════════════════════════════════════════════════════════
 let planFormOpen = false;
 let planFormType = 'facility-to-frame';
+let plannerShowCompleted = false;
 let planWeekStart = (() => { const d=new Date(); d.setDate(d.getDate()-d.getDay()+1); return toISO(d); })();
 
 const MOVE_TYPES = [
@@ -2468,8 +2469,12 @@ function renderPlanner() {
   if (planFormType === 'facility-to-frame') {
     // Cages in facility
     cageOpts = [...STATE.cages.filter(c=>c.location==='facility')].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(c=>`<option value="${c.id}">${esc(c.name)} (${hCat(c.height)}, ${c.width}m)</option>`).join('');
-    // Include ALL facility frames — even full ones — because you may plan ahead for when a frame will be empty
-    frameOpts = STATE.frames.filter(f=>f.location==='facility').sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f=>{
+    // Include ALL facility frames + frames with a return date (pre-plan for when they return)
+    frameOpts = STATE.frames.filter(f=>f.location==='facility' || (f.returnDate && f.location !== 'facility')).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f=>{
+      if (f.location !== 'facility') {
+        const returnNote = f.returnDate ? ` ↩ returns ${fmt(f.returnDate)}` : ' (away)';
+        return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${returnNote} — pre-plan</option>`;
+      }
       const fullNote = f.cages.length >= 2 ? ' ⚠ FULL' : f.cages.length === 1 ? ' (1 cage)' : ' (empty)';
       return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${fullNote}</option>`;
     }).join('');
@@ -2493,7 +2498,13 @@ function renderPlanner() {
   } else if (planFormType === 'rmd-to-frame') {
     // Cages in RMD
     cageOpts = [...STATE.cages.filter(c=>c.location==='rmd')].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(c=>`<option value="${c.id}">${esc(c.name)} (${c.locationDetail})</option>`).join('');
-    frameOpts = STATE.frames.filter(f=>f.location==='facility'&&f.cages.length<2).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f=>`<option value="${f.id}">${esc(f.name)} (${f.width}m)</option>`).join('');
+    frameOpts = STATE.frames.filter(f=>(f.location==='facility'&&f.cages.length<2) || (f.returnDate && f.location !== 'facility')).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f=>{
+      if (f.location !== 'facility') {
+        const returnNote = f.returnDate ? ` ↩ returns ${fmt(f.returnDate)}` : ' (away)';
+        return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${returnNote} — pre-plan</option>`;
+      }
+      return `<option value="${f.id}">${esc(f.name)} (${f.width}m)</option>`;
+    }).join('');
     showRmd = false;
   } else if (planFormType === 'frame-fix-shipping') {
     // Only cages that are alone in a frame (exactly 1 cage in frame)
@@ -2537,7 +2548,11 @@ function renderPlanner() {
 
   // For RMD→Frame, annotate frames with suitability note
   if (planFormType === 'rmd-to-frame') {
-    frameOpts = STATE.frames.filter(f => f.location === 'facility').sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f => {
+    frameOpts = STATE.frames.filter(f => f.location === 'facility' || (f.returnDate && f.location !== 'facility')).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f => {
+      if (f.location !== 'facility') {
+        const returnNote = f.returnDate ? ` ↩ returns ${fmt(f.returnDate)}` : ' (away)';
+        return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? ' 🔩' : ''})${returnNote} — pre-plan</option>`;
+      }
       const existing = f.cages.length === 1 ? getCage(f.cages[0]) : null;
       const note = f.cages.length >= 2 ? ' ⚠ FULL' : existing ? ` [has ${existing.name}]` : ' [empty]';
       return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? ' 🔩' : ''})${note}</option>`;
@@ -2628,10 +2643,12 @@ function renderPlanner() {
   const week1HTML = weekDays.slice(0,7).map(renderWeekDay).join('');
   const week2HTML = weekDays.slice(7).map(renderWeekDay).join('');
 
-  // All movements table
-  let sorted = [...STATE.plannedMovements].sort((a,b)=>a.date.localeCompare(b.date));
+  // All movements table — hide completed by default
+  let sortedAll = [...STATE.plannedMovements].sort((a,b)=>a.date.localeCompare(b.date));
+  let sorted = plannerShowCompleted ? sortedAll : sortedAll.filter(m => !m.completed);
+  const completedCount = sortedAll.filter(m => m.completed).length;
   let tableRows = sorted.length === 0
-    ? '<tr><td colspan="7" class="empty-msg" style="text-align:center;padding:20px">No movements planned</td></tr>'
+    ? '<tr><td colspan="7" class="empty-msg" style="text-align:center;padding:20px">' + (plannerShowCompleted ? 'No movements planned' : 'No pending movements — all done!') + '</td></tr>'
     : sorted.map(m=>`
       <tr style="opacity:${m.completed?'0.5':'1'}">
         <td style="font-family:var(--font-mono)">
@@ -2740,7 +2757,12 @@ function renderPlanner() {
           <div class="week-grid">${week2HTML}</div>
         </div>
         <div class="card">
-          <div class="card-title">All Planned Movements</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div class="card-title" style="margin:0">All Planned Movements <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(${sorted.length} shown${!plannerShowCompleted && completedCount > 0 ? `, ${completedCount} completed hidden` : ''})</span></div>
+            <button class="btn btn-secondary btn-sm" onclick="plannerShowCompleted=!plannerShowCompleted;render()" title="${plannerShowCompleted ? 'Hide completed movements' : 'Show completed movements'}">
+              ${plannerShowCompleted ? '🙈 Hide Done' : '👁 Show Done (' + completedCount + ')'}
+            </button>
+          </div>
           <div style="overflow-x:auto">
             <table><thead><tr>
               <th>Date</th><th>Shift</th><th>Type</th><th>Description</th><th>Notes</th><th>Status</th><th>Actions</th>
