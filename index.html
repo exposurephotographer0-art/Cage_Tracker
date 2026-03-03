@@ -5542,7 +5542,9 @@ function mvRedraw() {
       const cage = getCage(cageId);
       let srcPos = null;
       if (cage && cage.location === 'rmd' && cage.locationDetail) {
-        const rk = String(cage.locationDetail).replace(/[ABab]$/,'');
+        // locationDetail is like "RMD-04A" — extract just the numeric part for the element ID
+        const rmdMatch = String(cage.locationDetail).match(/(\d+)[ABab]?$/);
+        const rk = rmdMatch ? String(parseInt(rmdMatch[1], 10)) : String(cage.locationDetail).replace(/[^0-9]/g,'');
         srcPos = getPos('mvr-' + rk);
       }
       if (!srcPos) srcPos = getPos('mv-facility-box');
