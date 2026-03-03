@@ -1437,7 +1437,7 @@ function renderCages() {
     }).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f=>{
       const existing = f.cages.length===1 ? getCage(f.cages[0]) : null;
       const note = existing ? ` [with ${existing.name}]` : '';
-      return `<option value="frame:${f.id}">→ ${esc(f.name)} (${f.width}m)${note}</option>`;
+      return `<option value="frame:${f.id}">→ ${esc(f.name)} (${f.width}m${f.hasWaler ? " 🔩" : ""})${note}</option>`;
     }).join('');
 
     // RMD options: check height pairing rules
@@ -2494,10 +2494,10 @@ function renderPlanner() {
       const plannedNote = plannedToFrame_ftf.has(f.id) ? ' 📋 move planned' : '';
       if (f.location !== 'facility') {
         const returnNote = f.returnDate ? ` ↩ returns ${fmt(f.returnDate)}` : ' (away)';
-        return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${returnNote} — pre-plan${plannedNote}</option>`;
+        return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? " 🔩" : ""})${returnNote} — pre-plan${plannedNote}</option>`;
       }
       const fullNote = f.cages.length >= 2 ? ' ⚠ FULL' : f.cages.length === 1 ? ` (has ${getCage(f.cages[0])?.name || '?'})` : ' (empty)';
-      return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${fullNote}${plannedNote}</option>`;
+      return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? " 🔩" : ""})${fullNote}${plannedNote}</option>`;
     }).join('');
     showFrame = true;
     showRmd = false;
@@ -2508,10 +2508,10 @@ function renderPlanner() {
     frameOpts = STATE.frames.filter(f=>f.location==='facility' || (f.returnDate && f.location !== 'facility')).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f=>{
       if (f.location !== 'facility') {
         const returnNote = f.returnDate ? ` ↩ returns ${fmt(f.returnDate)}` : ' (away)';
-        return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${returnNote} — pre-plan</option>`;
+        return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? " 🔩" : ""})${returnNote} — pre-plan</option>`;
       }
       const fullNote = f.cages.length >= 2 ? ' ⚠ FULL' : f.cages.length === 1 ? ' (1 cage)' : ' (empty)';
-      return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${fullNote}</option>`;
+      return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? " 🔩" : ""})${fullNote}</option>`;
     }).join('');
     showRmd = false;
   } else if (planFormType === 'frame-to-rmd') {
@@ -2536,9 +2536,9 @@ function renderPlanner() {
     frameOpts = STATE.frames.filter(f=>(f.location==='facility'&&f.cages.length<2) || (f.returnDate && f.location !== 'facility')).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f=>{
       if (f.location !== 'facility') {
         const returnNote = f.returnDate ? ` ↩ returns ${fmt(f.returnDate)}` : ' (away)';
-        return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${returnNote} — pre-plan</option>`;
+        return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? " 🔩" : ""})${returnNote} — pre-plan</option>`;
       }
-      return `<option value="${f.id}">${esc(f.name)} (${f.width}m)</option>`;
+      return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? " 🔩" : ""})</option>`;
     }).join('');
     showRmd = false;
   } else if (planFormType === 'frame-fix-shipping') {
