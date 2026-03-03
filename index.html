@@ -6,6 +6,7 @@
 <title>Cage Tracker — Facility Management</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 :root {
   --bg-deep: #f0f2f5;
@@ -485,6 +486,7 @@ const DOUBLE_SPARE = 0.3, DOUBLE_WT = 14;
 
 const TABS = [
   {id:'dashboard', label:'Dashboard', icon:'◉'},
+  {id:'analytics', label:'Analytics', icon:'📊'},
   {id:'cages', label:'Cages', icon:'☐'},
   {id:'frames', label:'Frames', icon:'⊞'},
   {id:'rmd', label:'RMD Storage', icon:'▦'},
@@ -864,6 +866,9 @@ function renderMain() {
   if (activeTab === 'movements') {
     requestAnimationFrame(() => { setTimeout(mvRedraw, 50); });
   }
+  if (activeTab === 'analytics') {
+    requestAnimationFrame(() => { setTimeout(drawAnalyticsCharts, 80); });
+  }
   // Apply zoom transform on zoomable tabs
   if (tabZoom[activeTab] !== undefined) {
     requestAnimationFrame(() => { setTimeout(() => _applyZoomTransform(activeTab), 30); });
@@ -873,6 +878,7 @@ function renderMain() {
 function renderTab(id) {
   switch(id) {
     case 'dashboard': return renderDashboard();
+    case 'analytics': return renderAnalytics();
     case 'cages': return renderCages();
     case 'frames': return renderFrames();
     case 'rmd': return renderRMD();
@@ -3636,6 +3642,327 @@ async function clearReportMovements() {
 let auditFilter = 'all'; // 'all' | 'completed' | 'pending' | 'rmd-to-frame' | 'frame-to-rmd' | 'facility-to-frame'
 let auditSearch = '';
 let auditSort = 'date-desc'; // 'date-desc' | 'date-asc'
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ANALYTICS
+// ═══════════════════════════════════════════════════════════════════════════════
+let _analyticsCharts = {};
+
+function destroyAnalyticsCharts() {
+  Object.values(_analyticsCharts).forEach(c => { try { c.destroy(); } catch(e) {} });
+  _analyticsCharts = {};
+}
+
+function renderAnalytics() {
+  destroyAnalyticsCharts();
+
+  const cages = STATE.cages;
+  const trips = [...(STATE.boatTrips || [])].sort((a, b) => {
+    const da = a.departDate || a.loadDate || a.returnDate || '';
+    const db = b.departDate || b.loadDate || b.returnDate || '';
+    return da.localeCompare(db);
+  });
+
+  // KPIs — exclude facility cages
+  const inRMD    = cages.filter(c => c.location === 'rmd').length;
+  const inFrames = cages.filter(c => c.location === 'frame').length;
+  const shipped  = cages.filter(c => c.location === 'shipped').length;
+  const planned  = cages.filter(c => c.location !== 'shipped' && c.proposedShipDay).length;
+  const shipPref = cages.filter(c => c.shippingPreference && c.location !== 'shipped' && c.location !== 'facility').length;
+  const readyCages = STATE.frames.filter(f => f.fixedForShipping && f.location === 'facility').reduce((s, f) => s + f.cages.length, 0);
+  const pendingMoves = STATE.plannedMovements.filter(m => !m.completed).length;
+  const doneMoves    = STATE.plannedMovements.filter(m => m.completed).length;
+
+  // Per-trip data for charts
+  const tripData = trips.map(t => {
+    const shippedOnTrip = cages.filter(c => c.proposedTripId === t.id && c.location === 'shipped');
+    const plannedForTrip = cages.filter(c => c.proposedTripId === t.id && c.location !== 'shipped');
+    // Frames that returned on this trip (returnDate matches unloadDate)
+    const returnedFrames = t.unloadDate ? STATE.frames.filter(f => f.returnDate === t.unloadDate) : [];
+    const framesBySize = {};
+    returnedFrames.forEach(f => { framesBySize[f.width + 'm'] = (framesBySize[f.width + 'm'] || 0) + 1; });
+    return {
+      id: t.id,
+      label: tripLabel(t),
+      departDate: t.departDate || t.loadDate || '',
+      returnDate: t.returnDate || t.unloadDate || '',
+      shipped: shippedOnTrip.length,
+      shippedWeight: shippedOnTrip.reduce((s, c) => s + (c.weight || 0), 0),
+      planned: plannedForTrip.length,
+      plannedWeight: plannedForTrip.reduce((s, c) => s + (c.weight || 0), 0),
+      framesReturned: returnedFrames.length,
+      framesBySize,
+    };
+  }).filter(t => t.departDate || t.shipped > 0 || t.planned > 0 || t.framesReturned > 0);
+
+  // Frame return size breakdown across all trips
+  const allFrameSizes = {};
+  STATE.frames.filter(f => f.returnDate).forEach(f => {
+    allFrameSizes[f.width + 'm'] = (allFrameSizes[f.width + 'm'] || 0) + 1;
+  });
+
+  // Movement progress by type
+  const mvTypes = ['facility-to-frame', 'rmd-to-frame', 'frame-to-rmd', 'frame-fix-shipping'];
+  const mvLabels = ['Facility→Frame', 'RMD→Frame', 'Frame→RMD', 'Fix Ship'];
+  const mvDone    = mvTypes.map(t => STATE.plannedMovements.filter(m => m.typeKey === t && m.completed).length);
+  const mvPending = mvTypes.map(t => STATE.plannedMovements.filter(m => m.typeKey === t && !m.completed).length);
+
+  const chartData = {
+    tripLabels:   tripData.map(t => t.label),
+    tripsShipped: tripData.map(t => t.shipped),
+    tripsPlanned: tripData.map(t => t.planned),
+    tripsShipWeight: tripData.map(t => parseFloat(t.shippedWeight.toFixed(1))),
+    tripsPlanWeight: tripData.map(t => parseFloat(t.plannedWeight.toFixed(1))),
+    tripsFramesReturned: tripData.map(t => t.framesReturned),
+    frameSizeLabels: Object.keys(allFrameSizes),
+    frameSizeCounts: Object.values(allFrameSizes),
+    mvLabels, mvDone, mvPending,
+    kpis: { inRMD, inFrames, shipped, planned, readyCages, shipPref, pendingMoves, doneMoves },
+  };
+
+  const kpi = (v, lbl, col) => `<div class="stat-card"><div class="stat-val" style="color:${col}">${v}</div><div class="stat-lbl">${lbl}</div></div>`;
+
+  // Per-trip detail table
+  const tripRows = tripData.length === 0
+    ? `<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-muted)">No boat trips configured yet</td></tr>`
+    : tripData.map(t => {
+        const hasDepart = t.departDate;
+        const today = new Date().toISOString().slice(0, 10);
+        const isPast = hasDepart && t.departDate < today;
+        const statusBadge = t.shipped > 0
+          ? `<span class="badge badge-purple">Shipped (${t.shipped})</span>`
+          : t.planned > 0
+          ? `<span class="badge badge-yellow">Planned (${t.planned})</span>`
+          : `<span class="badge" style="background:var(--bg-elevated);color:var(--text-muted)">No cages</span>`;
+        return `<tr style="${isPast ? 'opacity:0.7' : ''}">
+          <td style="font-weight:700;color:var(--accent);white-space:nowrap">${esc(t.label)}</td>
+          <td style="font-family:var(--font-mono);font-size:11px">${t.departDate ? fmt(t.departDate) : '—'}</td>
+          <td style="font-family:var(--font-mono);font-size:11px">${t.returnDate ? fmt(t.returnDate) : '—'}</td>
+          <td style="text-align:right;font-family:var(--font-mono)">${t.shipped > 0 ? `<span style="color:var(--purple);font-weight:700">${t.shipped}</span>` : '—'}</td>
+          <td style="text-align:right;font-family:var(--font-mono)">${t.planned > 0 ? `<span style="color:var(--orange);font-weight:700">${t.planned}</span>` : '—'}</td>
+          <td style="text-align:right;font-family:var(--font-mono)">${t.framesReturned > 0 ? `<span style="color:#0e7490;font-weight:700">${t.framesReturned}</span>` : '—'}</td>
+          <td>${statusBadge}</td>
+        </tr>`;
+      }).join('');
+
+  return `
+  <div style="padding:0 0 32px">
+    <div class="flex-between" style="margin-bottom:18px">
+      <h2 class="section-title" style="margin:0">Analytics</h2>
+      <span style="font:500 11px var(--font-mono);color:var(--text-muted)">Excludes cages at facility · Live</span>
+    </div>
+
+    <!-- KPI strip -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:20px">
+      ${kpi(inRMD, 'In RMD', 'var(--green)')}
+      ${kpi(inFrames, 'In Frames', 'var(--orange)')}
+      ${kpi(shipped, 'Shipped', 'var(--purple)')}
+      ${kpi(planned, 'Planned for Trip', '#0e7490')}
+      ${kpi(readyCages, 'Ready to Ship', 'var(--green)')}
+      ${kpi(shipPref, 'Ship Preference', '#e8b800')}
+      ${kpi(pendingMoves, 'Pending Moves', 'var(--orange)')}
+      ${kpi(doneMoves, 'Moves Done', 'var(--green)')}
+    </div>
+
+    <!-- Main timeline chart -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="flex-between" style="margin-bottom:4px">
+        <div class="card-title" style="margin:0">Cages per Boat Trip — Shipped vs Planned</div>
+        <span style="font-size:10px;color:var(--text-muted)">Timeline ordered by depart date</span>
+      </div>
+      <div style="position:relative;height:260px">
+        <canvas id="ac-trips-cages"></canvas>
+      </div>
+      ${tripData.length === 0 ? '<p style="text-align:center;color:var(--text-muted);font-size:12px;padding:12px">No boat trips with data yet</p>' : ''}
+    </div>
+
+    <!-- Weight + frames returned row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+      <div class="card">
+        <div class="card-title">Estimated Weight per Trip (tonnes)</div>
+        <div style="position:relative;height:220px">
+          <canvas id="ac-trips-weight"></canvas>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Frames Returned per Trip</div>
+        <div style="position:relative;height:220px">
+          <canvas id="ac-frames-returned"></canvas>
+        </div>
+        ${tripData.every(t => t.framesReturned === 0) ? '<p style="text-align:center;color:var(--text-muted);font-size:12px;margin-top:8px">No frame return dates set on trips yet</p>' : ''}
+      </div>
+    </div>
+
+    <!-- Frame size breakdown + Movement progress row -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px">
+      <div class="card">
+        <div class="card-title">Returning Frames by Size</div>
+        <div style="position:relative;height:200px;display:flex;align-items:center;justify-content:center">
+          <canvas id="ac-frame-sizes" style="max-height:200px"></canvas>
+        </div>
+        ${Object.keys(allFrameSizes).length === 0 ? '<p style="text-align:center;color:var(--text-muted);font-size:12px;margin-top:8px">No frames with return dates</p>' : ''}
+      </div>
+      <div class="card">
+        <div class="card-title">Movement Plan Progress</div>
+        <div style="position:relative;height:200px">
+          <canvas id="ac-movements"></canvas>
+        </div>
+        ${STATE.plannedMovements.length === 0 ? '<p style="text-align:center;color:var(--text-muted);font-size:12px;margin-top:8px">No movements planned yet</p>' : ''}
+      </div>
+    </div>
+
+    <!-- Per-trip detail table -->
+    <div class="card">
+      <div class="card-title">Trip-by-Trip Breakdown</div>
+      <div style="overflow-x:auto">
+        <table style="font-size:12px">
+          <thead><tr>
+            <th>Trip</th>
+            <th>Departs</th>
+            <th>Returns</th>
+            <th style="text-align:right">Shipped</th>
+            <th style="text-align:right">Planned</th>
+            <th style="text-align:right">Frames Back</th>
+            <th>Status</th>
+          </tr></thead>
+          <tbody>${tripRows}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="analytics-data" style="display:none" data-json="${encodeURIComponent(JSON.stringify(chartData))}"></div>
+  </div>`;
+}
+
+function drawAnalyticsCharts() {
+  const el = document.getElementById('analytics-data');
+  if (!el) return;
+  let d;
+  try { d = JSON.parse(decodeURIComponent(el.getAttribute('data-json'))); } catch(e) { return; }
+
+  const font = { family: "'JetBrains Mono', monospace", size: 11 };
+  Chart.defaults.color = '#8895a7';
+
+  function mkChart(id, cfg) {
+    const canvas = document.getElementById(id);
+    if (!canvas) return;
+    try { Chart.getChart(canvas)?.destroy(); } catch(e) {}
+    _analyticsCharts[id] = new Chart(canvas, cfg);
+  }
+
+  const noTrips = d.tripLabels.length === 0;
+  const placeholderData = noTrips ? { labels: ['No trips yet'], datasets: [{ data: [0], backgroundColor: '#ddd' }] } : null;
+
+  const gridColor = 'rgba(255,255,255,0.05)';
+  const baseOpts = (stacked) => ({
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12, font } } },
+    scales: {
+      x: { stacked: !!stacked, grid: { color: gridColor }, ticks: { font, maxRotation: 35 } },
+      y: { stacked: !!stacked, beginAtZero: true, ticks: { font }, grid: { color: gridColor } }
+    }
+  });
+
+  // 1. Main trip cages chart — grouped bar (shipped + planned) + line for cumulative shipped
+  const cumulativeShipped = [];
+  let running = 0;
+  (d.tripsShipped || []).forEach(v => { running += v; cumulativeShipped.push(running); });
+
+  mkChart('ac-trips-cages', {
+    type: 'bar',
+    data: {
+      labels: noTrips ? ['No trips yet'] : d.tripLabels,
+      datasets: noTrips ? [{ label: 'No data', data: [0], backgroundColor: '#444' }] : [
+        { type: 'bar',  label: 'Shipped',       data: d.tripsShipped,  backgroundColor: '#7040c0cc', borderRadius: 4, order: 2 },
+        { type: 'bar',  label: 'Planned',        data: d.tripsPlanned,  backgroundColor: '#c08520cc', borderRadius: 4, order: 2 },
+        { type: 'line', label: 'Cumulative Shipped', data: cumulativeShipped, borderColor: '#e0ccff', backgroundColor: 'transparent',
+          pointBackgroundColor: '#7040c0', borderWidth: 2, pointRadius: 4, tension: 0.3, yAxisID: 'y2', order: 1 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 12, font } } },
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { font, maxRotation: 35 } },
+        y:  { beginAtZero: true, ticks: { font, stepSize: 1 }, grid: { color: gridColor }, title: { display: true, text: 'Cages', font } },
+        y2: { beginAtZero: true, position: 'right', ticks: { font }, grid: { display: false },
+              title: { display: true, text: 'Cumulative', font } }
+      }
+    }
+  });
+
+  // 2. Weight per trip
+  mkChart('ac-trips-weight', {
+    type: 'bar',
+    data: {
+      labels: noTrips ? ['No trips yet'] : d.tripLabels,
+      datasets: noTrips ? [{ data: [0], backgroundColor: '#444' }] : [
+        { label: 'Shipped (t)',  data: d.tripsShipWeight, backgroundColor: '#7040c0cc', borderRadius: 4 },
+        { label: 'Planned (t)', data: d.tripsPlanWeight, backgroundColor: '#c08520cc', borderRadius: 4 },
+      ]
+    },
+    options: {
+      ...baseOpts(false),
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { font, maxRotation: 35 } },
+        y: { beginAtZero: true, ticks: { font }, grid: { color: gridColor }, title: { display: true, text: 'Tonnes', font } }
+      }
+    }
+  });
+
+  // 3. Frames returned per trip — bar + inside each bar show the sizes breakdown
+  mkChart('ac-frames-returned', {
+    type: 'bar',
+    data: {
+      labels: noTrips ? ['No trips'] : d.tripLabels,
+      datasets: noTrips ? [{ data: [0], backgroundColor: '#444' }] : [
+        { label: 'Frames Returned', data: d.tripsFramesReturned, backgroundColor: '#0e749099', borderColor: '#0e7490', borderWidth: 1, borderRadius: 4 }
+      ]
+    },
+    options: {
+      ...baseOpts(false),
+      scales: {
+        x: { grid: { color: gridColor }, ticks: { font, maxRotation: 35 } },
+        y: { beginAtZero: true, ticks: { font, stepSize: 1 }, grid: { color: gridColor } }
+      }
+    }
+  });
+
+  // 4. Frame sizes donut
+  const sizeColours = ['#0e7490cc','#2563b0cc','#1a8a4acc','#c08520cc','#7040c0cc','#b85c1acc'];
+  mkChart('ac-frame-sizes', {
+    type: 'doughnut',
+    data: {
+      labels: d.frameSizeLabels.length ? d.frameSizeLabels : ['No data'],
+      datasets: [{
+        data: d.frameSizeCounts.length ? d.frameSizeCounts : [1],
+        backgroundColor: d.frameSizeLabels.length ? sizeColours.slice(0, d.frameSizeLabels.length) : ['#444'],
+        borderWidth: 2, borderColor: '#1a1f2e',
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10, font } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} frame${ctx.raw !== 1 ? 's' : ''}` } }
+      }
+    }
+  });
+
+  // 5. Movement progress stacked bar
+  mkChart('ac-movements', {
+    type: 'bar',
+    data: {
+      labels: d.mvLabels,
+      datasets: [
+        { label: 'Done',    data: d.mvDone,    backgroundColor: '#1a8a4acc', borderRadius: 4 },
+        { label: 'Pending', data: d.mvPending, backgroundColor: '#b85c1acc', borderRadius: 4 },
+      ]
+    },
+    options: baseOpts(true)
+  });
+}
+
 
 function renderAuditLog() {
   const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','facility-to-frame':'#2563b0','frame-fix-shipping':'#c08520'};
