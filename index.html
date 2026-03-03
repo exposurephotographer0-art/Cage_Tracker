@@ -2417,6 +2417,7 @@ let planWeekStart = (() => { const d=new Date(); d.setDate(d.getDate()-d.getDay(
 
 const MOVE_TYPES = [
   {value:'facility-to-frame', label:'Facility → Frame (out of facility)'},
+  {value:'frame-to-frame',    label:'Frame → Frame (swap cage between frames)'},
   {value:'frame-to-rmd', label:'Frame → RMD Storage'},
   {value:'rmd-to-frame', label:'RMD → Frame'},
   {value:'frame-fix-shipping', label:'Fix cage to frame for shipping'},
@@ -2472,7 +2473,27 @@ function renderPlanner() {
   let showFrame = true;
   let showRmd = false;
 
-  if (planFormType === 'facility-to-frame') {
+  if (planFormType === 'frame-to-frame') {
+    // Cages currently in frames at facility (or pending into a frame)
+    const pendingInFrameCageIds = new Set(
+      STATE.plannedMovements.filter(m => !m.completed && m.typeKey === 'facility-to-frame').map(m => m.cageId)
+    );
+    const inFrameCages = STATE.cages.filter(c =>
+      c.location === 'frame' || (c.location === 'facility' && pendingInFrameCageIds.has(c.id))
+    ).sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true}));
+    cageOpts = inFrameCages.map(c => {
+      const currentFrame = STATE.frames.find(f => f.cages.includes(c.id));
+      const lbl = currentFrame ? `in ${currentFrame.name}` : '(pending → frame)';
+      return `<option value="${c.id}">${esc(c.name)} (${lbl})</option>`;
+    }).join('');
+    // Destination frames: all facility frames (excluding the cage's current frame)
+    frameOpts = STATE.frames.filter(f => f.location === 'facility').sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true})).map(f => {
+      const fullNote = f.cages.length >= 2 ? ' ⚠ FULL' : f.cages.length === 1 ? ` (has ${getCage(f.cages[0])?.name || '?'})` : ' (empty)';
+      return `<option value="${f.id}">${esc(f.name)} (${f.width}m)${fullNote}</option>`;
+    }).join('');
+    showFrame = true;
+    showRmd = false;
+  } else if (planFormType === 'facility-to-frame') {
     // Cages in facility
     cageOpts = [...STATE.cages.filter(c=>c.location==='facility')].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(c=>`<option value="${c.id}">${esc(c.name)} (${hCat(c.height)}, ${c.width}m)</option>`).join('');
     // Include ALL facility frames + frames with a return date (pre-plan for when they return)
@@ -2572,7 +2593,7 @@ function renderPlanner() {
       <div class="form-grid form-grid-3">
         <div><label>Movement Type</label><select id="pf-type" onchange="onPlanTypeChange(this.value)">${typeOpts}</select></div>
         ${planFormType !== 'frame-return-from-client' ? `<div><label>Cage</label><select id="pf-cage" ${cageOnChange}><option value="">Select cage...</option>${cageOpts}</select></div>` : '<div></div>'}
-        ${showFrame ? `<div><label>Frame${planFormType==='rmd-to-frame'?' <span style="font-size:9px;color:var(--accent)">(auto-highlights on cage select)</span>':planFormType==='frame-return-from-client'?' <span style="font-size:9px;color:#0e7490">(returning empty from client/boat)</span>':''}</label><select id="pf-frame"><option value="">Select frame...</option>${frameOpts}</select></div>` : '<div id="pf-frame-placeholder"></div>'}
+        ${showFrame ? `<div><label>${planFormType==='frame-to-frame'?'Destination Frame':('Frame'+(planFormType==='rmd-to-frame'?' <span style="font-size:9px;color:var(--accent)">(auto-highlights on cage select)</span>':planFormType==='frame-return-from-client'?' <span style="font-size:9px;color:#0e7490">(returning empty from client/boat)</span>':'')))}</label><select id="pf-frame"><option value="">Select frame...</option>${frameOpts}</select></div>` : '<div id="pf-frame-placeholder"></div>'}
         <div><label>Date</label><input id="pf-date" type="date" value="${todayStr()}"/></div>
         <div><label>Shift</label><select id="pf-shift"><option value="day">Day Shift</option><option value="night">Night Shift</option></select></div>
         ${showRmd ? `<div><label>RMD Slot (Suggested)</label><select id="pf-rmd"><option value="">Select slot...</option>${rmdSlotOpts}</select></div>` : '<div id="pf-rmd-placeholder"></div>'}
@@ -2632,8 +2653,8 @@ function renderPlanner() {
     const hasMoves = dayMoves.length > 0 || departures.length > 0 || frameReturns.length > 0 || btLoads.length > 0 || btDeparts.length > 0 || btUnloads.length > 0 || btReturns.length > 0;
 
     let movesHTML = dayMoves.map(m=>`
-      <div class="week-move-item ${m.completed?'completed':''}" title="${esc(m.notes||m.description)}" style="${m.typeKey==='frame-return-from-client'?'background:#ecfeff;border:1px solid #a5f3fc;color:#0e7490;':''}">
-        ${m.typeKey==='frame-return-from-client'?'🚢 ': m.shift==='night'?'🌙 ':''}${esc(m.description.slice(0,26))}
+      <div class="week-move-item ${m.completed?'completed':''}" title="${esc(m.notes||m.description)}" style="${m.typeKey==='frame-return-from-client'?'background:#ecfeff;border:1px solid #a5f3fc;color:#0e7490;':m.typeKey==='frame-to-frame'?'background:#fff3ee;border:1px solid #fdba74;color:#c2410c;':''}">
+        ${m.typeKey==='frame-return-from-client'?'🚢 ': m.typeKey==='frame-to-frame'?'↕ ': m.shift==='night'?'🌙 ':''}${esc(m.description.slice(0,26))}
       </div>
     `).join('');
 
@@ -2892,6 +2913,11 @@ async function addMovement() {
   if(type === 'frame-return-from-client') {
     if(frame) parts.push(frame.name);
     parts.push('Facility');
+  } else if (type === 'frame-to-frame') {
+    if(cage) parts.push(cage.name);
+    const srcFrame = STATE.frames.find(f => f.cages.includes(cageId));
+    if(srcFrame) parts.push(srcFrame.name);
+    if(frame) parts.push(frame.name);
   } else {
     if(cage) parts.push(cage.name);
     if(frame) parts.push(frame.name);
@@ -2904,6 +2930,11 @@ async function addMovement() {
     id:uid(), type:typeLabel, typeKey:type, cageId, frameId:resolvedFrameId, rmdSlot,
     date, shift, notes, completed:false, description:desc, createdAt:new Date().toISOString()
   };
+  // For frame-to-frame, also store the source frame so completeMove can clear it
+  if (type === 'frame-to-frame') {
+    const srcFrame = STATE.frames.find(f => f.cages.includes(cageId));
+    if (srcFrame) move.srcFrameId = srcFrame.id;
+  }
   STATE.plannedMovements.push(move);
   planFormOpen = false;
   render();
@@ -2986,6 +3017,26 @@ async function completeMove(id) {
     frame.fixedForShipping = false;
     // Any cages in this frame should also be cleared (it should be empty, but just in case)
     frame.cages = [];
+  }
+  else if (m.typeKey === 'frame-to-frame' && cage && frame) {
+    // Remove cage from its current frame
+    const srcFrame = getFrame(m.srcFrameId) || STATE.frames.find(f => f.cages.includes(cage.id));
+    if (srcFrame) {
+      srcFrame.cages = srcFrame.cages.filter(id => id !== cage.id);
+      if (srcFrame.fixedForShipping) srcFrame.fixedForShipping = false; // moving a cage un-fixes the source frame
+    }
+    // Check destination frame capacity
+    if (frame.cages.length >= 2) { alert(`Cannot complete: ${frame.name} already has max cages.`); return; }
+    if (frame.cages.length === 1) {
+      const existing = getCage(frame.cages[0]);
+      if (existing && !canFitTwo(existing, cage, frame.width)) {
+        alert(`Cannot complete: cages don't fit together in ${frame.name}.`); return;
+      }
+    }
+    frame.cages.push(cage.id);
+    cage.location = 'frame';
+    cage.locationDetail = frame.name;
+    if (srcFrame) await saveFrame(srcFrame);
   }
 
   // Clear departure date whenever a cage physically leaves the facility
@@ -3647,7 +3698,7 @@ async function clearReportMovements() {
 // ═══════════════════════════════════════════════════════════════════════════════
 // AUDIT LOG
 // ═══════════════════════════════════════════════════════════════════════════════
-let auditFilter = 'all'; // 'all' | 'completed' | 'pending' | 'rmd-to-frame' | 'frame-to-rmd' | 'facility-to-frame'
+let auditFilter = 'all'; // 'all' | 'completed' | 'pending' | 'rmd-to-frame' | 'frame-to-rmd' | 'frame-to-frame' | 'facility-to-frame'
 let auditSearch = '';
 let auditSort = 'date-desc'; // 'date-desc' | 'date-asc'
 
@@ -3973,8 +4024,8 @@ function drawAnalyticsCharts() {
 
 
 function renderAuditLog() {
-  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','facility-to-frame':'#2563b0','frame-fix-shipping':'#c08520'};
-  const MVLABELS = {'rmd-to-frame':'RMD → Frame','frame-to-rmd':'Frame → RMD','facility-to-frame':'Facility → Frame','frame-fix-shipping':'Fix for Shipping'};
+  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','frame-to-frame':'#e05c1a','facility-to-frame':'#2563b0','frame-fix-shipping':'#c08520'};
+  const MVLABELS = {'rmd-to-frame':'RMD → Frame','frame-to-rmd':'Frame → RMD','frame-to-frame':'Frame → Frame','facility-to-frame':'Facility → Frame','frame-fix-shipping':'Fix for Shipping'};
 
   let movements = [...STATE.plannedMovements];
 
@@ -4015,6 +4066,7 @@ function renderAuditLog() {
     {k:'pending', label:`⏳ Pending (${pending})`},
     {k:'rmd-to-frame', label:`RMD→Frame (${byType['rmd-to-frame']||0})`},
     {k:'frame-to-rmd', label:`Frame→RMD (${byType['frame-to-rmd']||0})`},
+    {k:'frame-to-frame', label:`Frame→Frame (${byType['frame-to-frame']||0})`},
     {k:'facility-to-frame', label:`Facility→Frame (${byType['facility-to-frame']||0})`},
     {k:'frame-fix-shipping', label:`Fix Ship (${byType['frame-fix-shipping']||0})`},
   ].map(b => `<button class="filter-btn ${auditFilter===b.k?'active':''}" onclick="auditFilter='${b.k}';render()">${b.label}</button>`).join('');
@@ -4770,6 +4822,7 @@ function renderMovementsMap() {
     {k:'all',              label:`All (${pendingMoves.length})`},
     {k:'rmd-to-frame',     label:`RMD → Frame (${ct['rmd-to-frame']||0})`},
     {k:'frame-to-rmd',     label:`Frame → RMD (${ct['frame-to-rmd']||0})`},
+    {k:'frame-to-frame',   label:`Frame → Frame (${ct['frame-to-frame']||0})`},
     {k:'facility-to-frame',label:`Facility → Frame (${ct['facility-to-frame']||0})`},
     {k:'frame-fix-shipping',label:`Fix Shipping (${ct['frame-fix-shipping']||0})`},
     {k:'frame-return-from-client',label:`🚢 Frame Return (${ct['frame-return-from-client']||0})`},
@@ -5006,6 +5059,7 @@ function renderMovementsMap() {
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#27a060;border-radius:2px;display:inline-block"></span>RMD → Frame</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#7040c0;border-radius:2px;display:inline-block"></span>Frame → RMD</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#e05c1a;border-radius:2px;display:inline-block"></span>Frame → Frame</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#2563b0;border-radius:2px;display:inline-block;border-top:3px dashed #2563b0"></span>Facility → Frame</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#0e7490;border-radius:2px;display:inline-block;border-top:3px dashed #0e7490"></span>Boat → Frame</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#b45309;border-radius:2px;display:inline-block;border-top:3px dashed #b45309"></span>Cage → Boat Frame</span>
@@ -5133,6 +5187,7 @@ function mvRedraw() {
   const COLORS = {
     'rmd-to-frame':        '#27a060',
     'frame-to-rmd':        '#7040c0',
+    'frame-to-frame':      '#e05c1a',
     'facility-to-frame':   '#2563b0',
     'frame-fix-shipping':  '#c08520',
     'frame-return-from-client': '#0e7490',
@@ -5280,6 +5335,45 @@ function mvRedraw() {
         });
         labelTxt.textContent = cLabel;
         svg.appendChild(labelTxt);
+      }
+
+    } else if (m.typeKey === 'frame-to-frame') {
+      // Arrow from source frame card to destination frame card
+      const srcFk  = String(m.srcFrameId || '');
+      const destFk = String(m.frameId || '');
+      const srcPos  = getPos('mvf-' + srcFk);
+      const destPos = getPos('mvf-' + destFk);
+      if (!srcPos || !destPos) return;
+
+      // Draw a curved arrow between the two frame cards
+      const sx = srcPos.cx;
+      const sy = srcPos.top;    // leave from top of source frame
+      const ex = destPos.cx;
+      const ey = destPos.top;   // arrive at top of destination frame
+      const midY = Math.min(sy, ey) - 40; // arc above both cards
+      const path = svgEl('path', {
+        d: `M${sx},${sy} C${sx},${midY} ${ex},${midY} ${ex},${ey}`,
+        stroke: color, 'stroke-width': '2.5', fill: 'none',
+        'stroke-linecap': 'round',
+        'marker-end': `url(#arrow-frame-to-frame)`
+      });
+      svg.appendChild(path);
+
+      // Midpoint label
+      const bx = (sx + ex) / 2;
+      const by = midY - 8;
+      const circle = svgEl('circle', { cx: bx, cy: by + 8, r: '12', fill: color, stroke: '#fff', 'stroke-width': '2' });
+      svg.appendChild(circle);
+      const numText = svgEl('text', { x: bx, y: by + 8, fill: '#fff', 'font-size': '11', 'font-weight': 'bold', 'font-family': 'monospace', 'text-anchor': 'middle', 'dominant-baseline': 'central' });
+      numText.textContent = String(num);
+      svg.appendChild(numText);
+      if (cLabel) {
+        const lblBg = svgEl('text', { x: bx, y: by - 6, fill: '#fff', 'font-size': '10', 'font-weight': 'bold', 'font-family': 'monospace', 'text-anchor': 'middle', stroke: '#fff', 'stroke-width': '3', 'paint-order': 'stroke' });
+        lblBg.textContent = cLabel;
+        svg.appendChild(lblBg);
+        const lblTxt = svgEl('text', { x: bx, y: by - 6, fill: color, 'font-size': '10', 'font-weight': 'bold', 'font-family': 'monospace', 'text-anchor': 'middle' });
+        lblTxt.textContent = cLabel;
+        svg.appendChild(lblTxt);
       }
 
     } else if (m.typeKey === 'frame-return-from-client') {
