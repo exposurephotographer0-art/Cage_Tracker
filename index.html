@@ -2609,10 +2609,11 @@ function renderPlanner() {
   });
 
   // Build boat trip indexes for planner calendar
-  const btLoadByDay={}, btDepartByDay={}, btReturnByDay={};
+  const btLoadByDay={}, btDepartByDay={}, btUnloadByDay={}, btReturnByDay={};
   STATE.boatTrips.forEach(t=>{
-    if(t.loadDate) { if(!btLoadByDay[t.loadDate]) btLoadByDay[t.loadDate]=[]; btLoadByDay[t.loadDate].push(t.label); }
+    if(t.loadDate)   { if(!btLoadByDay[t.loadDate])     btLoadByDay[t.loadDate]=[];     btLoadByDay[t.loadDate].push(t.label); }
     if(t.departDate) { if(!btDepartByDay[t.departDate]) btDepartByDay[t.departDate]=[]; btDepartByDay[t.departDate].push(t.label); }
+    if(t.unloadDate) { if(!btUnloadByDay[t.unloadDate]) btUnloadByDay[t.unloadDate]=[]; btUnloadByDay[t.unloadDate].push(t.label); }
     if(t.returnDate) { if(!btReturnByDay[t.returnDate]) btReturnByDay[t.returnDate]=[]; btReturnByDay[t.returnDate].push(t.label); }
   });
 
@@ -2626,8 +2627,9 @@ function renderPlanner() {
     const frameReturns = returnByDay[day] || [];
     const btLoads = btLoadByDay[day] || [];
     const btDeparts = btDepartByDay[day] || [];
+    const btUnloads = btUnloadByDay[day] || [];
     const btReturns = btReturnByDay[day] || [];
-    const hasMoves = dayMoves.length > 0 || departures.length > 0 || frameReturns.length > 0 || btLoads.length > 0 || btDeparts.length > 0 || btReturns.length > 0;
+    const hasMoves = dayMoves.length > 0 || departures.length > 0 || frameReturns.length > 0 || btLoads.length > 0 || btDeparts.length > 0 || btUnloads.length > 0 || btReturns.length > 0;
 
     let movesHTML = dayMoves.map(m=>`
       <div class="week-move-item ${m.completed?'completed':''}" title="${esc(m.notes||m.description)}" style="${m.typeKey==='frame-return-from-client'?'background:#ecfeff;border:1px solid #a5f3fc;color:#0e7490;':''}">
@@ -2642,6 +2644,7 @@ function renderPlanner() {
       ${frameReturns.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#ecfeff;color:#0e7490;border:1px solid #a5f3fc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Frame ${n} expected back">🚢 ${esc(n)} returns</div>`).join('')}
       ${btLoads.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Boat loaded: ${n}">⬇ ${esc(n)}</div>`).join('')}
       ${btDeparts.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#dcfce7;color:#166534;border:1px solid #86efac;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Boat departs: ${n}">⛵ ${esc(n)}</div>`).join('')}
+      ${btUnloads.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Cages unloaded at client: ${n}">📦 ${esc(n)}</div>`).join('')}
       ${btReturns.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Boat returns: ${n}">🏠 ${esc(n)}</div>`).join('')}
       ${movesHTML}
     </div>`;
@@ -2755,6 +2758,7 @@ function renderPlanner() {
             <span style="padding:2px 6px;background:#ecfeff;color:#0e7490;border:1px solid #a5f3fc;border-radius:3px">🚢 Frame returns</span>
             <span style="padding:2px 6px;background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;border-radius:3px">⬇ Boat loaded</span>
             <span style="padding:2px 6px;background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:3px">⛵ Boat departs</span>
+            <span style="padding:2px 6px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;border-radius:3px">📦 Cages unloaded</span>
             <span style="padding:2px 6px;background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4;border-radius:3px">🏠 Boat returns</span>
           </div>
           <div style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px">Week 1</div>
@@ -3265,22 +3269,25 @@ function renderBoatDiary() {
   for(let i=0;i<21;i++) { const d=new Date(ws); d.setDate(d.getDate()+i); allDays.push(toISO(d)); }
 
   // Index boat trip events by date
-  const loadByDay={}, departByDay={}, returnByDay2={};
+  const loadByDay={}, departByDay={}, unloadByDay={}, returnByDay2={};
   STATE.boatTrips.forEach(t=>{
-    if(t.loadDate) { if(!loadByDay[t.loadDate]) loadByDay[t.loadDate]=[]; loadByDay[t.loadDate].push(t); }
-    if(t.departDate) { if(!departByDay[t.departDate]) departByDay[t.departDate]=[]; departByDay[t.departDate].push(t); }
-    if(t.returnDate) { if(!returnByDay2[t.returnDate]) returnByDay2[t.returnDate]=[]; returnByDay2[t.returnDate].push(t); }
+    if(t.loadDate)    { if(!loadByDay[t.loadDate])       loadByDay[t.loadDate]=[];       loadByDay[t.loadDate].push(t); }
+    if(t.departDate)  { if(!departByDay[t.departDate])   departByDay[t.departDate]=[];   departByDay[t.departDate].push(t); }
+    if(t.unloadDate)  { if(!unloadByDay[t.unloadDate])   unloadByDay[t.unloadDate]=[];   unloadByDay[t.unloadDate].push(t); }
+    if(t.returnDate)  { if(!returnByDay2[t.returnDate])  returnByDay2[t.returnDate]=[];  returnByDay2[t.returnDate].push(t); }
   });
 
   function renderBtDay(day) {
     const isToday = day===todayStr();
     const loads = loadByDay[day]||[];
     const departs = departByDay[day]||[];
+    const unloads = unloadByDay[day]||[];
     const returns = returnByDay2[day]||[];
-    const hasEvents = loads.length+departs.length+returns.length>0;
+    const hasEvents = loads.length+departs.length+unloads.length+returns.length>0;
     let evHTML = '';
     loads.forEach(t=>{ evHTML+=`<div class="bt-event load" onclick="editBoatTrip('${t.id}')" title="${esc(t.label)}${t.notes?': '+t.notes:''}">⬇ ${esc(t.label)}</div>`; });
     departs.forEach(t=>{ evHTML+=`<div class="bt-event depart" onclick="editBoatTrip('${t.id}')" title="${esc(t.label)}${t.notes?': '+t.notes:''}">⛵ ${esc(t.label)}</div>`; });
+    unloads.forEach(t=>{ evHTML+=`<div class="bt-event" style="background:#fff7ed;color:#9a3412;border:1px solid #fed7aa" onclick="editBoatTrip('${t.id}')" title="Cages unloaded at client: ${esc(t.label)}">📦 ${esc(t.label)}</div>`; });
     returns.forEach(t=>{ evHTML+=`<div class="bt-event return" onclick="editBoatTrip('${t.id}')" title="${esc(t.label)}${t.notes?': '+t.notes:''}">🏠 ${esc(t.label)}</div>`; });
     return `<div class="bt-week-day ${isToday?'today':''} ${hasEvents?'has-events':''}">
       <div class="bt-week-day-hdr">${fmtShort(day)}</div>
@@ -3347,6 +3354,7 @@ function renderBoatDiary() {
       <div style="display:flex;gap:10px;margin-bottom:8px;font-size:10px;align-items:center;flex-wrap:wrap">
         <span style="padding:2px 8px;background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;border-radius:3px;font-weight:600">⬇ Boat loaded at facility</span>
         <span style="padding:2px 8px;background:#dcfce7;color:#166534;border:1px solid #86efac;border-radius:3px;font-weight:600">⛵ Boat sets sail</span>
+        <span style="padding:2px 8px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;border-radius:3px;font-weight:600">📦 Cages unloaded at client</span>
         <span style="padding:2px 8px;background:#fce7f3;color:#9d174d;border:1px solid #f9a8d4;border-radius:3px;font-weight:600">🏠 Boat returns from client</span>
       </div>
       ${formHTML}
@@ -4968,6 +4976,22 @@ function renderMovementsMap() {
     }
   });
 
+  // Inject virtual "cage-to-boat-frame" entries: cages planned into frames currently away
+  // These show a dashed arrow from the cage in RMD/facility to the frame card in the boat box
+  filtered.forEach(m => {
+    if (m.typeKey !== 'facility-to-frame' && m.typeKey !== 'rmd-to-frame') return;
+    const frame = getFrame(m.frameId);
+    if (!frame) return;
+    if (frame.location === 'facility') return; // only away frames
+    if (!frame.returnDate) return; // only if they have a return date
+    window._mvMovesData.push({
+      id: 'ctbf-' + m.id, typeKey: 'cage-to-boat-frame', cageId: m.cageId,
+      rmdSlot: m.rmdSlot || '', frameId: m.frameId,
+      description: (getCage(m.cageId)?.name || '?') + ' → ' + frame.name + ' (on boat)',
+      date: m.date, sourceTypeKey: m.typeKey,
+    });
+  });
+
 
   return `
     <h2 class="section-title" style="margin-bottom:4px">↔ Movements Map</h2>
@@ -4984,6 +5008,7 @@ function renderMovementsMap() {
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#7040c0;border-radius:2px;display:inline-block"></span>Frame → RMD</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#2563b0;border-radius:2px;display:inline-block;border-top:3px dashed #2563b0"></span>Facility → Frame</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#0e7490;border-radius:2px;display:inline-block;border-top:3px dashed #0e7490"></span>Boat → Frame</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#b45309;border-radius:2px;display:inline-block;border-top:3px dashed #b45309"></span>Cage → Boat Frame</span>
       <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">${filtered.length} movement${filtered.length!==1?'s':''}</span>
     </div>
 
@@ -5038,9 +5063,21 @@ function renderMovementsMap() {
                         const daysLeft = Math.ceil((new Date(f.returnDate+'T12:00:00') - new Date()) / 86400000);
                         const retCol = daysLeft < 0 ? 'var(--red)' : daysLeft <= 7 ? 'var(--orange)' : '#0e7490';
                         const retStr = fmt(f.returnDate) + ` (${daysLeft < 0 ? Math.abs(daysLeft)+'d OVR' : daysLeft+'d'})`;
-                        return `<div id="mvboat-${f.id}" style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #a5f3fc;background:#ecfeff;margin-bottom:3px;">
+                        // Cages planned to go into this frame
+                        const plannedIntoCages = filtered
+                          .filter(m => (m.typeKey === 'facility-to-frame' || m.typeKey === 'rmd-to-frame') && m.frameId === f.id)
+                          .map(m => getCage(m.cageId)).filter(Boolean);
+                        const plannedHTML = plannedIntoCages.map(c =>
+                          `<div id="mvboat-cage-${c.id}-${f.id}" style="font-size:9px;padding:2px 5px;border-radius:3px;border:1px solid #fbbf24;background:#fffbeb;margin-top:2px;display:flex;align-items:center;gap:3px">
+                            <span style="color:#b45309;font-weight:800">→</span>
+                            <span style="font:600 9px var(--font-mono);color:#92400e">${esc(c.name)}</span>
+                            <span style="color:var(--text-muted);font-size:8px">${c.height}m</span>
+                          </div>`
+                        ).join('');
+                        return `<div id="mvboat-${f.id}" style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid ${plannedIntoCages.length ? '#fbbf24' : '#a5f3fc'};background:${plannedIntoCages.length ? '#fffbeb' : '#ecfeff'};margin-bottom:3px;">
                           <div style="font:700 10px var(--font-mono);color:#0e7490">${esc(f.name)} <span style="font-weight:400;font-size:9px;color:var(--text-muted)">${f.location}</span></div>
                           <div style="font-size:9px;color:${retCol};font-family:var(--font-mono)">↩ ${retStr}</div>
+                          ${plannedHTML}
                         </div>`;
                       }).join('')}
                       ${!hasAny ? '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no frames away</div>' : ''}
@@ -5099,6 +5136,7 @@ function mvRedraw() {
     'facility-to-frame':   '#2563b0',
     'frame-fix-shipping':  '#c08520',
     'frame-return-from-client': '#0e7490',
+    'cage-to-boat-frame':  '#b45309',
   };
 
   const cRect = container.getBoundingClientRect();
@@ -5389,6 +5427,52 @@ function mvRedraw() {
           'font-family': 'monospace', 'text-anchor': 'middle', 'dominant-baseline': 'auto'
         });
         lblTxt.textContent = lbl;
+        svg.appendChild(lblTxt);
+      }
+    } else if (m.typeKey === 'cage-to-boat-frame') {
+      // Dashed amber arrow from the cage's source (RMD or Facility box) to the cage chip inside the boat frame card
+      const fk = String(m.frameId || '');
+      const cageId = m.cageId || '';
+      // Try to find the specific cage chip node inside the boat frame card
+      const cageNodePos = getPos('mvboat-cage-' + cageId + '-' + fk);
+      const boatFramePos = getPos('mvboat-' + fk);
+      const targetPos = cageNodePos || boatFramePos;
+      if (!targetPos) return;
+
+      // Source: RMD card if cage is in RMD, otherwise Facility box
+      const cage = getCage(cageId);
+      let srcPos = null;
+      if (cage && cage.location === 'rmd' && cage.locationDetail) {
+        const rk = String(cage.locationDetail).replace(/[ABab]$/,'');
+        srcPos = getPos('mvr-' + rk);
+      }
+      if (!srcPos) srcPos = getPos('mv-facility-box');
+      if (!srcPos) return;
+
+      // Draw a dashed curved arrow from source → cage chip in the boat box
+      const sx = srcPos.right;
+      const sy = srcPos.cy;
+      const ex = targetPos.left;
+      const ey = targetPos.cy;
+      const cpOff = Math.max(Math.abs(ex - sx) * 0.4, 40);
+
+      const path = svgEl('path', {
+        d: `M${sx},${sy} C${sx+cpOff},${sy} ${ex-cpOff},${ey} ${ex},${ey}`,
+        stroke: color, 'stroke-width': '2', fill: 'none',
+        'stroke-linecap': 'round', 'stroke-dasharray': '6,4',
+        'marker-end': `url(#arrow-cage-to-boat-frame)`
+      });
+      svg.appendChild(path);
+
+      // Label at midpoint
+      const bx = (sx + ex) / 2;
+      const by = (sy + ey) / 2 - 8;
+      if (cLabel) {
+        const lblBg = svgEl('text', { x: bx, y: by, fill: '#fff', 'font-size': '9', 'font-weight': 'bold', 'font-family': 'monospace', 'text-anchor': 'middle', stroke: '#fff', 'stroke-width': '3', 'paint-order': 'stroke' });
+        lblBg.textContent = cLabel + ' →🚢';
+        svg.appendChild(lblBg);
+        const lblTxt = svgEl('text', { x: bx, y: by, fill: color, 'font-size': '9', 'font-weight': 'bold', 'font-family': 'monospace', 'text-anchor': 'middle' });
+        lblTxt.textContent = cLabel + ' →🚢';
         svg.appendChild(lblTxt);
       }
     }
