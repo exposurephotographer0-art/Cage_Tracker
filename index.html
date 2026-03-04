@@ -558,7 +558,6 @@ function initState() {
     shipments: [],
     boatTrips: [],
     settings: { movementsPerDay: MAX_MOVES }
-    auditEvents: [],
   };
 }
 
@@ -609,6 +608,9 @@ async function loadState() {
     auditEvents: PRELOAD_STATE.auditEvents || [],
     settings: PRELOAD_STATE.settings || { movementsPerDay: MAX_MOVES },
   };
+
+  // Render immediately from local data — don't wait for API
+  render();
 
   // Then try to refresh from the API in the background
   try {
@@ -2945,17 +2947,18 @@ async function addMovement() {
 
   const frame = getFrame(resolvedFrameId);
   const parts = [];
+  const frameWidthTag = (f) => f && f.width ? ` [${f.width}m]` : '';
   if(type === 'frame-return-from-client') {
-    if(frame) parts.push(frame.name);
+    if(frame) parts.push(frame.name + frameWidthTag(frame));
     parts.push('Facility');
   } else if (type === 'frame-to-frame') {
     if(cage) parts.push(cage.name);
     const srcFrame = STATE.frames.find(f => f.cages.includes(cageId));
-    if(srcFrame) parts.push(srcFrame.name);
-    if(frame) parts.push(frame.name);
+    if(srcFrame) parts.push(srcFrame.name + frameWidthTag(srcFrame));
+    if(frame) parts.push(frame.name + frameWidthTag(frame));
   } else {
     if(cage) parts.push(cage.name);
-    if(frame) parts.push(frame.name);
+    if(frame) parts.push(frame.name + frameWidthTag(frame));
     if(rmdSlot) parts.push('RMD-'+rmdSlot);
   }
   const desc = parts.join(' → ') || notes || 'Movement';
@@ -3602,7 +3605,6 @@ function addAuditEvent(type, description, detail, relatedIds) {
   };
   if (!STATE.auditEvents) STATE.auditEvents = [];
   STATE.auditEvents.unshift(event);
-  // Keep max 500 events
   if (STATE.auditEvents.length > 500) STATE.auditEvents = STATE.auditEvents.slice(0, 500);
 }
 
@@ -4267,7 +4269,7 @@ function renderAuditLog() {
     </div>
     <div style="margin-top:8px;font-size:11px;color:var(--text-muted);text-align:right">Showing ${movements.length} of ${total} movements</div>
 
-    <!-- ── Shipping & Frame Return Events ── -->
+    <!-- Shipping & Frame Return Events -->
     ${(() => {
       const events = (STATE.auditEvents || []);
       if (events.length === 0) return `
@@ -4739,7 +4741,7 @@ async function commitBoatPlan() {
           id: uid(), date: step.date,
           type: 'Reframe → Frame',
           typeKey: 'rmd-to-frame',
-          description: `${step.cage.name}: Load into ${step.frame.name}${walerNote}`,
+          description: `${step.cage.name}: Load into ${step.frame.name}${step.frame.width ? ` [${step.frame.width}m]` : ''}${walerNote}`,
           shift: 'day', notes: `Boat plan — load date: ${fmt(bpBoatDate)}`,
           cageId: step.cage.id,
           frameId: step.frame?.id || null, completed: false,
@@ -5192,7 +5194,7 @@ function renderMovementsMap() {
     window._mvMovesData.push({
       id: 'ctbf-' + m.id, typeKey: 'cage-to-boat-frame', cageId: m.cageId,
       rmdSlot: m.rmdSlot || '', frameId: m.frameId,
-      description: (getCage(m.cageId)?.name || '?') + ' → ' + frame.name + ' (on boat)',
+      description: (getCage(m.cageId)?.name || '?') + ' → ' + frame.name + (frame.width ? ` [${frame.width}m]` : '') + ' (on boat)',
       date: m.date, sourceTypeKey: m.typeKey,
     });
   });
