@@ -3327,13 +3327,7 @@ async function onMoveDrop(e) {
   render();
 
   try {
-    const API = (window.API_BASE || '');
-    await fetch(API + '/api/movements/reorder', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ ids: allMovements.map(m => m.id) })
-    });
+    await api('/api/movements/reorder', 'PUT', { ids: allMovements.map(m => m.id) });
   } catch(err) {
     console.warn('Reorder save failed', err);
   }
