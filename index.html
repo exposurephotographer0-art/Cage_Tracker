@@ -2942,17 +2942,18 @@ async function addMovement() {
 
   const frame = getFrame(resolvedFrameId);
   const parts = [];
+  const frameWidthTag = (f) => f && f.width ? ` [${f.width}m]` : '';
   if(type === 'frame-return-from-client') {
-    if(frame) parts.push(frame.name);
+    if(frame) parts.push(frame.name + frameWidthTag(frame));
     parts.push('Facility');
   } else if (type === 'frame-to-frame') {
     if(cage) parts.push(cage.name);
     const srcFrame = STATE.frames.find(f => f.cages.includes(cageId));
-    if(srcFrame) parts.push(srcFrame.name);
-    if(frame) parts.push(frame.name);
+    if(srcFrame) parts.push(srcFrame.name + frameWidthTag(srcFrame));
+    if(frame) parts.push(frame.name + frameWidthTag(frame));
   } else {
     if(cage) parts.push(cage.name);
-    if(frame) parts.push(frame.name);
+    if(frame) parts.push(frame.name + frameWidthTag(frame));
     if(rmdSlot) parts.push('RMD-'+rmdSlot);
   }
   const desc = parts.join(' → ') || notes || 'Movement';
@@ -4670,7 +4671,7 @@ async function commitBoatPlan() {
           id: uid(), date: step.date,
           type: 'Reframe → Frame',
           typeKey: 'rmd-to-frame',
-          description: `${step.cage.name}: Load into ${step.frame.name}${walerNote}`,
+          description: `${step.cage.name}: Load into ${step.frame.name}${step.frame.width ? ` [${step.frame.width}m]` : ''}${walerNote}`,
           shift: 'day', notes: `Boat plan — load date: ${fmt(bpBoatDate)}`,
           cageId: step.cage.id,
           frameId: step.frame?.id || null, completed: false,
@@ -5123,7 +5124,7 @@ function renderMovementsMap() {
     window._mvMovesData.push({
       id: 'ctbf-' + m.id, typeKey: 'cage-to-boat-frame', cageId: m.cageId,
       rmdSlot: m.rmdSlot || '', frameId: m.frameId,
-      description: (getCage(m.cageId)?.name || '?') + ' → ' + frame.name + ' (on boat)',
+      description: (getCage(m.cageId)?.name || '?') + ' → ' + frame.name + (frame.width ? ` [${frame.width}m]` : '') + ' (on boat)',
       date: m.date, sourceTypeKey: m.typeKey,
     });
   });
