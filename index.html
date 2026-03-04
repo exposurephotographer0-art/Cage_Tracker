@@ -181,6 +181,15 @@ tr:hover td { background: #f8f9fb; }
 /* Planner sidebar compact spatial */
 .planner-rmd-spatial { display: flex; flex-direction: column; gap: 8px; }
 .planner-rmd-row { display: flex; gap: 4px; flex-wrap: wrap; }
+
+/* ── Drag & Drop ── */
+.drag-handle {
+  cursor: grab; color: var(--text-muted); font-size: 14px; padding: 0 4px;
+  user-select: none; line-height: 1;
+}
+.drag-handle:active { cursor: grabbing; }
+tr.drag-over td { background: var(--accent-dim) !important; outline: 2px solid var(--accent); outline-offset: -1px; }
+tr.dragging { opacity: 0.4; }
 .rmd-slot {
   display: flex; align-items: center; gap: 8px; background: var(--bg-input);
   border-radius: 6px; padding: 6px 10px; border: 1px solid var(--border); margin-bottom: 0;
@@ -2691,13 +2700,19 @@ function renderPlanner() {
   const week2HTML = weekDays.slice(7).map(renderWeekDay).join('');
 
   // All movements table — hide completed by default
-  let sortedAll = [...STATE.plannedMovements].sort((a,b)=>a.date.localeCompare(b.date));
+  let sortedAll = [...STATE.plannedMovements].sort((a,b)=>{
+    const ao = a.sortOrder != null ? a.sortOrder : 999999;
+    const bo = b.sortOrder != null ? b.sortOrder : 999999;
+    if (ao !== bo) return ao - bo;
+    return a.date.localeCompare(b.date);
+  });
   let sorted = plannerShowCompleted ? sortedAll : sortedAll.filter(m => !m.completed);
   const completedCount = sortedAll.filter(m => m.completed).length;
   let tableRows = sorted.length === 0
-    ? '<tr><td colspan="7" class="empty-msg" style="text-align:center;padding:20px">' + (plannerShowCompleted ? 'No movements planned' : 'No pending movements — all done!') + '</td></tr>'
+    ? '<tr><td colspan="8" class="empty-msg" style="text-align:center;padding:20px">' + (plannerShowCompleted ? 'No movements planned' : 'No pending movements — all done!') + '</td></tr>'
     : sorted.map(m=>`
-      <tr style="opacity:${m.completed?'0.5':'1'}">
+      <tr data-id="${m.id}" draggable="true" style="opacity:${m.completed?'0.5':'1'}" ondragstart="onMoveDragStart(event)" ondragover="onMoveDragOver(event)" ondrop="onMoveDrop(event)" ondragend="onMoveDragEnd(event)" ondragleave="onMoveDragLeave(event)">
+        <td style="width:24px;padding:4px 2px"><span class="drag-handle" title="Drag to reorder">⠿</span></td>
         <td style="font-family:var(--font-mono)">
           ${!m.completed ? `<input type="date" value="${m.date}" title="Click to change date" style="border:none;background:transparent;font:600 12px var(--font-mono);color:var(--accent);cursor:pointer;width:130px;padding:2px 4px;border-radius:4px;border:1px solid transparent" onmouseover="this.style.borderColor='var(--border)'" onmouseout="this.style.borderColor='transparent'" onchange="rescheduleMove('${m.id}',this.value)" />` : `<span>${fmt(m.date)}</span>`}
         </td>
@@ -2813,7 +2828,7 @@ function renderPlanner() {
           </div>
           <div style="overflow-x:auto">
             <table><thead><tr>
-              <th>Date</th><th>Shift</th><th>Type</th><th>Description</th><th>Notes</th><th>Status</th><th>Actions</th>
+              <th style="width:24px"></th><th>Date</th><th>Shift</th><th>Type</th><th>Description</th><th>Notes</th><th>Status</th><th>Actions</th>
             </tr></thead><tbody>${tableRows}</tbody></table>
           </div>
         </div>
@@ -2945,7 +2960,8 @@ async function addMovement() {
 
   const move = {
     id:uid(), type:typeLabel, typeKey:type, cageId, frameId:resolvedFrameId, rmdSlot,
-    date, shift, notes, completed:false, description:desc, createdAt:new Date().toISOString()
+    date, shift, notes, completed:false, description:desc, createdAt:new Date().toISOString(),
+    sortOrder: STATE.plannedMovements.length
   };
   // For frame-to-frame, also store the source frame so completeMove can clear it
   if (type === 'frame-to-frame') {
@@ -3265,6 +3281,62 @@ async function deleteMove(id) {
   STATE.plannedMovements = STATE.plannedMovements.filter(m=>m.id!==id);
   render();
   await deleteMovementFromAPI(id);
+}
+
+// ── Drag & drop reordering for planned movements ──────────────────────────────
+let _dragSrcId = null;
+
+function onMoveDragStart(e) {
+  _dragSrcId = e.currentTarget.dataset.id;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function onMoveDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const row = e.currentTarget;
+  if (row.dataset.id !== _dragSrcId) row.classList.add('drag-over');
+}
+
+function onMoveDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+
+function onMoveDragEnd(e) {
+  document.querySelectorAll('tr.dragging').forEach(r => r.classList.remove('dragging'));
+  document.querySelectorAll('tr.drag-over').forEach(r => r.classList.remove('drag-over'));
+  _dragSrcId = null;
+}
+
+async function onMoveDrop(e) {
+  e.preventDefault();
+  const targetId = e.currentTarget.dataset.id;
+  if (!targetId || targetId === _dragSrcId || !_dragSrcId) return;
+
+  // Reorder in STATE — use the currently displayed sorted order as the base
+  const allMovements = [...STATE.plannedMovements];
+  const srcIdx = allMovements.findIndex(m => m.id === _dragSrcId);
+  const tgtIdx = allMovements.findIndex(m => m.id === targetId);
+  if (srcIdx === -1 || tgtIdx === -1) return;
+
+  const [moved] = allMovements.splice(srcIdx, 1);
+  allMovements.splice(tgtIdx, 0, moved);
+  allMovements.forEach((m, i) => { m.sortOrder = i; });
+  STATE.plannedMovements = allMovements;
+  render();
+
+  try {
+    const API = (window.API_BASE || '');
+    await fetch(API + '/api/movements/reorder', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ ids: allMovements.map(m => m.id) })
+    });
+  } catch(err) {
+    console.warn('Reorder save failed', err);
+  }
 }
 function shiftWeek(dir) {
   const d = new Date(planWeekStart+'T12:00:00');
