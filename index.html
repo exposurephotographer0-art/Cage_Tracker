@@ -558,6 +558,7 @@ function initState() {
     shipments: [],
     boatTrips: [],
     settings: { movementsPerDay: MAX_MOVES }
+    auditEvents: [],
   };
 }
 
@@ -605,6 +606,7 @@ async function loadState() {
     plannedMovements: PRELOAD_STATE.plannedMovements || [],
     shipments: PRELOAD_STATE.shipments || [],
     boatTrips: PRELOAD_STATE.boatTrips || [],
+    auditEvents: PRELOAD_STATE.auditEvents || [],
     settings: PRELOAD_STATE.settings || { movementsPerDay: MAX_MOVES },
   };
 
@@ -623,6 +625,7 @@ async function loadState() {
       plannedMovements: data.plannedMovements,
       shipments: data.shipments,
       boatTrips: data.boatTrips || [],
+      auditEvents: data.auditEvents || [],
       settings: { movementsPerDay: parseInt(data.settings?.movementsPerDay) || MAX_MOVES }
     };
     console.log('[CageTracker] State synced from API:', STATE.cages.length, 'cages');
@@ -2942,18 +2945,17 @@ async function addMovement() {
 
   const frame = getFrame(resolvedFrameId);
   const parts = [];
-  const frameWidthTag = (f) => f && f.width ? ` [${f.width}m]` : '';
   if(type === 'frame-return-from-client') {
-    if(frame) parts.push(frame.name + frameWidthTag(frame));
+    if(frame) parts.push(frame.name);
     parts.push('Facility');
   } else if (type === 'frame-to-frame') {
     if(cage) parts.push(cage.name);
     const srcFrame = STATE.frames.find(f => f.cages.includes(cageId));
-    if(srcFrame) parts.push(srcFrame.name + frameWidthTag(srcFrame));
-    if(frame) parts.push(frame.name + frameWidthTag(frame));
+    if(srcFrame) parts.push(srcFrame.name);
+    if(frame) parts.push(frame.name);
   } else {
     if(cage) parts.push(cage.name);
-    if(frame) parts.push(frame.name + frameWidthTag(frame));
+    if(frame) parts.push(frame.name);
     if(rmdSlot) parts.push('RMD-'+rmdSlot);
   }
   const desc = parts.join(' → ') || notes || 'Movement';
@@ -3591,6 +3593,19 @@ function toggleShipSelect(fid) {
   else shipSelected.push(fid);
   render();
 }
+function addAuditEvent(type, description, detail, relatedIds) {
+  const event = {
+    id: uid(), type, description, detail: detail || '',
+    relatedIds: relatedIds || [],
+    timestamp: new Date().toISOString(),
+    date: new Date().toISOString().slice(0,10),
+  };
+  if (!STATE.auditEvents) STATE.auditEvents = [];
+  STATE.auditEvents.unshift(event);
+  // Keep max 500 events
+  if (STATE.auditEvents.length > 500) STATE.auditEvents = STATE.auditEvents.slice(0, 500);
+}
+
 async function createShipment() {
   if(shipSelected.length===0) return alert('Select frames to ship.');
   const date = document.getElementById('sf-date').value;
@@ -3605,6 +3620,12 @@ async function createShipment() {
     updatedFrames.push(f);
     f.cages.forEach(cid=>{ const c=getCage(cid); if(c){c.location='shipped';c.locationDetail='In transit'; updatedCages.push(c);} });
   });
+  // Audit log entry for shipment
+  {
+    const frameNames = shipSelected.map(fid => getFrame(fid)?.name || fid).join(', ');
+    const cageNames = shipSelected.flatMap(fid => (getFrame(fid)?.cages || []).map(cid => getCage(cid)?.name || cid)).join(', ');
+    addAuditEvent('🚢 Shipped', `${shipSelected.length} frame(s) shipped: ${frameNames}`, cageNames ? `Cages aboard: ${cageNames}` : '', shipSelected);
+  }
   shipFormOpen=false; shipSelected=[];
   render();
   await addShipmentToAPI(shipment);
@@ -3634,10 +3655,12 @@ async function returnFrames(sid) {
   const sh = STATE.shipments.find(s=>s.id===sid);
   sh.status = 'frames-returned';
   const updatedFrames = [];
+  const returnedFrameNames = [];
   sh.frameIds.forEach(fid=>{
     const f=getFrame(fid);
-    if(f){ f.location='facility'; f.cages=[]; f.fixedForShipping=false; f.hasWaler=false; updatedFrames.push(f); }
+    if(f){ returnedFrameNames.push(f.name + (f.width ? ` [${f.width}m]` : '')); f.location='facility'; f.cages=[]; f.fixedForShipping=false; f.hasWaler=false; updatedFrames.push(f); }
   });
+  addAuditEvent('↩ Frame Return', `${updatedFrames.length} frame(s) returned to facility`, returnedFrameNames.join(', '), sh.frameIds);
   render();
   await updateShipmentInAPI(sh);
   await Promise.all(updatedFrames.map(f => saveFrame(f)));
@@ -3647,10 +3670,12 @@ async function returnFromClient(fid) {
   const f = getFrame(fid);
   if (!f) return;
   const updatedCages = [];
+  const cageNames = f.cages.map(cid => getCage(cid)?.name || cid).filter(Boolean);
   f.cages.forEach(cid => {
     const c = getCage(cid);
     if (c) { c.location = 'facility'; c.locationDetail = ''; c.departureDate = null; updatedCages.push(c); }
   });
+  addAuditEvent('↩ Frame Return', `${f.name}${f.width ? ` [${f.width}m]` : ''} returned from client`, cageNames.length ? `Cages unloaded: ${cageNames.join(', ')}` : 'No cages aboard', [fid]);
   f.cages = [];
   f.fixedForShipping = false;
   f.hasWaler = false;
@@ -4241,6 +4266,43 @@ function renderAuditLog() {
       </table>
     </div>
     <div style="margin-top:8px;font-size:11px;color:var(--text-muted);text-align:right">Showing ${movements.length} of ${total} movements</div>
+
+    <!-- ── Shipping & Frame Return Events ── -->
+    ${(() => {
+      const events = (STATE.auditEvents || []);
+      if (events.length === 0) return `
+        <div class="card" style="margin-top:24px">
+          <div class="card-title" style="margin-bottom:8px">🚢 Shipping &amp; Frame Return Log</div>
+          <div class="empty-msg">No shipping or frame return events recorded yet. These are captured automatically when you ship frames or mark them as returned.</div>
+        </div>`;
+      const evRows = events.map(ev => {
+        const isShip = ev.type.includes('Shipped');
+        const col = isShip ? '#7040c0' : '#0e7490';
+        const bg  = isShip ? '#f0e8fa' : '#ecfeff';
+        const tsStr = ev.timestamp ? new Date(ev.timestamp).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+        return `<tr>
+          <td style="font-family:var(--font-mono);font-size:11px;color:var(--text-muted);white-space:nowrap">${tsStr}</td>
+          <td><span style="display:inline-block;padding:2px 9px;border-radius:10px;background:${bg};color:${col};font:700 11px var(--font-mono)">${esc(ev.type)}</span></td>
+          <td style="font-weight:600;font-size:13px;color:var(--text-primary)">${esc(ev.description)}</td>
+          <td style="font-size:11px;color:var(--text-muted)">${esc(ev.detail||'')}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-danger btn-xs" onclick="deleteAuditEvent('${ev.id}')">✕</button>
+          </td>
+        </tr>`;
+      }).join('');
+      return `
+        <div class="card" style="margin-top:24px;overflow-x:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div class="card-title" style="margin:0">🚢 Shipping &amp; Frame Return Log <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(${events.length} event${events.length!==1?'s':''})</span></div>
+          </div>
+          <table>
+            <thead><tr>
+              <th>Timestamp</th><th>Event</th><th>Description</th><th>Detail</th><th></th>
+            </tr></thead>
+            <tbody>${evRows}</tbody>
+          </table>
+        </div>`;
+    })()}
   `;
 }
 
@@ -4249,6 +4311,12 @@ async function deleteMovement(id) {
   STATE.plannedMovements = STATE.plannedMovements.filter(m => m.id !== id);
   render();
   await deleteMovementFromAPI(id);
+}
+
+function deleteAuditEvent(id) {
+  if (!confirm('Remove this event from the log?')) return;
+  STATE.auditEvents = (STATE.auditEvents || []).filter(e => e.id !== id);
+  render();
 }
 
 function renderReport() {
@@ -4671,7 +4739,7 @@ async function commitBoatPlan() {
           id: uid(), date: step.date,
           type: 'Reframe → Frame',
           typeKey: 'rmd-to-frame',
-          description: `${step.cage.name}: Load into ${step.frame.name}${step.frame.width ? ` [${step.frame.width}m]` : ''}${walerNote}`,
+          description: `${step.cage.name}: Load into ${step.frame.name}${walerNote}`,
           shift: 'day', notes: `Boat plan — load date: ${fmt(bpBoatDate)}`,
           cageId: step.cage.id,
           frameId: step.frame?.id || null, completed: false,
@@ -5124,7 +5192,7 @@ function renderMovementsMap() {
     window._mvMovesData.push({
       id: 'ctbf-' + m.id, typeKey: 'cage-to-boat-frame', cageId: m.cageId,
       rmdSlot: m.rmdSlot || '', frameId: m.frameId,
-      description: (getCage(m.cageId)?.name || '?') + ' → ' + frame.name + (frame.width ? ` [${frame.width}m]` : '') + ' (on boat)',
+      description: (getCage(m.cageId)?.name || '?') + ' → ' + frame.name + ' (on boat)',
       date: m.date, sourceTypeKey: m.typeKey,
     });
   });
