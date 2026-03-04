@@ -741,6 +741,14 @@ async function addBoatTripToAPI(t) {
   try { await api('/api/boattrips', 'POST', t); }
   catch(e) { showError('Failed to add boat trip: ' + e.message); }
 }
+async function saveAuditEventToAPI(e) {
+  try { await api('/api/audit_events', 'POST', e); }
+  catch(err) { console.warn('Failed to save audit event:', err.message); }
+}
+async function deleteAuditEventFromAPI(id) {
+  try { await api('/api/audit_events', 'DELETE', { id }); }
+  catch(err) { console.warn('Failed to delete audit event:', err.message); }
+}
 async function updateBoatTripInAPI(t) {
   try { await api('/api/boattrips', 'PUT', t); }
   catch(e) { showError('Failed to update boat trip: ' + e.message); }
@@ -3606,6 +3614,7 @@ function addAuditEvent(type, description, detail, relatedIds) {
   if (!STATE.auditEvents) STATE.auditEvents = [];
   STATE.auditEvents.unshift(event);
   if (STATE.auditEvents.length > 500) STATE.auditEvents = STATE.auditEvents.slice(0, 500);
+  saveAuditEventToAPI(event);
 }
 
 async function createShipment() {
@@ -4319,6 +4328,7 @@ function deleteAuditEvent(id) {
   if (!confirm('Remove this event from the log?')) return;
   STATE.auditEvents = (STATE.auditEvents || []).filter(e => e.id !== id);
   render();
+  deleteAuditEventFromAPI(id);
 }
 
 function renderReport() {
