@@ -5071,14 +5071,26 @@ function renderMovementsMap() {
     const existingCageIds = new Set(['cage1','cage2','cage3','cage4'].flatMap(sk => ['A','B'].map(side => r[side][sk])).filter(Boolean));
     const incomingCages = movesForRmd.filter(m => m.typeKey === 'frame-to-rmd' && m.cageId && !existingCageIds.has(m.cageId));
     if (incomingCages.length > 0) {
-      slotsHTML += `<div style="font:700 8px var(--font-mono);color:var(--green);text-transform:uppercase;letter-spacing:.05em;margin:5px 0 3px">Incoming</div>`;
+      // Group incoming cages by which side (A/B) they're going to
+      const incomingBySide = {A:[], B:[], unknown:[]};
       incomingCages.forEach(m => {
-        const c = getCage(m.cageId); if (!c) return;
-        slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #4aad72;background:#f0faf4;margin-bottom:2px;display:flex;align-items:center;gap:4px;">
-          <span style="color:#27a060;font-weight:800;margin-right:2px">←</span>
-          <span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
-          <span style="color:var(--text-muted);margin-left:3px">${c.height}m</span>
-        </div>`;
+        const slot = resolveRmdSlot(m) || '';
+        const sideMatch = String(slot).match(/([ABab])$/);
+        const side = sideMatch ? sideMatch[1].toUpperCase() : 'unknown';
+        incomingBySide[side].push(m);
+      });
+      ['A','B','unknown'].forEach(side => {
+        if (incomingBySide[side].length === 0) return;
+        const sideLabel = side === 'unknown' ? 'Incoming' : `Side ${side} Incoming`;
+        slotsHTML += `<div style="font:700 8px var(--font-mono);color:#27a060;text-transform:uppercase;letter-spacing:.05em;margin:5px 0 3px">${sideLabel}</div>`;
+        incomingBySide[side].forEach(m => {
+          const c = getCage(m.cageId); if (!c) return;
+          slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #4aad72;background:#f0faf4;margin-bottom:2px;display:flex;align-items:center;gap:4px;">
+            <span style="color:#27a060;font-weight:800;margin-right:2px">←</span>
+            <span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
+            <span style="color:var(--text-muted);margin-left:3px">${c.height}m</span>
+          </div>`;
+        });
       });
     }
 
