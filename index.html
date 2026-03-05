@@ -5067,6 +5067,21 @@ function renderMovementsMap() {
       }
     });
 
+    // Show cages planned to move INTO this RMD slot (frame-to-rmd) that aren't already in an RMD slot shown above
+    const existingCageIds = new Set(['cage1','cage2','cage3','cage4'].flatMap(sk => ['A','B'].map(side => r[side][sk])).filter(Boolean));
+    const incomingCages = movesForRmd.filter(m => m.typeKey === 'frame-to-rmd' && m.cageId && !existingCageIds.has(m.cageId));
+    if (incomingCages.length > 0) {
+      slotsHTML += `<div style="font:700 8px var(--font-mono);color:var(--green);text-transform:uppercase;letter-spacing:.05em;margin:5px 0 3px">Incoming</div>`;
+      incomingCages.forEach(m => {
+        const c = getCage(m.cageId); if (!c) return;
+        slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #4aad72;background:#f0faf4;margin-bottom:2px;display:flex;align-items:center;gap:4px;">
+          <span style="color:#27a060;font-weight:800;margin-right:2px">←</span>
+          <span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
+          <span style="color:var(--text-muted);margin-left:3px">${c.height}m</span>
+        </div>`;
+      });
+    }
+
     const border = isActive ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);' : 'border:1px solid var(--border);';
     return `<div id="mvr-${rmdNum}" style="background:var(--bg-card);${border}border-radius:8px;padding:9px 11px;min-width:145px;flex:0 0 auto;">
       <div style="font:700 13px var(--font-mono);color:${isActive?'var(--accent)':'var(--text-primary)'};margin-bottom:1px;">RMD-${rmdNum}</div>
