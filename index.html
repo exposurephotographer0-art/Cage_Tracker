@@ -2655,7 +2655,7 @@ function renderPlanner() {
   STATE.cages.forEach(c => {
     if (c.departureDate && c.location === 'facility') {
       if (!depByDay[c.departureDate]) depByDay[c.departureDate] = [];
-      depByDay[c.departureDate].push(c.name);
+      depByDay[c.departureDate].push(c);
     }
   });
 
@@ -2700,7 +2700,7 @@ function renderPlanner() {
     return `<div class="week-day ${isToday?'today':''} ${isWeekend&&!hasMoves?'weekend':''} ${hasMoves?'has-moves':''}">
       <div class="week-day-hdr">${fmtShort(day)}</div>
       ${pending>0 ? `<div class="week-move-count ${pending>MAX_MOVES?'over-limit':''}" style="color:${pending>MAX_MOVES?'var(--red)':'var(--green)'}">${pending} moves${pending>MAX_MOVES?' ⚠ OVER':''}</div>` : ''}
-      ${departures.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Cage ${n} leaves facility">🚚 ${esc(n)}</div>`).join('')}
+      ${departures.map(c=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Cage ${esc(c.name)} leaves facility — ${c.width}m wide · ${hCat(c.height)} · ${lCat(c.length)}">🚚 <strong>${esc(c.name)}</strong> <span style="opacity:0.75">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)}</span></div>`).join('')}
       ${frameReturns.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#ecfeff;color:#0e7490;border:1px solid #a5f3fc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Frame ${n} expected back">🚢 ${esc(n)} returns</div>`).join('')}
       ${btLoads.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Boat loaded: ${n}">⬇ ${esc(n)}</div>`).join('')}
       ${btDeparts.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#dcfce7;color:#166534;border:1px solid #86efac;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Boat departs: ${n}">⛵ ${esc(n)}</div>`).join('')}
