@@ -4997,12 +4997,20 @@ function renderMovementsMap() {
     if (m.rmdSlot) return m.rmdSlot;
     if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-to-rmd') {
       const cage = getCage(m.cageId);
-      if (cage && cage.location === 'rmd' && cage.locationDetail) return cage.locationDetail;
+      if (cage && cage.location === 'rmd' && cage.locationDetail) {
+        // locationDetail is like "RMD-04A" — extract just "4A"
+        const detailMatch = String(cage.locationDetail).match(/(\d+)\s*([ABab]?)\s*$/);
+        if (detailMatch) return String(parseInt(detailMatch[1], 10)) + (detailMatch[2] || '');
+        return cage.locationDetail;
+      }
     }
     return '';
   }
 
-  const activeRmds   = new Set(filtered.map(m=>resolveRmdSlot(m)).filter(Boolean).map(s=>String(s).replace(/[ABab]$/,'')));
+  const activeRmds   = new Set(filtered.map(m=>resolveRmdSlot(m)).filter(Boolean).map(s=>{
+    const match = String(s).match(/(\d+)/);
+    return match ? String(parseInt(match[1],10)) : String(s).replace(/[ABab]$/,'');
+  }));
 
   // Helper: resolve frameId for a movement (handles old data where frame-to-rmd has no frameId)
   function resolveFrameId(m) {
@@ -5022,6 +5030,8 @@ function renderMovementsMap() {
   }
 
   const activeFrames = new Set(filtered.map(m => resolveFrameId(m)).filter(Boolean));
+  // Also include srcFrameId for frame-to-frame movements so the source frame card is rendered
+  filtered.forEach(m => { if (m.typeKey === 'frame-to-frame' && m.srcFrameId) activeFrames.add(m.srcFrameId); });
 
   // ── RMD cards HTML ──
   function buildRmdCard(rmdNum) {
@@ -5171,12 +5181,28 @@ function renderMovementsMap() {
     if (!rmdSlot && (m.typeKey === 'frame-to-rmd' || m.typeKey === 'rmd-to-frame')) {
       const cage = getCage(m.cageId);
       if (cage && cage.location === 'rmd' && cage.locationDetail) {
-        rmdSlot = cage.locationDetail; // e.g. "7b" → will be cleaned to "7"
+        // locationDetail is like "RMD-04A" or "RMD-7B" — extract just "4A" or "7B"
+        const detailMatch = String(cage.locationDetail).match(/(\d+)\s*([ABab]?)\s*$/);
+        if (detailMatch) {
+          rmdSlot = String(parseInt(detailMatch[1], 10)) + (detailMatch[2] || '');
+        } else {
+          rmdSlot = cage.locationDetail;
+        }
+      }
+    }
+    // Resolve srcFrameId for frame-to-frame if missing
+    let srcFrameId = m.srcFrameId || '';
+    if (!srcFrameId && m.typeKey === 'frame-to-frame' && m.cageId) {
+      const cage = getCage(m.cageId);
+      if (cage && cage.location === 'frame') {
+        const f = STATE.frames.find(fr => fr.cages.includes(m.cageId));
+        if (f) srcFrameId = f.id;
       }
     }
     return {
       id:m.id, typeKey:m.typeKey, cageId:m.cageId,
       rmdSlot:rmdSlot, frameId:frameId,
+      srcFrameId:srcFrameId,
       description:m.description, date:m.date,
     };
   });
@@ -5399,9 +5425,15 @@ function mvRedraw() {
   svg.appendChild(defs);
 
   // Count per node for offset spreading
+  // Helper to extract just the RMD number from rmdSlot (handles "3A", "RMD-04A", etc.)
+  function cleanRk(slot) {
+    const s = String(slot||'').replace(/[ABab]$/,'');
+    const m = s.match(/(\d+)/);
+    return m ? String(parseInt(m[1],10)) : s;
+  }
   const rET={}, fET={}, fXT={}, rNT={};
   MOVES.forEach(m => {
-    const rk = String(m.rmdSlot||'').replace(/[ABab]$/,'');
+    const rk = cleanRk(m.rmdSlot);
     const fk = String(m.frameId||'');
     if (m.typeKey === 'rmd-to-frame') { rET[rk]=(rET[rk]||0)+1; fET[fk]=(fET[fk]||0)+1; }
     if (m.typeKey === 'frame-to-rmd') { fXT[fk]=(fXT[fk]||0)+1; rNT[rk]=(rNT[rk]||0)+1; }
@@ -5415,7 +5447,7 @@ function mvRedraw() {
     const num = idx + 1;
 
     if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-to-rmd') {
-      const rk = String(m.rmdSlot||'').replace(/[ABab]$/,'');
+      const rk = cleanRk(m.rmdSlot);
       const fk = String(m.frameId||'');
       const rPos = getPos('mvr-' + rk);
       const fPos = getPos('mvf-' + fk);
@@ -5571,35 +5603,65 @@ function mvRedraw() {
 
       // Arrow from Boat box → Frame card (planned frame-return-from-client movement)
       const fPos = getPos('mvf-' + fk);
-      if (!boatPos || !fPos) return;
-      const sx = boatPos.cx;
-      const sy = boatPos.bottom;
-      const ex = fPos.cx;
-      const ey = fPos.top;
-      const gap = Math.abs(ey - sy);
-      const cpOff = Math.max(gap * 0.35, 40);
+      const frameZonePos = getPos('mv-frame-zone');
       // Add marker for this colour if not already added
       if (!document.getElementById('arrow-frame-return-from-client')) {
         const mk = svgEl('marker', { id:'arrow-frame-return-from-client', markerWidth:'10', markerHeight:'8', refX:'9', refY:'4', orient:'auto', markerUnits:'userSpaceOnUse' });
         mk.appendChild(svgEl('polygon', { points:'0,0 10,4 0,8', fill:'#0e7490' }));
         svg.querySelector('defs').appendChild(mk);
       }
-      const bPath = svgEl('path', {
-        d: `M${sx},${sy} C${sx},${sy+cpOff} ${ex},${ey-cpOff} ${ex},${ey}`,
-        stroke: '#0e7490', 'stroke-width': '2.5', fill: 'none',
-        'stroke-linecap': 'round', 'stroke-dasharray': '7,4',
-        'marker-end': 'url(#arrow-frame-return-from-client)'
-      });
-      svg.appendChild(bPath);
-      // Label at midpoint
-      const mt2=0.5;
-      const lbx=(1-mt2)**3*sx+3*(1-mt2)**2*mt2*sx+3*(1-mt2)*mt2**2*ex+mt2**3*ex;
-      const lby=(1-mt2)**3*sy+3*(1-mt2)**2*mt2*(sy+cpOff)+3*(1-mt2)*mt2**2*(ey-cpOff)+mt2**3*ey;
-      if (cLabel) {
+      // If the frame card exists in the frames zone, draw arrow to it
+      if (fPos && (boatFramePos || boatPos)) {
+        const refSrc = boatFramePos || boatPos;
+        const sx = refSrc.cx;
+        const sy = refSrc.bottom;
+        const ex = fPos.cx;
+        const ey = fPos.top;
+        const gap = Math.abs(ey - sy);
+        const cpOff = Math.max(gap * 0.35, 40);
+        const bPath = svgEl('path', {
+          d: `M${sx},${sy} C${sx},${sy+cpOff} ${ex},${ey-cpOff} ${ex},${ey}`,
+          stroke: '#0e7490', 'stroke-width': '2.5', fill: 'none',
+          'stroke-linecap': 'round', 'stroke-dasharray': '7,4',
+          'marker-end': 'url(#arrow-frame-return-from-client)'
+        });
+        svg.appendChild(bPath);
+        const mt2=0.5;
+        const lbx=(1-mt2)**3*sx+3*(1-mt2)**2*mt2*sx+3*(1-mt2)*mt2**2*ex+mt2**3*ex;
+        const lby=(1-mt2)**3*sy+3*(1-mt2)**2*mt2*(sy+cpOff)+3*(1-mt2)*mt2**2*(ey-cpOff)+mt2**3*ey;
         const fr = getFrame(m.frameId);
-        const lbl = fr ? fr.name : cLabel;
-        const lb1 = svgEl('text',{x:lbx+14,y:lby,fill:'#fff','font-size':'9','font-weight':'bold','font-family':'monospace','text-anchor':'middle',stroke:'#fff','stroke-width':'3','paint-order':'stroke'}); lb1.textContent=lbl; svg.appendChild(lb1);
-        const lb2 = svgEl('text',{x:lbx+14,y:lby,fill:'#0e7490','font-size':'9','font-weight':'bold','font-family':'monospace','text-anchor':'middle'}); lb2.textContent=lbl; svg.appendChild(lb2);
+        const lbl = fr ? fr.name : (cLabel || '');
+        if (lbl) {
+          const lb1 = svgEl('text',{x:lbx+14,y:lby,fill:'#fff','font-size':'9','font-weight':'bold','font-family':'monospace','text-anchor':'middle',stroke:'#fff','stroke-width':'3','paint-order':'stroke'}); lb1.textContent=lbl; svg.appendChild(lb1);
+          const lb2 = svgEl('text',{x:lbx+14,y:lby,fill:'#0e7490','font-size':'9','font-weight':'bold','font-family':'monospace','text-anchor':'middle'}); lb2.textContent=lbl; svg.appendChild(lb2);
+        }
+      }
+      // If frame card not in facility zone, draw dashed arrow from boat box/card down toward frame zone
+      else if (boatFramePos || boatPos) {
+        const refSrc = boatFramePos || boatPos;
+        const targetPos = frameZonePos || facilityPos;
+        if (targetPos) {
+          const sx = refSrc.cx;
+          const sy = refSrc.bottom + 4;
+          const ex = targetPos.cx;
+          const ey = targetPos.top;
+          const gap = Math.abs(ey - sy);
+          const cpOff = Math.max(gap * 0.35, 40);
+          const bPath = svgEl('path', {
+            d: `M${sx},${sy} C${sx},${sy+cpOff} ${ex},${ey-cpOff} ${ex},${ey}`,
+            stroke: '#0e7490', 'stroke-width': '2.5', fill: 'none',
+            'stroke-linecap': 'round', 'stroke-dasharray': '7,4',
+            'marker-end': 'url(#arrow-frame-return-from-client)'
+          });
+          svg.appendChild(bPath);
+          const fr = getFrame(m.frameId);
+          const lbl = fr ? fr.name + ' ↩' : (cLabel || '');
+          if (lbl) {
+            const mx = (sx + ex)/2, my = (sy + ey)/2 - 8;
+            const lb1 = svgEl('text',{x:mx,y:my,fill:'#fff','font-size':'9','font-weight':'bold','font-family':'monospace','text-anchor':'middle',stroke:'#fff','stroke-width':'3','paint-order':'stroke'}); lb1.textContent=lbl; svg.appendChild(lb1);
+            const lb2 = svgEl('text',{x:mx,y:my,fill:'#0e7490','font-size':'9','font-weight':'bold','font-family':'monospace','text-anchor':'middle'}); lb2.textContent=lbl; svg.appendChild(lb2);
+          }
+        }
       }
 
     } else if (m.typeKey === 'facility-to-frame' || m.typeKey === 'frame-fix-shipping') {
