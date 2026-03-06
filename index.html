@@ -615,6 +615,8 @@ function recordLocationChange(cage, newLocation, newDetail) {
 function hCat(h) { return h < H_SHORT ? 'Short' : h <= H_MED ? 'Medium' : 'Tall'; }
 function lCat(l) { return l < 6.5 ? 'Stumpy' : 'Long'; }
 function hBadge(h) { const c = hCat(h); return c === 'Short' ? 'green' : c === 'Medium' ? 'yellow' : 'red'; }
+function cageLabel(c) { return `${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
+function cageLabelRaw(c) { return `${c.name} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
 function locBadge(l) { return {facility:'blue', rmd:'green', frame:'orange', shipped:'purple'}[l] || 'accent'; }
 function locLabel(c) {
   if (c.location === 'facility') return 'In Facility';
@@ -1545,7 +1547,7 @@ function renderDashboard() {
       return `<div class="rmd-slot" onclick="toggleShipPref('${cage.id}')" style="cursor:pointer;${slotBg}" title="${cage.shippingPreference ? 'Click to remove shipping preference' : 'Click to set shipping preference'}">
         <span class="rmd-slot-label">${posLabel}</span>
         <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${nameColor}">${esc(cage.name)}${cage.shippingPreference ? ' ★' : ''}</span><span class="rmd-cage-detail" style="${detailColor}">${cage.width}m · ${lCat(cage.length)} · ${hCat(cage.height)}</span></span>
+          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${nameColor}">${esc(cage.name)}${cage.shippingPreference ? ' ★' : ''}</span><span class="rmd-cage-detail" style="${detailColor}">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</span></span>
         </div>
       </div>`;
     } else {
@@ -1734,7 +1736,7 @@ function renderDashboardFrames() {
           const depColor = daysLeft !== null && daysLeft <= 3 ? 'var(--red)' : 'var(--orange)';
           return `<div style="font-size:11px;padding:3px 0;display:flex;justify-content:space-between;align-items:center">
             <span style="font-weight:600;font-family:var(--font-mono);${shadeBg}">${esc(c.name)}${shipLabel}</span>
-            <span style="color:${dep ? depColor : 'var(--text-muted)'}">${c.width}m · ${lCat(c.length)} · ${hCat(c.height)}${depStr}</span>
+            <span style="color:${dep ? depColor : 'var(--text-muted)'}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t${depStr}</span>
           </div>`;
         }).join('')
       : '<div style="font-size:11px;color:var(--text-muted);font-style:italic">No cages loaded</div>';
@@ -2640,7 +2642,7 @@ function renderFrames() {
       const _bg = _shade ? shipmentShadeBg(_shade)+'border-radius:4px;padding:2px 6px;display:flex;justify-content:space-between;align-items:center;' : (c.shippingPreference ? shipPrefSlotBg(c)+'border-radius:4px;padding:2px 6px;display:flex;justify-content:space-between;align-items:center;' : '');
       const _nc = shipmentShadeNameColor(_shade) || shipPrefNameColor(c);
       return `<div class="frame-cage-item" style="${_bg}">
-        <span style="${_nc}">${esc(c.name)} (${c.width}m, ${c.weight}t)${needsWaler(c) ? ' <span style="color:var(--yellow);font-size:10px" title="Cage < 6.5m needs waler for shipping">⚠ waler req.</span>' : ''}</span>
+        <span style="${_nc}">${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t${needsWaler(c) ? ' <span style="color:var(--yellow);font-size:10px" title="Cage < 6.5m needs waler for shipping">⚠ waler req.</span>' : ''}</span>
         ${f.location==='facility'&&!f.fixedForShipping ? `<button class="remove-btn" onclick="removeCageFromFrame('${f.id}','${c.id}')">×</button>` : ''}
       </div>`;
     }).join('');
@@ -2873,7 +2875,7 @@ function renderRMD() {
       return `<div class="rmd-slot" style="${_tBg}">
         <span class="rmd-slot-label">${posLabel}</span>
         <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${shipmentShadeNameColor(_ts)||shipPrefNameColor(cage)}">${esc(cage.name)}</span><span class="rmd-cage-detail" style="${shipmentShadeDetailColor(_ts)}">${cage.height}m · ${cage.length}m</span></span>
+          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${shipmentShadeNameColor(_ts)||shipPrefNameColor(cage)}">${esc(cage.name)}</span><span class="rmd-cage-detail" style="${shipmentShadeDetailColor(_ts)}">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</span></span>
           <button class="remove-btn" onclick="removeFromRMD(${idx},'${side}','${slot}')">×</button>
         </div>
       </div>`;
@@ -2948,7 +2950,7 @@ function renderRMD() {
                   const _s = shipmentShadeClass(cage2, _rmdTabShipDays);
                   const _b = _s ? shipmentShadeBg(_s)+'border-radius:4px;padding:1px 4px;' : (cage2.shippingPreference ? shipPrefSlotBg(cage2)+'border-radius:4px;padding:1px 4px;' : '');
                   const _nc = shipmentShadeNameColor(_s) || shipPrefNameColor(cage2);
-                  return '<div class="rmd-slot" style="'+_b+'"><span class="rmd-slot-label">'+posLabel+'</span><div class="rmd-slot-content"><span class="rmd-cage-info"><span class="rmd-cage-name" style="'+_nc+'">'+esc(cage2.name)+'</span><span class="rmd-cage-detail" style="'+shipmentShadeDetailColor(_s)+'">'+cage2.height+'m·'+cage2.length+'m</span></span><button class="remove-btn" onclick="removeFromRMD('+idx2+',\''+side+'\',\''+slot+'\')">&#215;</button></div></div>';
+                  return '<div class="rmd-slot" style="'+_b+'"><span class="rmd-slot-label">'+posLabel+'</span><div class="rmd-slot-content"><span class="rmd-cage-info"><span class="rmd-cage-name" style="'+_nc+'">'+esc(cage2.name)+'</span><span class="rmd-cage-detail" style="'+shipmentShadeDetailColor(_s)+'">'+cage2.width+'m·'+hCat(cage2.height)+'·'+lCat(cage2.length)+'·'+cage2.weight+'t</span></span><button class="remove-btn" onclick="removeFromRMD('+idx2+',\''+side+'\',\''+slot+'\')">&#215;</button></div></div>';
                 } else {
                   const used2 = groupSlots.filter(s=>s!==slot).reduce((sum,s)=>{const c2=sObj2[s]?getCage(sObj2[s]):null;return sum+(c2?c2.length||0:0);},0);
                   const rem2 = (RMD_MAX_LENGTH-used2).toFixed(1);
@@ -3308,7 +3310,7 @@ function renderPlanner() {
     return `<div class="week-day ${isToday?'today':''} ${isWeekend&&!hasMoves?'weekend':''} ${hasMoves?'has-moves':''}">
       <div class="week-day-hdr">${fmtShort(day)}</div>
       ${pending>0 ? `<div class="week-move-count ${pending>MAX_MOVES?'over-limit':''}" style="color:${pending>MAX_MOVES?'var(--red)':'var(--green)'}">${pending} moves${pending>MAX_MOVES?' ⚠ OVER':''}</div>` : ''}
-      ${departures.map(c=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Cage ${esc(c.name)} leaves facility — ${c.width}m wide · ${hCat(c.height)} · ${lCat(c.length)}">🚚 <strong>${esc(c.name)}</strong> <span style="opacity:0.75">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)}</span></div>`).join('')}
+      ${departures.map(c=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Cage ${esc(c.name)} leaves facility — ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t">🚚 <strong>${esc(c.name)}</strong> <span style="opacity:0.75">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</span></div>`).join('')}
       ${frameReturns.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#ecfeff;color:#0e7490;border:1px solid #a5f3fc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Frame ${n} expected back">🚢 ${esc(n)} returns</div>`).join('')}
       ${btLoads.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Boat loaded: ${n}">⬇ ${esc(n)}</div>`).join('')}
       ${btDeparts.map(n=>`<div style="font-size:9px;padding:2px 4px;margin-bottom:1px;border-radius:3px;background:#dcfce7;color:#166534;border:1px solid #86efac;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="Boat departs: ${n}">⛵ ${esc(n)}</div>`).join('')}
@@ -3386,7 +3388,7 @@ function renderPlanner() {
       const _pNc = shipmentShadeNameColor(_ps) || 'color:var(--text-primary)';
       return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;${_pBg};border-radius:4px;margin-bottom:2px">
         <span style="font:600 11px var(--font-mono);${_pNc}">${esc(s.c.name)}</span>
-        <span style="font-size:10px;${shipmentShadeDetailColor(_ps)||'color:var(--text-muted)'};">${s.lbl} · ${s.c.height}m · ${hCat(s.c.height)}</span>
+        <span style="font-size:10px;${shipmentShadeDetailColor(_ps)||'color:var(--text-muted)'};">${s.lbl} · ${s.c.width}m · ${hCat(s.c.height)} · ${lCat(s.c.length)} · ${s.c.weight}t</span>
         <span style="font-size:9px;background:#fdf5dc;color:var(--yellow);border:1px solid #e0d8a0;border-radius:3px;padding:1px 5px;margin-left:4px" title="Minimum frame size needed for shipping">▣ ${minFrame}m${walerNote}</span>
       </div>`;
     }).join('');
@@ -3401,7 +3403,7 @@ function renderPlanner() {
     let cageChips = fCages.map(c=>{
       const _fs = shipmentShadeClass(c, _plannerShipDays);
       const _fBg = _fs ? 'background:'+(_fs==='next'?'#3b1d6e':'#c8b8e8')+';color:'+(_fs==='next'?'#e0ccff':'#4a2a7a')+';border-radius:3px;padding:1px 5px;' : '';
-      return `<span style="font-size:11px;${_fBg}">${esc(c.name)} (${c.weight}t)</span>`;
+      return `<span style="font-size:11px;${_fBg}">${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</span>`;
     }).join(', ');
     return `<div class="planner-frame-item">
       <span style="font-weight:700;font-family:var(--font-mono)">${esc(f.name)}</span>
@@ -5678,8 +5680,8 @@ function renderMovementsMap() {
           const arrow = mvOut ? '<span style="color:#c08520;font-weight:800;margin-right:4px">→</span>'
                       : mvIn  ? '<span style="color:#27a060;font-weight:800;margin-right:4px">←</span>' : '';
           slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;background:var(--bg-input);margin-bottom:2px;${bg}">
-            <div style="display:flex;align-items:center;">${arrow}<span style="font:600 10px var(--font-mono)">${esc(cage.name)}</span><span style="color:var(--text-muted);margin-left:4px">${cage.width}m</span></div>
-            <div style="color:var(--text-muted);font-size:9px;padding-left:${arrow?'14':'0'}px">${hCat(cage.height)} · ${lCat(cage.length)}</div>
+            <div style="display:flex;align-items:center;">${arrow}<span style="font:600 10px var(--font-mono)">${esc(cage.name)}</span></div>
+            <div style="color:var(--text-muted);font-size:9px;padding-left:${arrow?'14':'0'}px">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</div>
           </div>`;
         }
       });
@@ -5707,8 +5709,8 @@ function renderMovementsMap() {
         incomingBySide[side].forEach(m => {
           const c = getCage(m.cageId); if (!c) return;
           slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #4aad72;background:#f0faf4;margin-bottom:2px;">
-            <div style="display:flex;align-items:center;gap:3px;"><span style="color:#27a060;font-weight:800;margin-right:2px">←</span><span style="font:600 10px var(--font-mono)">${esc(c.name)}</span><span style="color:var(--text-muted);margin-left:4px">${c.width}m</span></div>
-            <div style="color:var(--text-muted);font-size:9px;padding-left:14px">${hCat(c.height)} · ${lCat(c.length)}</div>
+            <div style="display:flex;align-items:center;gap:3px;"><span style="color:#27a060;font-weight:800;margin-right:2px">←</span><span style="font:600 10px var(--font-mono)">${esc(c.name)}</span></div>
+            <div style="color:var(--text-muted);font-size:9px;padding-left:14px">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
           </div>`;
         });
       });
@@ -5741,16 +5743,16 @@ function renderMovementsMap() {
     fCages.forEach(c=>{
       const out = outIds.includes(c.id);
       html += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid ${out?'#f5a742':'var(--border)'};background:${out?'#fff7ed':'var(--bg-input)'};margin-bottom:2px;">
-        <div style="display:flex;align-items:center;gap:2px;">${out?'<span style="color:#c08520;font-weight:800">→</span>':''}<span style="font:600 10px var(--font-mono)">${esc(c.name)}</span><span style="color:var(--text-muted);margin-left:3px">${c.width}m</span></div>
-        <div style="color:var(--text-muted);font-size:9px;padding-left:${out?'13':'0'}px">${hCat(c.height)} · ${lCat(c.length)}</div>
+        <div style="display:flex;align-items:center;gap:2px;">${out?'<span style="color:#c08520;font-weight:800">→</span>':''}<span style="font:600 10px var(--font-mono)">${esc(c.name)}</span></div>
+        <div style="color:var(--text-muted);font-size:9px;padding-left:${out?'13':'0'}px">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
       </div>`;
     });
     inIds.forEach(cid=>{
       const c=getCage(cid); if(!c)return;
       if(fCages.find(x=>x.id===cid))return; // already shown
       html+=`<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #4aad72;background:#f0faf4;margin-bottom:2px;">
-        <div style="display:flex;align-items:center;gap:2px;"><span style="color:#27a060;font-weight:800">←</span><span style="font:600 10px var(--font-mono)">${esc(c.name)}</span><span style="color:var(--text-muted);margin-left:3px">${c.width}m</span></div>
-        <div style="color:var(--text-muted);font-size:9px;padding-left:13px">${hCat(c.height)} · ${lCat(c.length)}</div>
+        <div style="display:flex;align-items:center;gap:2px;"><span style="color:#27a060;font-weight:800">←</span><span style="font:600 10px var(--font-mono)">${esc(c.name)}</span></div>
+        <div style="color:var(--text-muted);font-size:9px;padding-left:13px">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
       </div>`;
     });
     if(!html) html='<div style="font-size:10px;color:var(--text-muted);font-style:italic">empty</div>';
