@@ -1040,96 +1040,195 @@ function renderRMDHeatmap() {
 }
 
 function renderFrameReturnsStat() {
-  // Frames with an expected return date (returnDate set), not already at facility
-  // ALSO include frames that returned this week (returnedAt set within current week)
-  const today = new Date();
-  // Week boundaries: Mon–Sun of current week
-  const dayOfWeek = today.getDay(); // 0=Sun
-  const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const weekStart = new Date(today); weekStart.setDate(today.getDate() + mondayOffset); weekStart.setHours(0,0,0,0);
-  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 6); weekEnd.setHours(23,59,59,999);
+  const todayD = new Date();
+  const todayISO = todayStr();
 
-  // Next week
-  const nextWeekStart = new Date(weekStart); nextWeekStart.setDate(weekStart.getDate() + 7);
-  const nextWeekEnd = new Date(weekEnd); nextWeekEnd.setDate(weekEnd.getDate() + 7);
+  // ── Build a unified timeline of "slots" ──────────────────────────────────
+  // Each slot is either a trip (with a known unload/return date) or a calendar week.
+  // We show a sliding window centred on the current week (slot 0).
 
-  const pendingFrames = STATE.frames.filter(f => f.returnDate && f.location !== 'facility');
-  const returnedThisWeek = STATE.frames.filter(f => f.returnedAt && f.location === 'facility' && (() => {
-    const d = new Date(f.returnedAt + 'T12:00:00');
-    return d >= weekStart && d <= weekEnd;
-  })());
+  // Collect all trips sorted by unload/return date
+  const trips = [...(STATE.boatTrips || [])].sort((a, b) => {
+    const da = a.unloadDate || a.returnDate || a.departDate || '';
+    const db = b.unloadDate || b.returnDate || b.departDate || '';
+    return da.localeCompare(db);
+  });
 
-  if (pendingFrames.length === 0 && returnedThisWeek.length === 0) return '';
+  // Current week Mon start
+  const dow = todayD.getDay();
+  const mondayOff = dow === 0 ? -6 : 1 - dow;
+  function getMondayOf(weekOffset) {
+    const d = new Date(todayD);
+    d.setDate(todayD.getDate() + mondayOff + weekOffset * 7);
+    d.setHours(0,0,0,0);
+    return d;
+  }
+  function isoDate(d) { return d.toISOString().slice(0,10); }
 
-  function groupByWidth(frames) {
-    const groups = {};
-    frames.forEach(f => {
-      const key = f.width;
-      if (!groups[key]) groups[key] = 0;
-      groups[key]++;
+  // Build slots: past trips (historical) + calendar weeks for future/present
+  // A "trip slot" covers the trip's unload week. A "week slot" covers a Mon–Sun.
+  // We deduplicate: if a trip's unload date falls in a calendar week, the trip takes priority.
+
+  // First figure out the range: earliest trip unload → +8 future weeks
+  const tripSlots = trips
+    .filter(t => t.unloadDate || t.returnDate)
+    .map(t => {
+      const unload = t.unloadDate || t.returnDate;
+      const d = new Date(unload + 'T12:00:00');
+      const wMon = new Date(d);
+      const wd = wMon.getDay(); wMon.setDate(d.getDate() + (wd === 0 ? -6 : 1 - wd)); wMon.setHours(0,0,0,0);
+      const wSun = new Date(wMon); wSun.setDate(wMon.getDate() + 6); wSun.setHours(23,59,59,999);
+      return { type: 'trip', trip: t, unloadDate: unload, weekMon: wMon, weekSun: wSun,
+               label: tripLabel(t), isoMon: isoDate(wMon) };
     });
-    return Object.entries(groups).sort((a,b) => parseFloat(a[0]) - parseFloat(b[0]));
+
+  // Build calendar week slots for current week ± 8 weeks, skipping weeks already covered by a trip
+  const tripWeekISOs = new Set(tripSlots.map(s => s.isoMon));
+  const calSlots = [];
+  for (let wo = -8; wo <= 8; wo++) {
+    const mon = getMondayOf(wo);
+    const isoMon = isoDate(mon);
+    if (tripWeekISOs.has(isoMon)) continue; // trip takes this week
+    const sun = new Date(mon); sun.setDate(mon.getDate() + 6); sun.setHours(23,59,59,999);
+    calSlots.push({ type: 'week', weekOffset: wo, weekMon: mon, weekSun: sun, isoMon });
   }
 
-  function groupLabel(groups) {
-    if (groups.length === 0) return '<span style="color:var(--text-muted);font-style:italic">none</span>';
-    return groups.map(([w, n]) =>
-      `<span style="display:inline-block;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:2px 10px;margin:1px 3px;font:600 12px var(--font-mono);color:var(--purple)">${n}× ${w}m</span>`
+  // Merge and sort all slots by weekMon
+  const allSlots = [...tripSlots, ...calSlots].sort((a, b) => a.isoMon.localeCompare(b.isoMon));
+  if (allSlots.length === 0) return '';
+
+  // Find current slot index (the slot whose week contains today)
+  const todayTs = todayD.getTime();
+  let currentIdx = allSlots.findIndex(s => s.weekMon.getTime() <= todayTs && s.weekSun.getTime() >= todayTs);
+  if (currentIdx < 0) currentIdx = allSlots.findIndex(s => s.weekMon.getTime() > todayTs) || 0;
+  if (currentIdx < 0) currentIdx = 0;
+
+  // Apply slide offset — clamped to valid range
+  const targetIdx = Math.max(0, Math.min(allSlots.length - 1, currentIdx + frameReturnsSlide));
+  const slot = allSlots[targetIdx];
+  const isCurrentWeek = slot.isoMon === isoDate(getMondayOf(0));
+  const isPast = slot.weekSun.getTime() < todayD.getTime();
+  const isFuture = slot.weekMon.getTime() > todayD.getTime();
+
+  // ── Frames for this slot ─────────────────────────────────────────────────
+  // "Expected": frames with returnDate in this slot's week (and still away)
+  // "Returned": frames that actually came back (returnedAt in this slot's week)
+  // If slot is a trip: also match by trip unloadDate exactly
+
+  function frameInSlot(f) {
+    const checkDate = f.returnDate || null;
+    if (!checkDate) return false;
+    const d = new Date(checkDate + 'T12:00:00');
+    return d >= slot.weekMon && d <= slot.weekSun;
+  }
+  function frameReturnedInSlot(f) {
+    if (!f.returnedAt) return false;
+    const d = new Date(f.returnedAt + 'T12:00:00');
+    return d >= slot.weekMon && d <= slot.weekSun;
+  }
+
+  const expectedFrames  = STATE.frames.filter(f => f.location !== 'facility' && frameInSlot(f));
+  const returnedFrames  = STATE.frames.filter(f => f.location === 'facility' && frameReturnedInSlot(f));
+  // For past slots, also include frames still away that were expected (overdue)
+  const overdueFrames   = isPast ? expectedFrames.filter(f => f.location !== 'facility') : [];
+  const confirmedBack   = returnedFrames.length;
+  const stillExpected   = expectedFrames.filter(f => f.location !== 'facility').length;
+  const allCount        = confirmedBack + stillExpected;
+
+  function groupByWidth(frames) {
+    const g = {};
+    frames.forEach(f => { g[f.width] = (g[f.width]||0)+1; });
+    return Object.entries(g).sort((a,b)=>parseFloat(a[0])-parseFloat(b[0]));
+  }
+  function widthPills(frames) {
+    if (!frames.length) return '<span style="color:var(--text-muted);font-style:italic;font-size:11px">none</span>';
+    return groupByWidth(frames).map(([w,n])=>
+      `<span style="display:inline-block;background:var(--bg-elevated);border:1px solid var(--border);border-radius:10px;padding:2px 9px;margin:1px 2px;font:600 11px var(--font-mono);color:var(--purple)">${n}× ${w}m</span>`
     ).join('');
   }
 
-  const thisWeek = pendingFrames.filter(f => {
-    const d = new Date(f.returnDate + 'T12:00:00');
-    return d >= weekStart && d <= weekEnd;
-  });
-  const nextWeek = pendingFrames.filter(f => {
-    const d = new Date(f.returnDate + 'T12:00:00');
-    return d >= nextWeekStart && d <= nextWeekEnd;
-  });
-  const later = pendingFrames.filter(f => {
-    const d = new Date(f.returnDate + 'T12:00:00');
-    return d > nextWeekEnd;
-  });
-  const overdue = pendingFrames.filter(f => {
-    const d = new Date(f.returnDate + 'T12:00:00');
-    return d < weekStart;
-  });
+  // ── Data source label ─────────────────────────────────────────────────────
+  const isLiveTrip  = slot.type === 'trip' && !isPast;
+  const isAudit     = slot.type === 'trip' && isPast && confirmedBack > 0;
+  const dataSource  = isAudit
+    ? `<span style="font:500 10px var(--font-mono);color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:4px;padding:1px 6px;margin-left:6px">📁 audit</span>`
+    : isLiveTrip
+    ? `<span style="font:500 10px var(--font-mono);color:#27a060;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;padding:1px 6px;margin-left:6px">● live</span>`
+    : '';
 
-  // Combine expected-this-week + already-returned-this-week for the "This Week" tile
-  const thisWeekAll = [...thisWeek, ...returnedThisWeek];
-  const thisWeekGroups = groupByWidth(thisWeekAll);
-  const nextWeekGroups = groupByWidth(nextWeek);
+  // ── Slot label ────────────────────────────────────────────────────────────
+  const sunD = slot.weekSun;
+  const monStr = `${slot.weekMon.getDate()} ${slot.weekMon.toLocaleString('en-GB',{month:'short'})}`;
+  const sunStr = `${sunD.getDate()} ${sunD.toLocaleString('en-GB',{month:'short'})}`;
+  const weekLabel = isCurrentWeek ? 'This Week' : isFuture ? `w/c ${monStr}` : `w/c ${monStr}`;
+  const slotTitle = slot.type === 'trip'
+    ? `↩ ${esc(slot.label)} — ${monStr}–${sunStr}` + (slot.trip.unloadDate ? ` (unloads ${fmt(slot.trip.unloadDate)})` : '')
+    : `${weekLabel} &nbsp;<span style="font-weight:400;font-size:11px;color:var(--text-muted)">${monStr} – ${sunStr}</span>`;
 
-  const totalReturning = pendingFrames.length;
+  const canPrev = targetIdx > 0;
+  const canNext = targetIdx < allSlots.length - 1;
 
-  return `<div class="card" style="margin-bottom:14px;border-color:${thisWeekAll.length > 0 ? '#a0c8e8' : 'var(--border)'}">
-    <div class="flex-between" style="margin-bottom:10px">
-      <div class="card-title" style="margin:0;color:var(--purple)">↩ Frames Returning from Client
-        <span style="font:400 11px var(--font-display);color:var(--text-muted);margin-left:8px">${totalReturning} frame${totalReturning!==1?'s':''} still expected</span>
+  // ── Determine border colour ───────────────────────────────────────────────
+  const borderCol = allCount > 0
+    ? (isCurrentWeek ? '#a0c8e8' : isPast && confirmedBack > 0 ? '#a0d8b0' : '#d8c8f0')
+    : 'var(--border)';
+
+  return `<div class="card" style="margin-bottom:14px;border-color:${borderCol}">
+    <!-- header row -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <div style="flex:1;min-width:0">
+        <div class="card-title" style="margin:0;color:var(--purple)">↩ Frames Returning from Client ${dataSource}</div>
       </div>
       <button class="btn btn-secondary btn-sm" onclick="switchTab('frames')">Manage Frames →</button>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
-      <div style="background:#f5f0fa;border:1px solid #d8c8f0;border-radius:8px;padding:12px">
-        <div style="font:700 10px var(--font-mono);color:var(--purple);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">This Week${returnedThisWeek.length > 0 ? ` <span style="font-weight:400;color:#27a060">(${returnedThisWeek.length} returned ✓)</span>` : ''}</div>
-        <div style="font:700 22px var(--font-mono);color:var(--purple);margin-bottom:6px">${thisWeekAll.length}</div>
-        <div>${groupLabel(thisWeekGroups)}</div>
+
+    <!-- slider nav -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <button class="btn btn-secondary btn-sm" onclick="frameReturnsSlide--;render()" ${canPrev?'':'disabled'} style="padding:3px 10px;font-size:16px;line-height:1">‹</button>
+      <div style="flex:1;text-align:center;font:700 13px var(--font-display);color:${isCurrentWeek?'var(--accent)':'var(--text-primary)'}">${slotTitle}</div>
+      <button class="btn btn-secondary btn-sm" onclick="frameReturnsSlide++;render()" ${canNext?'':'disabled'} style="padding:3px 10px;font-size:16px;line-height:1">›</button>
+    </div>
+
+    <!-- content tiles -->
+    ${allCount === 0 && !overdueFrames.length ? `<div class="empty-msg">No frame returns ${isPast ? 'recorded' : 'expected'} for this period</div>` : `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px">
+
+      <!-- confirmed returned -->
+      <div style="background:${confirmedBack>0?'#f0fdf4':'var(--bg-elevated)'};border:1px solid ${confirmedBack>0?'#86efac':'var(--border)'};border-radius:8px;padding:12px">
+        <div style="font:700 10px var(--font-mono);color:${confirmedBack>0?'#15803d':'var(--text-muted)'};text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">✓ Returned</div>
+        <div style="font:700 26px var(--font-mono);color:${confirmedBack>0?'#15803d':'var(--text-muted)'};margin-bottom:6px">${confirmedBack}</div>
+        <div>${widthPills(returnedFrames)}</div>
       </div>
+
+      <!-- expected / still to come -->
+      <div style="background:${stillExpected>0&&!isPast?'#f5f0fa':'var(--bg-elevated)'};border:1px solid ${stillExpected>0&&!isPast?'#d8c8f0':'var(--border)'};border-radius:8px;padding:12px">
+        <div style="font:700 10px var(--font-mono);color:${stillExpected>0&&isPast?'var(--red)':stillExpected>0?'var(--purple)':'var(--text-muted)'};text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">${isPast&&stillExpected>0?'⚠ Overdue':'⏳ Expected'}</div>
+        <div style="font:700 26px var(--font-mono);color:${stillExpected>0&&isPast?'var(--red)':stillExpected>0?'var(--purple)':'var(--text-muted)'};margin-bottom:6px">${stillExpected}</div>
+        <div>${widthPills(expectedFrames.filter(f=>f.location!=='facility'))}</div>
+      </div>
+
+      ${slot.type === 'trip' ? `
+      <!-- trip details -->
       <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:12px">
-        <div style="font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Next Week</div>
-        <div style="font:700 22px var(--font-mono);color:var(--text-secondary);margin-bottom:6px">${nextWeek.length}</div>
-        <div>${groupLabel(nextWeekGroups)}</div>
-      </div>
-      <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:12px">
-        <div style="font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">Later</div>
-        <div style="font:700 22px var(--font-mono);color:var(--text-muted);margin-bottom:6px">${later.length}</div>
-        <div style="font-size:11px;color:var(--text-muted)">${later.length > 0 ? later.slice(0,3).map(f=>`${f.name} (${f.width}m) — ${fmt(f.returnDate)}`).join(', ') + (later.length > 3 ? `…` : '') : '—'}</div>
-      </div>
-      ${overdue.length > 0 ? `<div style="background:#fce8e8;border:1px solid #e8b0b0;border-radius:8px;padding:12px">
-        <div style="font:700 10px var(--font-mono);color:var(--red);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">⚠ Overdue</div>
-        <div style="font:700 22px var(--font-mono);color:var(--red);margin-bottom:6px">${overdue.length}</div>
-        <div style="font-size:11px;color:var(--red)">${overdue.slice(0,3).map(f=>`${f.name} — ${fmt(f.returnDate)}`).join(', ')}${overdue.length > 3 ? '…' : ''}</div>
+        <div style="font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Trip Info</div>
+        <div style="font:600 12px var(--font-display);color:var(--text-primary);margin-bottom:4px">${esc(slot.trip.label||'Unnamed Trip')}</div>
+        ${slot.trip.departDate ? `<div style="font-size:11px;color:var(--text-muted)">Departs: <span style="color:var(--text-secondary);font-family:var(--font-mono)">${fmt(slot.trip.departDate)}</span></div>` : ''}
+        ${slot.trip.unloadDate ? `<div style="font-size:11px;color:var(--text-muted)">Unloads: <span style="color:#0e7490;font-family:var(--font-mono)">${fmt(slot.trip.unloadDate)}</span></div>` : ''}
+        ${slot.trip.notes ? `<div style="font-size:10px;color:var(--text-muted);margin-top:4px;font-style:italic">${esc(slot.trip.notes)}</div>` : ''}
       </div>` : ''}
+
+    </div>`}
+
+    <!-- dot nav indicator -->
+    <div style="display:flex;justify-content:center;gap:4px;margin-top:10px;flex-wrap:wrap;max-width:300px;margin-left:auto;margin-right:auto">
+      ${allSlots.map((s,i) => {
+        const isTarget = i === targetIdx;
+        const isCur = s.isoMon === isoDate(getMondayOf(0));
+        const isTrip = s.type === 'trip';
+        const col = isTarget ? 'var(--accent)' : isCur ? 'var(--purple)' : isTrip ? '#0e7490' : 'var(--border)';
+        const size = isTarget ? '8px' : isCur ? '7px' : '5px';
+        return `<div onclick="frameReturnsSlide=${i-currentIdx};render()" title="${s.type==='trip'?esc(s.label||'Trip'):s.isoMon}" style="width:${size};height:${size};border-radius:50%;background:${col};cursor:pointer;flex-shrink:0;transition:all .15s"></div>`;
+      }).join('')}
     </div>
   </div>`;
 }
@@ -3365,6 +3464,7 @@ function shiftWeek(dir) {
 // ═══════════════════════════════════════════════════════════════════════════════
 let shipFormOpen = false;
 let shipSelected = [];
+let frameReturnsSlide = 0; // 0 = current week, negative = past weeks/trips, positive = future
 
 // ── Boat Trip Diary state ────────────────────────────────────────────────────
 let btFormOpen = false;
