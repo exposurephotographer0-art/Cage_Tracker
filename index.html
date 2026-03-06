@@ -2486,7 +2486,7 @@ function updateFrameSuggestion(cageId) {
   }
 }
 
-function renderPlanner() {
+function buildPlanFormHTML() {
   const typeOpts = MOVE_TYPES.map(t=>`<option value="${t.value}" ${planFormType===t.value?'selected':''}>${t.label}</option>`).join('');
 
   // Build cage options based on movement type
@@ -2625,25 +2625,27 @@ function renderPlanner() {
     : planFormType === 'frame-return-from-client' ? 'Frame (returning from client)'
     : 'Frame';
 
-  let formHTML = '';
-  if (planFormOpen) {
-    const cageOnChange = planFormType === 'rmd-to-frame' ? 'onchange="updateFrameSuggestion(this.value)"' : '';
-    formHTML = `<div class="card" id="plan-form">
-      <div class="form-grid form-grid-3">
-        <div><label>Movement Type</label><select id="pf-type" onchange="onPlanTypeChange(this.value)">${typeOpts}</select></div>
-        ${planFormType !== 'frame-return-from-client' ? `<div><label>Cage</label><select id="pf-cage" ${cageOnChange}><option value="">Select cage...</option>${cageOpts}</select></div>` : '<div></div>'}
-        ${showFrame ? `<div><label>${frameLbl}</label><select id="pf-frame"><option value="">Select frame...</option>${frameOpts}</select></div>` : '<div id="pf-frame-placeholder"></div>'}
-        <div><label>Date</label><input id="pf-date" type="date" value="${todayStr()}"/></div>
-        <div><label>Shift</label><select id="pf-shift"><option value="day">Day Shift</option><option value="night">Night Shift</option></select></div>
-        ${showRmd ? `<div><label>RMD Slot (Suggested)</label><select id="pf-rmd"><option value="">Select slot...</option>${rmdSlotOpts}</select></div>` : '<div id="pf-rmd-placeholder"></div>'}
-        <div style="grid-column:span 3"><label>Notes</label><input id="pf-notes"/></div>
-      </div>
-      <div class="form-actions">
-        <button class="btn btn-primary" onclick="addMovement()">Add to Plan</button>
-        <button class="btn btn-secondary" onclick="planFormOpen=false;render()">Cancel</button>
-      </div>
-    </div>`;
-  }
+  if (!planFormOpen) return '';
+  const cageOnChange = planFormType === 'rmd-to-frame' ? 'onchange="updateFrameSuggestion(this.value)"' : '';
+  return `<div class="card" id="plan-form">
+    <div class="form-grid form-grid-3">
+      <div><label>Movement Type</label><select id="pf-type" onchange="onPlanTypeChange(this.value)">${typeOpts}</select></div>
+      ${planFormType !== 'frame-return-from-client' ? `<div><label>Cage</label><select id="pf-cage" ${cageOnChange}><option value="">Select cage...</option>${cageOpts}</select></div>` : '<div></div>'}
+      ${showFrame ? `<div><label>${frameLbl}</label><select id="pf-frame"><option value="">Select frame...</option>${frameOpts}</select></div>` : '<div id="pf-frame-placeholder"></div>'}
+      <div><label>Date</label><input id="pf-date" type="date" value="${todayStr()}"/></div>
+      <div><label>Shift</label><select id="pf-shift"><option value="day">Day Shift</option><option value="night">Night Shift</option></select></div>
+      ${showRmd ? `<div><label>RMD Slot (Suggested)</label><select id="pf-rmd"><option value="">Select slot...</option>${rmdSlotOpts}</select></div>` : '<div id="pf-rmd-placeholder"></div>'}
+      <div style="grid-column:span 3"><label>Notes</label><input id="pf-notes"/></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="addMovement()">Add to Plan</button>
+      <button class="btn btn-secondary" onclick="planFormOpen=false;render()">Cancel</button>
+    </div>
+  </div>`;
+}
+
+function renderPlanner() {
+  const formHTML = buildPlanFormHTML();
 
   // 2-week days
   const ws = new Date(planWeekStart + 'T12:00:00');
@@ -5375,9 +5377,10 @@ function renderMovementsMap() {
               <div class="card-title" style="margin-bottom:10px">Planned Movements</div>
               ${moveListHTML||'<div class="empty-msg">No movements match filter</div>'}
               <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
-                <button class="btn btn-primary" style="width:100%" onclick="switchTab('planner');setTimeout(()=>{planFormOpen=true;render();setTimeout(()=>{const el=document.getElementById('plan-form');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},80);},50)" title="Go to Planner and add a new movement">+ Plan Movements</button>
+                <button class="btn btn-primary" style="width:100%" onclick="planFormOpen=!planFormOpen;render()" title="Plan a new movement">+ Plan Movements</button>
               </div>
             </div>
+            ${planFormOpen ? buildPlanFormHTML() : ''}
             ${(() => {
               const leavingCages = STATE.cages
                 .filter(c => c.departureDate && (c.location === 'facility' || c.location === 'rmd' || c.location === 'frame'))
