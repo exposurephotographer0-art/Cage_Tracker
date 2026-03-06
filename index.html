@@ -2766,11 +2766,8 @@ async function updateFrameLoc(fid,loc) {
   const f=getFrame(fid);
   f.location=loc;
   if(loc!=='facility') f.fixedForShipping=false;
-  // When frame returns to facility, record the return timestamp and clear returnDate
-  if(loc==='facility') {
-    if (!f.returnedAt) f.returnedAt = todayStr(); // stamp actual return for dashboard stats
-    f.returnDate = null;
-  }
+  // Clear returnDate when frame returns to facility
+  if(loc==='facility') f.returnDate = null;
   if(loc!=='facility') {
     f.cages.forEach(cid=>{
       const c=getCage(cid);
@@ -4621,7 +4618,7 @@ function renderAnalytics() {
             ${(confirmedCount + plannedCount) > 0 ? (confirmedCount > 0 ? confirmedWeight : plannedWeight).toFixed(1) + 't' : '—'}
           </td>
           <td style="text-align:right;font-family:var(--font-mono)">
-            ${returnedFrames > 0 ? `<span style="color:#0e7490;font-weight:700">${returnedFrames}</span>${emptyReturned > 0 ? ` <span style="font-size:10px;color:var(--text-muted)">(${emptyReturned} empty)</span>` : ''}` : '—'}
+            ${returnedFrames > 0 ? `<span style="color:#0e7490;font-weight:700">${returnedFrames}</span>` : '—'}
           </td>
           <td>${statusBadge} ${dataSource}</td>
         </tr>`;
@@ -4676,7 +4673,7 @@ function renderAnalytics() {
       </div>
       <div class="card">
         <div class="card-title" style="margin-bottom:4px">Frames Returned per Trip</div>
-        <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px">Matched by trip unload/return date · empty = frame had no cages on return</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-bottom:8px">Matched by trip link or unload/return date</div>
         <div style="position:relative;height:220px"><canvas id="ac-trip-frames"></canvas></div>
       </div>
     </div>
@@ -4749,20 +4746,19 @@ function drawAnalyticsCharts() {
     }
   });
 
-  // Frames returned per trip: total with empty breakdown
+  // Frames returned per trip
   mkChart('ac-trip-frames', {
     type: 'bar',
     data: {
       labels: noData ? ['No trips'] : d.tripLabels,
       datasets: noData ? [{ data: [0], backgroundColor: '#444', label: 'No data' }] : [
-        { label: 'Empty on return',   data: d.tripEmptyReturned, backgroundColor: '#0e749099', borderRadius: 3, stack: 'frames' },
-        { label: 'Had cages (error?)', data: d.tripFramesReturned.map((v,i) => v - d.tripEmptyReturned[i]), backgroundColor: '#c9303099', borderRadius: 3, stack: 'frames' },
+        { label: 'Frames Returned', data: d.tripFramesReturned, backgroundColor: '#0e749099', borderRadius: 3 },
       ]
     },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font } } },
-      scales: { ...baseScales, x: { ...baseScales.x, stacked: true }, y: { ...baseScales.y, stacked: true } }
+      scales: { ...baseScales }
     }
   });
 }
