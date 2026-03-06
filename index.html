@@ -2628,7 +2628,7 @@ function renderPlanner() {
   let formHTML = '';
   if (planFormOpen) {
     const cageOnChange = planFormType === 'rmd-to-frame' ? 'onchange="updateFrameSuggestion(this.value)"' : '';
-    formHTML = `<div class="card">
+    formHTML = `<div class="card" id="plan-form">
       <div class="form-grid form-grid-3">
         <div><label>Movement Type</label><select id="pf-type" onchange="onPlanTypeChange(this.value)">${typeOpts}</select></div>
         ${planFormType !== 'frame-return-from-client' ? `<div><label>Cage</label><select id="pf-cage" ${cageOnChange}><option value="">Select cage...</option>${cageOpts}</select></div>` : '<div></div>'}
@@ -2844,6 +2844,9 @@ function renderPlanner() {
               <th style="width:24px"></th><th>Date</th><th>Shift</th><th>Type</th><th>Description</th><th>Notes</th><th>Status</th><th>Actions</th>
             </tr></thead><tbody>${tableRows}</tbody></table>
           </div>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:flex-end">
+            <button class="btn btn-primary" onclick="planFormOpen=true;render();setTimeout(()=>{const el=document.getElementById('plan-form');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},80)" title="Add a new planned movement">+ Plan Movements</button>
+          </div>
         </div>
       </div>
       <div class="planner-sidebar" style="max-height:calc(100vh - 140px);overflow-y:auto">
@@ -2877,6 +2880,37 @@ function renderPlanner() {
             <div class="card-title">🚢 Frames Away (Client / Boat)</div>
             ${rows}
             ${clientFrames.length === 0 ? '<div class="empty-msg">None away</div>' : ''}
+          </div>`;
+        })()}
+        ${(() => {
+          const today = todayStr();
+          const leavingCages = STATE.cages
+            .filter(c => c.departureDate && (c.location === 'facility' || c.location === 'rmd' || c.location === 'frame'))
+            .sort((a, b) => a.departureDate.localeCompare(b.departureDate));
+          if (!leavingCages.length) return `<div class="card"><div class="card-title">🚚 Cages Leaving Facility</div><div class="empty-msg">No cages with a departure date set</div></div>`;
+          const rows = leavingCages.map(c => {
+            const daysLeft = Math.ceil((new Date(c.departureDate + 'T12:00:00') - new Date()) / 86400000);
+            const urgency = daysLeft < 0 ? 'color:var(--red)' : daysLeft <= 3 ? 'color:var(--orange)' : daysLeft <= 7 ? 'color:var(--yellow)' : 'color:var(--green)';
+            const dayLabel = daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? 'today' : `${daysLeft}d`;
+            const locLabel = c.location === 'rmd' ? c.locationDetail || 'RMD' : c.location === 'frame' ? c.locationDetail || 'Frame' : 'Facility';
+            const hasDims = c.width > 0 || c.height > 0 || c.length > 0;
+            return `<div style="padding:7px 8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;margin-bottom:5px">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${hasDims?'4':'0'}px">
+                <span style="font:700 12px var(--font-mono);color:var(--text-primary)">Cage ${esc(c.name)}</span>
+                <span style="font-size:10px;padding:2px 7px;background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;border-radius:10px;font-family:var(--font-mono);font-weight:600">${fmt(c.departureDate)}</span>
+              </div>
+              ${hasDims ? `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                ${c.width > 0 ? `<span style="font-size:10px;padding:1px 6px;background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;border-radius:4px;font-family:var(--font-mono)">W ${c.width}m</span>` : ''}
+                ${c.height > 0 ? `<span style="font-size:10px;padding:1px 6px;background:#f0fdf4;color:#166534;border:1px solid #86efac;border-radius:4px;font-family:var(--font-mono)">H ${c.height}m</span>` : ''}
+                ${c.length > 0 ? `<span style="font-size:10px;padding:1px 6px;background:#fdf4ff;color:#7e22ce;border:1px solid #e9d5ff;border-radius:4px;font-family:var(--font-mono)">L ${c.length}m</span>` : ''}
+                <span style="font-size:10px;color:var(--text-muted);margin-left:auto">${locLabel}</span>
+                <span style="font-size:10px;font-weight:700;font-family:var(--font-mono);${urgency}">${dayLabel}</span>
+              </div>` : `<div style="display:flex;justify-content:space-between;font-size:10px"><span style="color:var(--text-muted)">${locLabel} · no dims</span><span style="font-weight:700;font-family:var(--font-mono);${urgency}">${dayLabel}</span></div>`}
+            </div>`;
+          }).join('');
+          return `<div class="card">
+            <div class="card-title">🚚 Cages Leaving Facility <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(${leavingCages.length})</span></div>
+            ${rows}
           </div>`;
         })()}
       </div>
