@@ -408,6 +408,96 @@ tr.dragging { opacity: 0.4; }
   background: var(--bg-elevated); border: 1px solid var(--border);
 }
 
+/* ── Global Search Modal ── */
+.search-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.65); z-index: 9000;
+  display: flex; align-items: flex-start; justify-content: center; padding-top: 80px;
+  backdrop-filter: blur(3px);
+}
+.search-modal {
+  background: var(--bg-card); border: 1px solid var(--border-light);
+  border-radius: 14px; width: 600px; max-width: 92vw;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.5); overflow: hidden;
+}
+.search-input-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+}
+.search-input-row input {
+  flex: 1; background: transparent; border: none; outline: none;
+  font: 500 16px var(--font-display); color: var(--text-primary);
+}
+.search-input-row .search-icon { font-size: 18px; color: var(--text-muted); }
+.search-results { max-height: 380px; overflow-y: auto; }
+.search-result-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 18px; cursor: pointer; transition: background 0.08s;
+  border-bottom: 1px solid var(--border);
+}
+.search-result-item:hover, .search-result-item.active { background: var(--accent-dim); }
+.search-result-item:last-child { border-bottom: none; }
+.search-result-name { font: 700 14px var(--font-mono); color: var(--text-primary); }
+.search-result-meta { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+.search-result-badge { flex-shrink: 0; }
+.search-hint { padding: 10px 18px; font-size: 11px; color: var(--text-muted); text-align: center; border-top: 1px solid var(--border); }
+.search-kbd { background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font: 600 10px var(--font-mono); }
+
+/* ── Header search button ── */
+.header-search-btn {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 14px; cursor: pointer;
+  color: var(--text-muted); font: 500 12px var(--font-display);
+  transition: all 0.12s; white-space: nowrap;
+}
+.header-search-btn:hover { border-color: var(--border-light); color: var(--text-secondary); }
+
+/* ── Warnings panel ── */
+.warning-item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 8px 12px; border-radius: 6px; margin-bottom: 6px;
+  font-size: 12px;
+}
+.warning-item.warn-red { background: rgba(201,48,48,0.08); border: 1px solid rgba(201,48,48,0.25); }
+.warning-item.warn-orange { background: rgba(184,92,26,0.08); border: 1px solid rgba(184,92,26,0.25); }
+.warning-item.warn-yellow { background: rgba(200,165,16,0.1); border: 1px solid rgba(200,165,16,0.25); }
+.warning-item .wi-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+.warning-item .wi-text { flex: 1; }
+.warning-item .wi-title { font-weight: 700; color: var(--text-primary); }
+.warning-item .wi-detail { color: var(--text-muted); margin-top: 1px; }
+
+/* ── Cage location history ── */
+.loc-history-list { list-style: none; padding: 0; margin: 0; }
+.loc-history-item {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 11px;
+}
+.loc-history-item:last-child { border-bottom: none; }
+.loc-history-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  margin-top: 3px; background: var(--accent);
+}
+.loc-history-date { font: 600 10px var(--font-mono); color: var(--text-muted); min-width: 80px; }
+.loc-history-desc { color: var(--text-secondary); }
+
+/* ── Frame utilisation bar ── */
+.frame-util-bar {
+  height: 8px; border-radius: 4px; overflow: hidden;
+  background: var(--border); display: flex; margin: 4px 0;
+}
+.frame-util-segment { height: 100%; transition: width 0.2s; }
+
+/* ── Movement notes inline ── */
+.move-note-edit {
+  font-size: 11px; padding: 2px 6px; border-radius: 4px;
+  border: 1px solid var(--border); background: var(--bg-input);
+  color: var(--text-primary); font-family: var(--font-display);
+  width: 100%; margin-top: 3px;
+}
+
+/* ── Export button ── */
+.export-btn { display: flex; align-items: center; gap: 5px; }
+
 /* ── Zoom control ── */
 .zoom-bar {
   display: flex; align-items: center; gap: 6px;
@@ -508,6 +598,20 @@ const TABS = [
 ];
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+
+function recordLocationChange(cage, newLocation, newDetail) {
+  if (!cage.locationHistory) cage.locationHistory = [];
+  cage.locationHistory.push({
+    date: todayStr ? todayStr() : new Date().toISOString().slice(0,10),
+    from: cage.location,
+    fromDetail: cage.locationDetail || '',
+    to: newLocation,
+    toDetail: newDetail || '',
+    ts: new Date().toISOString(),
+  });
+  // Keep last 50 history entries
+  if (cage.locationHistory.length > 50) cage.locationHistory = cage.locationHistory.slice(-50);
+}
 function hCat(h) { return h < H_SHORT ? 'Short' : h <= H_MED ? 'Medium' : 'Tall'; }
 function lCat(l) { return l < 6.5 ? 'Stumpy' : 'Long'; }
 function hBadge(h) { const c = hCat(h); return c === 'Short' ? 'green' : c === 'Medium' ? 'yellow' : 'red'; }
@@ -1116,6 +1220,9 @@ function renderFrameReturnsStat() {
   // If slot is a trip: also match by trip unloadDate exactly
 
   function frameInSlot(f) {
+    // Primary: direct trip link
+    if (slot.type === 'trip' && f.returnTripId === slot.trip.id) return true;
+    // Fallback: returnDate in this slot's week
     const checkDate = f.returnDate || null;
     if (!checkDate) return false;
     const d = new Date(checkDate + 'T12:00:00');
@@ -1233,6 +1340,184 @@ function renderFrameReturnsStat() {
   </div>`;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// WARNINGS ENGINE
+// ═══════════════════════════════════════════════════════════════════════════════
+function computeWarnings() {
+  const warnings = [];
+  const today = todayStr();
+
+  STATE.cages.forEach(c => {
+    // Cage at facility with departure date in ≤2 days and no movement planned
+    if (c.location === 'facility' && c.departureDate) {
+      const daysLeft = Math.ceil((new Date(c.departureDate+'T12:00:00') - new Date()) / 86400000);
+      if (daysLeft >= 0 && daysLeft <= 2) {
+        const hasMove = STATE.plannedMovements.some(m => m.cageId === c.id && !m.completed);
+        if (!hasMove) warnings.push({ level:'red', icon:'🚨', title:`${c.name} leaves in ${daysLeft}d — no movement planned`, detail:`Departure ${fmt(c.departureDate)} · ${c.width}m · ${hCat(c.height)}`, cageId:c.id });
+      }
+    }
+    // Cage needs waler but assigned frame has none
+    if (c.location === 'frame' && needsWaler(c)) {
+      const frame = STATE.frames.find(f => f.cages.includes(c.id));
+      if (frame && !frame.hasWaler) warnings.push({ level:'orange', icon:'⚠', title:`${c.name} needs waler — ${frame.name} has none`, detail:`Cage is ${c.length}m (<6.5m) and requires a waler for shipping`, cageId:c.id });
+    }
+    // Frame fixed for shipping but cage has no trip assigned
+    if (c.location === 'frame') {
+      const frame = STATE.frames.find(f => f.cages.includes(c.id));
+      if (frame && frame.fixedForShipping && !c.proposedTripId && !c.proposedShipDay) {
+        warnings.push({ level:'yellow', icon:'📋', title:`${c.name} is fixed for shipping but has no trip assigned`, detail:`Frame ${frame.name} is ready — assign a boat trip to this cage`, cageId:c.id });
+      }
+    }
+    // Overdue departure (cage still at facility past departure date)
+    if (c.location === 'facility' && c.departureDate && c.departureDate < today) {
+      warnings.push({ level:'red', icon:'🔴', title:`${c.name} departure overdue by ${Math.abs(Math.ceil((new Date(c.departureDate+'T12:00:00') - new Date()) / 86400000))}d`, detail:`Was due to leave ${fmt(c.departureDate)} — still at facility`, cageId:c.id });
+    }
+  });
+
+  // Frames: overdue return from client
+  STATE.frames.forEach(f => {
+    if (f.location === 'client' && f.returnDate && f.returnDate < today) {
+      const daysOver = Math.abs(Math.ceil((new Date(f.returnDate+'T12:00:00') - new Date()) / 86400000));
+      warnings.push({ level:'orange', icon:'🔁', title:`${f.name} overdue from client by ${daysOver}d`, detail:`Expected return ${fmt(f.returnDate)}` });
+    }
+    // Frame at facility with cages but not fixed for shipping and departure imminent
+    if (f.location === 'facility' && f.cages.length > 0) {
+      f.cages.forEach(cid => {
+        const c = getCage(cid);
+        if (c && c.proposedShipDay) {
+          const daysLeft = Math.ceil((new Date(c.proposedShipDay+'T12:00:00') - new Date()) / 86400000);
+          if (daysLeft >= 0 && daysLeft <= 3 && !f.fixedForShipping) {
+            warnings.push({ level:'yellow', icon:'⚛', title:`${f.name} not fixed for shipping — ${c.name} ships in ${daysLeft}d`, detail:`Ship day ${fmt(c.proposedShipDay)} — fix frame for shipping`, cageId:c.id });
+          }
+        }
+      });
+    }
+  });
+
+  // Movements: over daily limit
+  const mvByDay = {};
+  STATE.plannedMovements.filter(m=>!m.completed).forEach(m => { mvByDay[m.date]=(mvByDay[m.date]||0)+1; });
+  Object.entries(mvByDay).forEach(([date, count]) => {
+    if (count > MAX_MOVES) warnings.push({ level:'orange', icon:'📅', title:`${fmt(date)}: ${count} movements planned (limit ${MAX_MOVES})`, detail:'Consider redistributing some movements to adjacent days' });
+  });
+
+  // Sort: red first, then orange, then yellow
+  const order = {red:0,orange:1,yellow:2};
+  return warnings.sort((a,b) => (order[a.level]||2) - (order[b.level]||2));
+}
+
+function renderWarningsPanel() {
+  const warnings = computeWarnings();
+  if (warnings.length === 0) return '';
+  const collapsed = warningsCollapsed;
+  const redCount = warnings.filter(w=>w.level==='red').length;
+  const orangeCount = warnings.filter(w=>w.level==='orange').length;
+
+  const summary = `${redCount>0?`<span style="color:var(--red);font-weight:700">${redCount} critical</span>`:''}${redCount>0&&orangeCount>0?' · ':''}${orangeCount>0?`<span style="color:var(--orange)">${orangeCount} warning${orangeCount>1?'s':''}</span>`:''}`;
+
+  const itemsHTML = warnings.map(w => `
+    <div class="warning-item warn-${w.level}" ${w.cageId?`onclick="openCageHistory('${w.cageId}')" style="cursor:pointer"`:''}>
+      <div class="wi-icon">${w.icon}</div>
+      <div class="wi-text">
+        <div class="wi-title">${esc(w.title)}</div>
+        <div class="wi-detail">${esc(w.detail)}</div>
+      </div>
+    </div>`).join('');
+
+  return `<div class="card" style="margin-bottom:14px;border-color:${redCount>0?'rgba(201,48,48,0.4)':'rgba(184,92,26,0.3)'}">
+    <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="warningsCollapsed=!warningsCollapsed;render()">
+      <div style="font:700 13px var(--font-display);color:${redCount>0?'var(--red)':'var(--orange)'}">⚠ Warnings &amp; Issues &nbsp;${summary}</div>
+      <span style="color:var(--text-muted);font-size:12px">${collapsed?'▼ Show':'▲ Hide'}</span>
+    </div>
+    ${collapsed ? '' : `<div style="margin-top:10px">${itemsHTML}</div>`}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GLOBAL SEARCH
+// ═══════════════════════════════════════════════════════════════════════════════
+function openGlobalSearch() {
+  globalSearchOpen = true; globalSearchQuery = ''; globalSearchIdx = 0;
+  renderSearchModal();
+  setTimeout(() => { const inp = document.getElementById('gs-input'); if(inp) inp.focus(); }, 50);
+}
+function closeGlobalSearch() {
+  globalSearchOpen = false;
+  const el = document.getElementById('gs-overlay'); if(el) el.remove();
+}
+function globalSearchResults(q) {
+  if (!q || q.length < 1) return [];
+  const ql = q.toLowerCase();
+  const results = [];
+  STATE.cages.forEach(c => {
+    if (c.name.toLowerCase().includes(ql) || (c.notes||'').toLowerCase().includes(ql) || (c.locationDetail||'').toLowerCase().includes(ql)) {
+      const trip = c.proposedTripId ? getBoatTrip(c.proposedTripId) : null;
+      results.push({ type:'cage', id:c.id, name:c.name, meta:`${locLabel(c)} · ${c.width}m × ${c.height}m × ${c.length}m · ${c.weight}t${trip?' · '+tripLabel(trip):''}`, badge:locBadge(c.location), badgeLabel:locLabel(c), action:()=>{ closeGlobalSearch(); switchTab('cages'); setTimeout(()=>{ cageSearch=c.name; render(); },100); } });
+    }
+  });
+  STATE.frames.forEach(f => {
+    if (f.name.toLowerCase().includes(ql)) {
+      results.push({ type:'frame', id:f.id, name:f.name, meta:`${f.location} · ${f.width}m · ${f.cages.length} cage(s)${f.returnDate?' · returns '+fmt(f.returnDate):''}`, badge:{facility:'green',boat:'blue',client:'purple'}[f.location]||'accent', badgeLabel:f.location, action:()=>{ closeGlobalSearch(); switchTab('frames'); } });
+    }
+  });
+  STATE.boatTrips.forEach(t => {
+    if ((t.label||'').toLowerCase().includes(ql) || (t.notes||'').toLowerCase().includes(ql)) {
+      results.push({ type:'trip', id:t.id, name:t.label||'Unnamed Trip', meta:`${t.departDate?'Departs '+fmt(t.departDate):''}${t.unloadDate?' · Unloads '+fmt(t.unloadDate):''}`, badge:'accent', badgeLabel:'trip', action:()=>{ closeGlobalSearch(); switchTab('boatplan'); } });
+    }
+  });
+  return results.slice(0, 12);
+}
+function renderSearchModal() {
+  const existing = document.getElementById('gs-overlay'); if(existing) existing.remove();
+  if (!globalSearchOpen) return;
+  const results = globalSearchResults(globalSearchQuery);
+
+  const overlay = document.createElement('div');
+  overlay.id = 'gs-overlay'; overlay.className = 'search-overlay';
+  overlay.onclick = e => { if(e.target===overlay) closeGlobalSearch(); };
+
+  const itemsHTML = globalSearchQuery.length === 0
+    ? `<div style="padding:18px;text-align:center;color:var(--text-muted);font-size:12px">Type to search cages, frames, or trips…</div>`
+    : results.length === 0
+    ? `<div style="padding:18px;text-align:center;color:var(--text-muted);font-size:12px">No results for "${esc(globalSearchQuery)}"</div>`
+    : results.map((r,i) => `
+      <div class="search-result-item ${i===globalSearchIdx?'active':''}" id="gsr-${i}" onclick="gsSelectResult(${i})">
+        <div style="flex:1;min-width:0">
+          <div class="search-result-name">${esc(r.name)}</div>
+          <div class="search-result-meta">${esc(r.meta)}</div>
+        </div>
+        <span class="badge badge-${r.badge} search-result-badge" style="font-size:10px">${esc(r.badgeLabel)}</span>
+      </div>`).join('');
+
+  overlay.innerHTML = `<div class="search-modal">
+    <div class="search-input-row">
+      <span class="search-icon">🔍</span>
+      <input id="gs-input" placeholder="Search cages, frames, trips…" value="${esc(globalSearchQuery)}"
+        oninput="gsOnInput(this.value)"
+        onkeydown="gsOnKey(event)"/>
+      <button class="btn btn-secondary btn-sm" onclick="closeGlobalSearch()">✕</button>
+    </div>
+    <div class="search-results" id="gs-results">${itemsHTML}</div>
+    <div class="search-hint"><span class="search-kbd">↑↓</span> navigate &nbsp; <span class="search-kbd">Enter</span> jump to &nbsp; <span class="search-kbd">Esc</span> close</div>
+  </div>`;
+  document.body.appendChild(overlay);
+}
+function gsOnInput(val) {
+  globalSearchQuery = val; globalSearchIdx = 0; renderSearchModal();
+  setTimeout(() => { const inp = document.getElementById('gs-input'); if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); }}, 10);
+}
+function gsOnKey(e) {
+  const results = globalSearchResults(globalSearchQuery);
+  if (e.key === 'ArrowDown') { globalSearchIdx = Math.min(globalSearchIdx+1, results.length-1); renderSearchModal(); setTimeout(()=>{const inp=document.getElementById('gs-input');if(inp){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}},10); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { globalSearchIdx = Math.max(globalSearchIdx-1, 0); renderSearchModal(); setTimeout(()=>{const inp=document.getElementById('gs-input');if(inp){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}},10); e.preventDefault(); }
+  else if (e.key === 'Enter') { gsSelectResult(globalSearchIdx); }
+  else if (e.key === 'Escape') { closeGlobalSearch(); }
+}
+function gsSelectResult(idx) {
+  const results = globalSearchResults(globalSearchQuery);
+  if (results[idx]) results[idx].action();
+}
+
 function renderDashboard() {
   const cages = STATE.cages;
   const inFac = cages.filter(c=>c.location==='facility').length;
@@ -1317,6 +1602,7 @@ function renderDashboard() {
     <div id="zoom-outer-dashboard" class="zoom-outer">
       <div id="zoom-wrap-dashboard" class="zoom-wrap">
         <h2 class="section-title">Dashboard Overview</h2>
+        ${renderWarningsPanel()}
         ${renderFrameReturnsStat()}
         ${renderRMDHeatmap()}
         ${renderNextDueDelivery()}
@@ -1490,6 +1776,85 @@ let cageEditing = null;
 let cageSelected = new Set(); // for multi-delete
 let cageHideShipped = true;
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// CAGE LOCATION HISTORY MODAL
+// ═══════════════════════════════════════════════════════════════════════════════
+function openCageHistory(cageId) {
+  cageHistoryModal = cageId;
+  renderHistoryModal();
+}
+function closeCageHistory() {
+  cageHistoryModal = null;
+  const el = document.getElementById('cage-history-overlay');
+  if (el) el.remove();
+}
+function renderHistoryModal() {
+  const existing = document.getElementById('cage-history-overlay');
+  if (existing) existing.remove();
+  if (!cageHistoryModal) return;
+  const cage = getCage(cageHistoryModal);
+  if (!cage) return;
+
+  const history = (cage.locationHistory || []).slice().reverse(); // newest first
+  // Also pull completed movements for this cage from planned movements
+  const mvHistory = STATE.plannedMovements
+    .filter(m => m.cageId === cage.id && m.completed)
+    .sort((a,b) => (b.completedAt||b.date).localeCompare(a.completedAt||a.date));
+
+  const histHTML = history.length === 0
+    ? `<div class="empty-msg">No location history recorded yet.<br><span style="font-size:11px">History is recorded from this point forward when locations change.</span></div>`
+    : `<ul class="loc-history-list">${history.map((h,i) => {
+        const locColour = {facility:'var(--blue)',rmd:'var(--green)',frame:'var(--orange)',shipped:'var(--purple)'}[h.to] || 'var(--accent)';
+        const fromLabel = h.from ? `${h.from}${h.fromDetail ? ' · '+h.fromDetail : ''}` : '—';
+        const toLabel = `${h.to}${h.toDetail ? ' · '+h.toDetail : ''}`;
+        return `<li class="loc-history-item">
+          <div class="loc-history-dot" style="background:${locColour}"></div>
+          <div class="loc-history-date">${fmt(h.date)}</div>
+          <div class="loc-history-desc">
+            <span style="color:var(--text-muted)">${esc(fromLabel)}</span>
+            <span style="color:var(--accent);margin:0 5px">→</span>
+            <span style="font-weight:600;color:${locColour}">${esc(toLabel)}</span>
+          </div>
+        </li>`;
+      }).join('')}</ul>`;
+
+  const mvHTML = mvHistory.length === 0
+    ? `<div class="empty-msg" style="font-size:11px">No completed movements recorded for this cage.</div>`
+    : `<ul class="loc-history-list">${mvHistory.map(m => `
+        <li class="loc-history-item">
+          <div class="loc-history-dot" style="background:var(--green)"></div>
+          <div class="loc-history-date">${fmt(m.completedAt||m.date)}</div>
+          <div class="loc-history-desc">
+            <span style="font-weight:600">${esc(m.type)}</span>
+            <span style="color:var(--text-muted);margin-left:6px">${esc(m.description)}</span>
+            ${m.completionNote ? `<div style="font-style:italic;color:var(--text-muted);font-size:10px;margin-top:2px">"${esc(m.completionNote)}"</div>` : ''}
+          </div>
+        </li>`).join('')}</ul>`;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'cage-history-overlay';
+  overlay.className = 'search-overlay';
+  overlay.onclick = (e) => { if (e.target === overlay) closeCageHistory(); };
+  overlay.innerHTML = `
+    <div class="search-modal" style="width:560px;max-height:80vh;display:flex;flex-direction:column">
+      <div class="search-input-row">
+        <span style="font-size:18px">📍</span>
+        <div style="flex:1">
+          <div style="font:700 15px var(--font-display);color:var(--text-primary)">Location History — Cage ${esc(cage.name)}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${cage.width}m × ${cage.height}m × ${cage.length}m · ${cage.weight}t · Currently: <span class="badge badge-${locBadge(cage.location)}" style="font-size:9px">${esc(locLabel(cage))}</span></div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="closeCageHistory()">✕</button>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:14px 18px">
+        <div style="font:700 11px var(--font-mono);color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Location Changes</div>
+        ${histHTML}
+        <div style="font:700 11px var(--font-mono);color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;margin-top:16px">Completed Movements</div>
+        ${mvHTML}
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
 function renderCages() {
   const filtered = STATE.cages.filter(c=>{
     if (cageHideShipped && c.location === 'shipped') return false;
@@ -1649,6 +2014,7 @@ function renderCages() {
           </select>
         </td>
         <td style="white-space:nowrap">
+          <button class="btn btn-secondary btn-xs" onclick="openCageHistory('${c.id}')" title="Location history">📍</button>
           <button class="btn btn-danger btn-xs" onclick="deleteCage('${c.id}')">✕</button>
         </td>
       </tr>`;
@@ -1658,6 +2024,7 @@ function renderCages() {
     <div class="flex-between" style="margin-bottom:16px">
       <h2 class="section-title" style="margin:0">Cage Inventory</h2>
       <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="exportCagesCSV()">📤 Export CSV</button>
         <button class="btn btn-secondary" onclick="document.getElementById('excel-import').click()">📥 Import from Excel</button>
         <button class="btn btn-primary" onclick="cageFormOpen=!cageFormOpen;render()">+ Add Cage</button>
       </div>
@@ -1693,16 +2060,28 @@ function renderCages() {
         <button class="filter-btn ${cageSort==='shipday'?'active':''}" onclick="cageSort='shipday';render()" title="Sort by Proposed Ship Day">🚢 Ship Day</button>
       </div>
     </div>
-    ${cageSelected.size > 0 ? `<div style="display:flex;align-items:center;gap:12px;background:#fef0e6;border:1px solid #e8c8a0;border-radius:8px;padding:8px 14px;margin-bottom:10px">
-      <span style="font-weight:600;font-size:13px;color:var(--orange)">${cageSelected.size} cage${cageSelected.size>1?'s':''} selected</span>
-      <button class="btn btn-danger btn-sm" onclick="deleteSelectedCages()">🗑 Delete Selected</button>
-      <button class="btn btn-secondary btn-sm" onclick="cageSelected.clear();render()">✕ Clear Selection</button>
+    ${cageSelected.size > 0 ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fef0e6;border:1px solid #e8c8a0;border-radius:8px;padding:8px 14px;margin-bottom:10px">
+      <span style="font-weight:600;font-size:13px;color:var(--orange);white-space:nowrap">${cageSelected.size} cage${cageSelected.size>1?'s':''} selected</span>
+      <div style="display:flex;align-items:center;gap:5px">
+        <label style="font-size:11px;color:var(--text-muted);white-space:nowrap">Departure date:</label>
+        <input type="date" id="bulk-dep-date" style="font-size:11px;padding:3px 7px" onchange="bulkSetDeparture(this.value)"/>
+      </div>
+      <div style="display:flex;align-items:center;gap:5px">
+        <label style="font-size:11px;color:var(--text-muted);white-space:nowrap">Assign trip:</label>
+        <select id="bulk-trip-sel" style="font-size:11px;padding:3px 7px" onchange="bulkSetTrip(this.value);this.value=''">
+          <option value="">— Select trip —</option>
+          ${(STATE.boatTrips||[]).sort((a,b)=>(a.departDate||a.loadDate||'').localeCompare(b.departDate||b.loadDate||'')).map(t=>`<option value="${t.id}">${esc(tripLabel(t))}</option>`).join('')}
+          <option value="__clear__">✕ Clear trip</option>
+        </select>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteSelectedCages()">🗑 Delete</button>
+      <button class="btn btn-secondary btn-sm" onclick="cageSelected.clear();render()">✕ Clear</button>
     </div>` : ''}
     <div class="card" style="overflow-x:auto">
       <table>
         <thead><tr>
           <th style="width:32px"><input type="checkbox" id="cage-select-all" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)" onchange="toggleAllCages(this.checked,${JSON.stringify(filtered.map(c=>c.id))})"/></th>
-          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Boat Trip</th><th>Category</th><th>Location</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th>Move</th><th>Del</th>
+          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Boat Trip</th><th>Category</th><th>Location</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th>Move</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -1758,6 +2137,67 @@ async function deleteSelectedCages() {
   const affectedFrames = STATE.frames.filter(f => ids.some(id => f.cages.includes(id)));
   await Promise.all(affectedFrames.map(f => saveFrame(f)));
   await saveRMD();
+}
+
+// ── Bulk assignment ─────────────────────────────────────────────────────────
+async function bulkSetDeparture(dateStr) {
+  if (!dateStr || cageSelected.size === 0) return;
+  const ids = [...cageSelected];
+  const cages = ids.map(id => getCage(id)).filter(Boolean);
+  cages.forEach(c => { c.departureDate = dateStr; });
+  render();
+  await Promise.all(cages.map(c => saveCage(c)));
+}
+
+async function bulkSetTrip(tripId) {
+  if (!tripId || cageSelected.size === 0) return;
+  const ids = [...cageSelected];
+  const cages = ids.map(id => getCage(id)).filter(Boolean);
+  if (tripId === '__clear__') {
+    cages.forEach(c => { c.proposedTripId = null; c.proposedShipDay = null; });
+  } else {
+    const trip = getBoatTrip(tripId);
+    cages.forEach(c => {
+      c.proposedTripId = tripId;
+      c.proposedShipDay = trip ? (trip.departDate || trip.loadDate || null) : null;
+    });
+  }
+  render();
+  await Promise.all(cages.map(c => saveCage(c)));
+}
+
+// ── CSV Export ───────────────────────────────────────────────────────────────
+function exportCagesCSV() {
+  const headers = ['Name','Height(m)','Width(m)','Length(m)','Weight(t)','Category','Location','Location Detail','Departure Date','Boat Trip','Shipping Preference','Notes'];
+  const rows = STATE.cages.map(c => {
+    const trip = c.proposedTripId ? getBoatTrip(c.proposedTripId) : null;
+    return [
+      c.name, c.height, c.width, c.length, c.weight,
+      hCat(c.height), c.location, c.locationDetail||'',
+      c.departureDate||'', trip ? tripLabel(trip) : (c.proposedShipDay||''),
+      c.shippingPreference ? 'Yes' : 'No', c.notes||''
+    ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(',');
+  });
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `cages-export-${todayStr()}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportMovementsCSV() {
+  const headers = ['Date','Shift','Type','Description','Notes','Status','Completed At','Completion Note'];
+  const rows = STATE.plannedMovements.map(m => [
+    m.date, m.shift||'day', m.type||'', m.description||'', m.notes||'',
+    m.completed ? 'Done' : 'Pending', m.completedAt||'', m.completionNote||''
+  ].map(v => `"${String(v).replace(/"/g,'""')}"`).join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `movements-export-${todayStr()}.csv`; a.click();
+  URL.revokeObjectURL(url);
 }
 
 function startInlineEdit(cageId, field, spanEl) {
@@ -1856,6 +2296,13 @@ async function changeCageLocation(cid, target) {
   if(!target) return;
   const cage = getCage(cid);
   if(!cage) return;
+
+  // Determine new location/detail for history before mutation
+  let newLoc = cage.location, newDetail = cage.locationDetail || '';
+  if (target === 'facility') { newLoc = 'facility'; newDetail = ''; }
+  else if (target.startsWith('frame:')) { newLoc = 'frame'; const f = getFrame(target.split(':')[1]); newDetail = f ? f.name : ''; }
+  else if (target.startsWith('rmd:')) { const p = target.split(':'); newLoc = 'rmd'; newDetail = `RMD-${p[1]}${p[2]}`; }
+  recordLocationChange(cage, newLoc, newDetail);
 
   // Clear from current location first (returns frames that were modified)
   const clearedFrames = clearCageFromCurrentLocation(cid);
@@ -2222,20 +2669,25 @@ function renderFrames() {
       const retDaysLeft = f.returnDate ? Math.ceil((new Date(f.returnDate+'T12:00:00') - new Date()) / 86400000) : null;
       const retBadge = retDaysLeft !== null ? (retDaysLeft < 0 ? '<span style="color:var(--red);font-size:10px">OVERDUE</span>' : retDaysLeft <= 7 ? `<span style="color:var(--orange);font-size:10px">⚠ ${retDaysLeft}d</span>` : `<span style="color:var(--text-muted);font-size:10px">${retDaysLeft}d</span>`) : '';
 
-      // Build dropdown options from trip unload dates
-      const tripsWithUnload = (STATE.boatTrips||[]).filter(t=>t.unloadDate).sort((a,b)=>a.unloadDate.localeCompare(b.unloadDate));
-      const tripOpts = tripsWithUnload.map(t=>`<option value="${t.unloadDate}" ${f.returnDate===t.unloadDate?'selected':''}>${esc(t.label)} — Unload: ${fmt(t.unloadDate)}</option>`).join('');
-      const noTripsMsg = tripsWithUnload.length === 0 ? '<option value="" disabled>No trips with unload dates — add via Shipping tab</option>' : '';
+      // All trips — those with unload dates can be directly linked
+      const allTrips = (STATE.boatTrips||[]).sort((a,b)=>(a.unloadDate||a.returnDate||'').localeCompare(b.unloadDate||b.returnDate||''));
+      const tripOpts = allTrips.map(t => {
+        const sel = f.returnTripId === t.id ? 'selected' : '';
+        const dateInfo = t.unloadDate ? ` — Unload: ${fmt(t.unloadDate)}` : t.returnDate ? ` — Return: ${fmt(t.returnDate)}` : ' (no unload date)';
+        return `<option value="${t.id}" ${sel}>${esc(t.label||'Unnamed')}${dateInfo}</option>`;
+      }).join('');
+      const noTripsMsg = allTrips.length === 0 ? '<option value="" disabled>No trips configured — add via Shipping tab</option>' : '';
+      const linkedTrip = f.returnTripId ? getBoatTrip(f.returnTripId) : null;
 
       actionsHTML = `<div style="margin-top:8px">
-        <label style="font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;display:block">📅 Expected Return (linked to trip unload date)</label>
+        <label style="font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;display:block">🚢 Return Trip (direct link)</label>
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-          <select style="flex:1;font-size:11px;padding:4px 8px" onchange="setFrameReturnDate('${f.id}',this.value)">
-            <option value="" ${!f.returnDate?'selected':''}>— Not set —</option>
+          <select style="flex:1;font-size:11px;padding:4px 8px" onchange="setFrameReturnTrip('${f.id}',this.value)">
+            <option value="" ${!f.returnTripId?'selected':''}>— Not linked to trip —</option>
             ${noTripsMsg}
             ${tripOpts}
           </select>
-          ${f.returnDate ? `<span style="font-size:10px;white-space:nowrap;font-family:var(--font-mono);color:#0e7490">${fmt(f.returnDate)}</span>` : ''}
+          ${linkedTrip && linkedTrip.unloadDate ? `<span style="font-size:10px;white-space:nowrap;font-family:var(--font-mono);color:#0e7490">${fmt(linkedTrip.unloadDate)}</span>` : ''}
           ${retBadge}
         </div>
         <button class="btn btn-primary btn-sm btn-block" onclick="returnFromClient('${f.id}')">🏭 Return to Facility (unload cage)</button>
@@ -2258,8 +2710,42 @@ function renderFrames() {
   }).join('');
 
   const _framesTabShipDays = getShipmentDays();
+
+  // Utilisation stats
+  const totalFrames = STATE.frames.length;
+  const loaded2 = STATE.frames.filter(f=>f.cages.length===2).length;
+  const loaded1 = STATE.frames.filter(f=>f.cages.length===1).length;
+  const empty = STATE.frames.filter(f=>f.cages.length===0&&f.location==='facility').length;
+  const away = STATE.frames.filter(f=>f.location!=='facility').length;
+  const readyShip = STATE.frames.filter(f=>f.fixedForShipping&&f.location==='facility').length;
+  const p2 = totalFrames ? Math.round(loaded2/totalFrames*100) : 0;
+  const p1 = totalFrames ? Math.round(loaded1/totalFrames*100) : 0;
+  const pE = totalFrames ? Math.round(empty/totalFrames*100) : 0;
+  const pA = totalFrames ? Math.round(away/totalFrames*100) : 0;
+
+  const utilHTML = totalFrames === 0 ? '' : `
+    <div class="card" style="margin-bottom:12px;padding:12px 16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font:700 12px var(--font-mono);color:var(--accent)">Frame Utilisation — ${totalFrames} total</span>
+        <span style="font-size:11px;color:var(--text-muted)">${readyShip} ready to ship</span>
+      </div>
+      <div class="frame-util-bar">
+        ${p2>0?`<div class="frame-util-segment" style="width:${p2}%;background:var(--green)" title="${loaded2} fully loaded (2 cages)"></div>`:''}
+        ${p1>0?`<div class="frame-util-segment" style="width:${p1}%;background:var(--orange)" title="${loaded1} half loaded (1 cage)"></div>`:''}
+        ${pE>0?`<div class="frame-util-segment" style="width:${pE}%;background:var(--border)" title="${empty} empty at facility"></div>`:''}
+        ${pA>0?`<div class="frame-util-segment" style="width:${pA}%;background:var(--purple);opacity:0.6" title="${away} away (boat/client)"></div>`:''}
+      </div>
+      <div style="display:flex;gap:14px;margin-top:6px;font-size:11px;flex-wrap:wrap">
+        <span style="color:var(--green)">● ${loaded2} full (2 cages)</span>
+        <span style="color:var(--orange)">● ${loaded1} partial (1 cage)</span>
+        <span style="color:var(--text-muted)">● ${empty} empty</span>
+        <span style="color:var(--purple)">● ${away} away</span>
+      </div>
+    </div>`;
+
   return `
     <h2 class="section-title">Frame Management</h2>
+    ${utilHTML}
     ${shipmentLegendHTML(_framesTabShipDays)}
     <div class="filter-bar">
       ${['all','facility','boat','client'].map(f=>`
@@ -2338,6 +2824,22 @@ async function setFrameReturnDate(fid, dateStr) {
   const f = getFrame(fid);
   if (!f) return;
   f.returnDate = dateStr || null;
+  render();
+  await saveFrame(f);
+}
+
+async function setFrameReturnTrip(fid, tripId) {
+  const f = getFrame(fid);
+  if (!f) return;
+  if (!tripId) {
+    f.returnTripId = null;
+    f.returnDate = null;
+  } else {
+    const trip = getBoatTrip(tripId);
+    f.returnTripId = tripId;
+    // Sync returnDate from trip's unload date (or returnDate as fallback)
+    f.returnDate = trip ? (trip.unloadDate || trip.returnDate || null) : null;
+  }
   render();
   await saveFrame(f);
 }
@@ -2837,14 +3339,17 @@ function renderPlanner() {
         <td>${m.shift==='night'?'🌙 Night':'☀ Day'}</td>
         <td>${esc(m.type)}</td>
         <td style="font-weight:600;color:var(--text-primary)">${esc(m.description)}</td>
-        <td style="color:var(--text-muted)">${esc(m.notes||'')}</td>
+        <td style="color:var(--text-muted)">
+          ${esc(m.notes||'')}
+          ${m.completed && m.completionNote ? `<div style="font-style:italic;font-size:10px;color:var(--purple)">"${esc(m.completionNote)}"</div>` : ''}
+          ${!m.completed ? `<input class="move-note-edit" placeholder="Add note…" value="${esc(m.completionNote||'')}" onchange="setMoveNote('${m.id}',this.value)" title="Completion note (saved when you tick done)"/>` : ''}
+        </td>
         <td><span class="badge ${m.completed?'badge-green':'badge-yellow'}">${m.completed?'Done':'Pending'}</span></td>
         <td style="white-space:nowrap">
           ${!m.completed ? `<button class="btn btn-primary btn-xs" onclick="completeMove('${m.id}')">✓</button> ` : ''}
           <button class="btn btn-danger btn-xs" onclick="deleteMove('${m.id}')">Del</button>
         </td>
-      </tr>
-    `).join('');
+      </tr>`).join('');
 
   // Build RMD & Frame summary sidebar for planner
   const _plannerShipDays = getShipmentDays();
@@ -2940,9 +3445,12 @@ function renderPlanner() {
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
             <div class="card-title" style="margin:0">All Planned Movements <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(${sorted.length} shown${!plannerShowCompleted && completedCount > 0 ? `, ${completedCount} completed hidden` : ''})</span></div>
-            <button class="btn btn-secondary btn-sm" onclick="plannerShowCompleted=!plannerShowCompleted;render()" title="${plannerShowCompleted ? 'Hide completed movements' : 'Show completed movements'}">
-              ${plannerShowCompleted ? '🙈 Hide Done' : '👁 Show Done (' + completedCount + ')'}
-            </button>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-secondary btn-sm" onclick="exportMovementsCSV()" title="Export all movements to CSV">📤 CSV</button>
+              <button class="btn btn-secondary btn-sm" onclick="plannerShowCompleted=!plannerShowCompleted;render()" title="${plannerShowCompleted ? 'Hide completed movements' : 'Show completed movements'}">
+                ${plannerShowCompleted ? '🙈 Hide Done' : '👁 Show Done (' + completedCount + ')'}
+              </button>
+            </div>
           </div>
           <div style="overflow-x:auto">
             <table><thead><tr>
@@ -3099,6 +3607,14 @@ async function completeMove(id) {
   const cage = getCage(m.cageId);
   const frame = getFrame(m.frameId);
 
+  // Record location history for cage-moving operations
+  if (cage) {
+    if (m.typeKey === 'facility-to-frame' && frame) recordLocationChange(cage, 'frame', frame.name);
+    else if (m.typeKey === 'rmd-to-frame' && frame) recordLocationChange(cage, 'frame', frame.name);
+    else if (m.typeKey === 'frame-to-rmd' && m.rmdSlot) recordLocationChange(cage, 'rmd', 'RMD-' + m.rmdSlot);
+    else if (m.typeKey === 'frame-to-frame' && frame) recordLocationChange(cage, 'frame', frame.name);
+  }
+
   // Execute the actual movement based on type
   if (m.typeKey === 'facility-to-frame' && cage && frame) {
     // Clear cage from any current location
@@ -3199,11 +3715,19 @@ async function completeMove(id) {
 
   m.completed = true;
   m.completedAt = new Date().toISOString();
+  // Preserve any completion note that was typed before ticking done
+  // (completionNote is already on m if setMoveNote was called)
   render();
   await updateMovementInAPI(m);
   if (cage) await saveCage(cage);
   if (frame) await saveFrame(frame);
   await saveRMD();
+}
+
+function setMoveNote(id, note) {
+  const m = STATE.plannedMovements.find(x => x.id === id);
+  if (m) { m.completionNote = note; }
+  // No re-render needed — just persist in memory until completeMove is called
 }
 async function autoplanDepartures() {
   // Find all cages in 'facility' that have a departureDate set
@@ -3465,6 +3989,11 @@ function shiftWeek(dir) {
 let shipFormOpen = false;
 let shipSelected = [];
 let frameReturnsSlide = 0; // 0 = current week, negative = past weeks/trips, positive = future
+let globalSearchOpen = false;
+let globalSearchQuery = '';
+let globalSearchIdx = 0;
+let cageHistoryModal = null; // cageId of open history modal
+let warningsCollapsed = false;
 
 // ── Boat Trip Diary state ────────────────────────────────────────────────────
 let btFormOpen = false;
@@ -3992,6 +4521,9 @@ function renderAnalytics() {
     const unload = t.unloadDate || t.returnDate || '';
     const returnedFrames = STATE.frames.filter(f => {
       if (!unload) return false;
+      // Primary: direct trip link
+      if (f.returnTripId === t.id) return true;
+      // Fallback: returnDate matches trip unload/return date
       return (f.returnDate === unload) || (f.returnedAt && f.returnedAt === unload);
     });
 
@@ -5969,6 +6501,12 @@ function updateUKClock() {
 setInterval(updateUKClock, 1000);
 document.addEventListener("DOMContentLoaded", () => updateUKClock());
 
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); openGlobalSearch(); }
+  if (e.key === 'Escape' && globalSearchOpen) closeGlobalSearch();
+  if (e.key === 'Escape' && cageHistoryModal) closeCageHistory();
+});
+
 document.addEventListener("DOMContentLoaded", async function() {
   try {
     await loadState();
@@ -5998,6 +6536,9 @@ document.addEventListener("DOMContentLoaded", async function() {
     <div class="header-title">Cage Tracker</div>
     <div class="header-sub">FACILITY MANAGEMENT SYSTEM</div>
   </div>
+  <button class="header-search-btn" onclick="openGlobalSearch()" title="Search cages, frames, trips (Ctrl+K)">
+    <span>🔍</span> Search <span class="search-kbd" style="margin-left:4px">Ctrl K</span>
+  </button>
   <div style="margin-left:auto;display:flex;flex-direction:column;align-items:flex-end">
     <div id="hdr-time" style="font:700 15px var(--font-mono);color:#e8a830;letter-spacing:0.05em"></div>
     <div id="hdr-date" style="font:500 10px var(--font-mono);color:#8899aa;letter-spacing:0.06em"></div>
