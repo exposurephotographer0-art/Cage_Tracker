@@ -6591,7 +6591,9 @@ function showPinScreen(errorMsg = '', isLocked = false, remaining = 0) {
   if (errorMsg) { errEl.textContent = errorMsg; errEl.style.display = 'block'; }
   else { errEl.style.display = 'none'; }
   if (isLocked) {
-    inp.disabled = true;
+    inp.disabled = false;  // keep input enabled so admin PIN can still be typed
+    inp.value = '';
+    inp.focus();
     btn.disabled = true;
     startLockoutCountdown(remaining);
   } else {
@@ -6647,8 +6649,8 @@ async function submitPin() {
   const pin = document.getElementById('pin-input').value.trim();
   if (!pin) return;
   const btn = document.getElementById('pin-submit-btn');
-  btn.disabled = true;
-  btn.textContent = 'Checking...';
+  const wasLocked = btn.disabled;
+  if (!wasLocked) { btn.disabled = true; btn.textContent = 'Checking...'; }
   try {
     const res = await fetch(API_BASE + '/api/auth', {
       method: 'POST',
@@ -6717,7 +6719,7 @@ document.addEventListener("DOMContentLoaded", async function() {
     showPinScreen();
   }
   document.getElementById('pin-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') submitPin();
+    if (e.key === 'Enter') submitPin();  // always fires, even during lockout (admin PIN)
   });
 });
 
