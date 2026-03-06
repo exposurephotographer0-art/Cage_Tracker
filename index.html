@@ -753,6 +753,7 @@ function normaliseCage(c) {
     shippingPreference: !!(c.shipping_preference || c.shippingPreference),
     notes: c.notes || '',
     createdAt: c.created_at || c.createdAt || new Date().toISOString(),
+    locationHistory: c.locationHistory || [],
   };
 }
 
