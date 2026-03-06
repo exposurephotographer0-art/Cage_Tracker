@@ -6580,30 +6580,62 @@ document.addEventListener('keydown', e => {
 });
 
 // ── PIN Screen ──────────────────────────────────────────────────────
-function showPinScreen(errorMsg = '') {
+let _lockoutTimer = null;
+
+function showPinScreen(errorMsg = '', isLocked = false, remaining = 0) {
   document.getElementById('pin-overlay').style.display = 'flex';
   document.getElementById('app-wrapper').style.display = 'none';
-  if (errorMsg) {
-    const el = document.getElementById('pin-error');
-    el.textContent = errorMsg;
-    el.style.display = 'block';
+  const errEl = document.getElementById('pin-error');
+  const inp   = document.getElementById('pin-input');
+  const btn   = document.getElementById('pin-submit-btn');
+  if (errorMsg) { errEl.textContent = errorMsg; errEl.style.display = 'block'; }
+  else { errEl.style.display = 'none'; }
+  if (isLocked) {
+    inp.disabled = true;
+    btn.disabled = true;
+    startLockoutCountdown(remaining);
   } else {
-    document.getElementById('pin-error').style.display = 'none';
+    inp.disabled = false;
+    btn.disabled = false;
+    btn.textContent = 'Unlock';
+    clearLockoutCountdown();
+    setTimeout(() => { if (inp) { inp.value = ''; inp.focus(); } }, 100);
   }
-  setTimeout(() => {
-    const inp = document.getElementById('pin-input');
-    if (inp) inp.value = ''; inp && inp.focus();
-  }, 100);
+}
+
+function startLockoutCountdown(seconds) {
+  clearLockoutCountdown();
+  const btn = document.getElementById('pin-submit-btn');
+  const inp = document.getElementById('pin-input');
+  let remaining = seconds;
+  function tick() {
+    if (remaining <= 0) {
+      clearLockoutCountdown();
+      btn.disabled = false; btn.textContent = 'Unlock';
+      inp.disabled = false;
+      document.getElementById('pin-error').style.display = 'none';
+      inp.value = ''; inp.focus();
+      return;
+    }
+    const m = Math.floor(remaining / 60);
+    const s = String(remaining % 60).padStart(2, '0');
+    btn.textContent = `Locked — ${m}:${s}`;
+    remaining--;
+    _lockoutTimer = setTimeout(tick, 1000);
+  }
+  tick();
+}
+
+function clearLockoutCountdown() {
+  if (_lockoutTimer) { clearTimeout(_lockoutTimer); _lockoutTimer = null; }
 }
 
 function hidePinScreen() {
   document.getElementById('pin-overlay').style.display = 'none';
   document.getElementById('app-wrapper').style.display = 'flex';
-  // Show/hide write-only elements based on access level
   document.querySelectorAll('.write-only').forEach(el => {
     el.style.display = isReadOnly() ? 'none' : '';
   });
-  // Show access badge
   const badge = document.getElementById('access-badge');
   if (badge) {
     badge.textContent = isReadOnly() ? '👁 READ ONLY' : '✏ READ & WRITE';
@@ -6624,9 +6656,31 @@ async function submitPin() {
       body: JSON.stringify({ pin })
     });
     const data = await res.json();
+
+    if (res.status === 429 || data.locked) {
+      // Locked out
+      showPinScreen(data.error || 'Too many attempts. Please wait.', true, data.remaining || 300);
+      return;
+    }
+
+    if (data.ok && data.level === 'admin_unlock') {
+      // Admin PIN used — IP unlocked, prompt for real PIN
+      showPinScreen('');
+      const errEl = document.getElementById('pin-error');
+      errEl.textContent = '✓ Unlocked by admin. Enter your access PIN.';
+      errEl.style.color = '#1a8a4a';
+      errEl.style.background = 'rgba(26,138,74,0.1)';
+      errEl.style.borderColor = 'rgba(26,138,74,0.3)';
+      errEl.style.display = 'block';
+      return;
+    }
+
     if (data.ok) {
       _sessionPin = pin;
       _sessionLevel = data.level;
+      // Reset error style in case admin unlock changed it
+      const errEl = document.getElementById('pin-error');
+      errEl.style.color = ''; errEl.style.background = ''; errEl.style.borderColor = '';
       hidePinScreen();
       try { await loadState(); } catch(e) { console.error('loadState failed:', e); }
       try { render(); } catch(e) {
@@ -6638,18 +6692,30 @@ async function submitPin() {
         </div>`;
       }
     } else {
-      showPinScreen('Incorrect PIN. Please try again.');
+      // Wrong PIN — show attempts remaining or generic error
+      const msg = data.error || 'Incorrect PIN. Please try again.';
+      showPinScreen(msg, false, 0);
     }
   } catch(e) {
-    showPinScreen('Connection error. Please try again.');
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Unlock';
+    showPinScreen('Connection error. Please try again.', false, 0);
+    const btn2 = document.getElementById('pin-submit-btn');
+    btn2.disabled = false; btn2.textContent = 'Unlock';
   }
 }
 
 document.addEventListener("DOMContentLoaded", async function() {
-  showPinScreen();
+  // Check if IP is already locked before showing screen
+  try {
+    const res = await fetch(API_BASE + '/api/lockout-status');
+    const data = await res.json();
+    if (data.locked) {
+      showPinScreen('Too many previous attempts.', true, data.remaining);
+    } else {
+      showPinScreen();
+    }
+  } catch(e) {
+    showPinScreen();
+  }
   document.getElementById('pin-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') submitPin();
   });
