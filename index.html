@@ -6721,6 +6721,17 @@ document.addEventListener("DOMContentLoaded", async function() {
   document.getElementById('pin-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') submitPin();  // always fires, even during lockout (admin PIN)
   });
+  // Re-enable the Unlock button as soon as the user starts typing (allows admin PIN during lockout)
+  document.getElementById('pin-input').addEventListener('input', e => {
+    const btn = document.getElementById('pin-submit-btn');
+    if (e.target.value.trim().length > 0) {
+      btn.disabled = false;
+      if (btn.textContent.startsWith('Locked')) btn.textContent = 'Unlock';
+    } else {
+      // If they clear the box while locked, re-disable
+      if (_lockoutTimer) { btn.disabled = true; }
+    }
+  });
 });
 
 </script>
