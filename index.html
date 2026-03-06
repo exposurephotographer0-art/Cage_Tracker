@@ -811,6 +811,12 @@ async function toggleShippingPreference(cageId, checked) {
   await saveCage(c);
 }
 
+function toggleShipPref(cageId) {
+  const c = getCage(cageId);
+  if (!c) return;
+  toggleShippingPreference(cageId, !c.shippingPreference);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ZOOM HELPERS
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1035,9 +1041,7 @@ function renderRMDHeatmap() {
 
 function renderFrameReturnsStat() {
   // Frames with an expected return date (returnDate set), not already at facility
-  const returningFrames = STATE.frames.filter(f => f.returnDate && f.location !== 'facility');
-  if (returningFrames.length === 0) return '';
-
+  // ALSO include frames that returned this week (returnedAt set within current week)
   const today = new Date();
   // Week boundaries: Mon–Sun of current week
   const dayOfWeek = today.getDay(); // 0=Sun
@@ -1048,6 +1052,14 @@ function renderFrameReturnsStat() {
   // Next week
   const nextWeekStart = new Date(weekStart); nextWeekStart.setDate(weekStart.getDate() + 7);
   const nextWeekEnd = new Date(weekEnd); nextWeekEnd.setDate(weekEnd.getDate() + 7);
+
+  const pendingFrames = STATE.frames.filter(f => f.returnDate && f.location !== 'facility');
+  const returnedThisWeek = STATE.frames.filter(f => f.returnedAt && f.location === 'facility' && (() => {
+    const d = new Date(f.returnedAt + 'T12:00:00');
+    return d >= weekStart && d <= weekEnd;
+  })());
+
+  if (pendingFrames.length === 0 && returnedThisWeek.length === 0) return '';
 
   function groupByWidth(frames) {
     const groups = {};
@@ -1066,39 +1078,41 @@ function renderFrameReturnsStat() {
     ).join('');
   }
 
-  const thisWeek = returningFrames.filter(f => {
+  const thisWeek = pendingFrames.filter(f => {
     const d = new Date(f.returnDate + 'T12:00:00');
     return d >= weekStart && d <= weekEnd;
   });
-  const nextWeek = returningFrames.filter(f => {
+  const nextWeek = pendingFrames.filter(f => {
     const d = new Date(f.returnDate + 'T12:00:00');
     return d >= nextWeekStart && d <= nextWeekEnd;
   });
-  const later = returningFrames.filter(f => {
+  const later = pendingFrames.filter(f => {
     const d = new Date(f.returnDate + 'T12:00:00');
     return d > nextWeekEnd;
   });
-  const overdue = returningFrames.filter(f => {
+  const overdue = pendingFrames.filter(f => {
     const d = new Date(f.returnDate + 'T12:00:00');
     return d < weekStart;
   });
 
-  const thisWeekGroups = groupByWidth(thisWeek);
+  // Combine expected-this-week + already-returned-this-week for the "This Week" tile
+  const thisWeekAll = [...thisWeek, ...returnedThisWeek];
+  const thisWeekGroups = groupByWidth(thisWeekAll);
   const nextWeekGroups = groupByWidth(nextWeek);
 
-  const totalReturning = returningFrames.length;
+  const totalReturning = pendingFrames.length;
 
-  return `<div class="card" style="margin-bottom:14px;border-color:${thisWeek.length > 0 ? '#a0c8e8' : 'var(--border)'}">
+  return `<div class="card" style="margin-bottom:14px;border-color:${thisWeekAll.length > 0 ? '#a0c8e8' : 'var(--border)'}">
     <div class="flex-between" style="margin-bottom:10px">
       <div class="card-title" style="margin:0;color:var(--purple)">↩ Frames Returning from Client
-        <span style="font:400 11px var(--font-display);color:var(--text-muted);margin-left:8px">${totalReturning} frame${totalReturning!==1?'s':''} with expected return date</span>
+        <span style="font:400 11px var(--font-display);color:var(--text-muted);margin-left:8px">${totalReturning} frame${totalReturning!==1?'s':''} still expected</span>
       </div>
       <button class="btn btn-secondary btn-sm" onclick="switchTab('frames')">Manage Frames →</button>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">
       <div style="background:#f5f0fa;border:1px solid #d8c8f0;border-radius:8px;padding:12px">
-        <div style="font:700 10px var(--font-mono);color:var(--purple);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">This Week</div>
-        <div style="font:700 22px var(--font-mono);color:var(--purple);margin-bottom:6px">${thisWeek.length}</div>
+        <div style="font:700 10px var(--font-mono);color:var(--purple);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">This Week${returnedThisWeek.length > 0 ? ` <span style="font-weight:400;color:#27a060">(${returnedThisWeek.length} returned ✓)</span>` : ''}</div>
+        <div style="font:700 22px var(--font-mono);color:var(--purple);margin-bottom:6px">${thisWeekAll.length}</div>
         <div>${groupLabel(thisWeekGroups)}</div>
       </div>
       <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:12px">
@@ -1143,10 +1157,10 @@ function renderDashboard() {
       const slotBg = shade ? shipmentShadeBg(shade) + 'border-radius:4px;padding:2px 4px;' : (cage.shippingPreference ? shipPrefSlotBg(cage)+'border-radius:4px;padding:2px 4px;' : '');
       const nameColor = shipmentShadeNameColor(shade) || shipPrefNameColor(cage);
       const detailColor = shipmentShadeDetailColor(shade);
-      return `<div class="rmd-slot" style="${slotBg}">
+      return `<div class="rmd-slot" onclick="toggleShipPref('${cage.id}')" style="cursor:pointer;${slotBg}" title="${cage.shippingPreference ? 'Click to remove shipping preference' : 'Click to set shipping preference'}">
         <span class="rmd-slot-label">${posLabel}</span>
         <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${nameColor}">${esc(cage.name)}</span><span class="rmd-cage-detail" style="${detailColor}">${cage.width}m · ${lCat(cage.length)} · ${hCat(cage.height)}</span></span>
+          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${nameColor}">${esc(cage.name)}${cage.shippingPreference ? ' ★' : ''}</span><span class="rmd-cage-detail" style="${detailColor}">${cage.width}m · ${lCat(cage.length)} · ${hCat(cage.height)}</span></span>
         </div>
       </div>`;
     } else {
@@ -1175,7 +1189,7 @@ function renderDashboard() {
             ${renderRMDSlot(side,'cage2',side+' Out 1',r)}${renderRMDSlot(side,'cage4',side+' Out 2',r)}
           </div>`;
       }
-      return `<div class="rmd-site-card" onclick="switchTab('rmd')" style="cursor:pointer">
+      return `<div class="rmd-site-card" style="cursor:default">
         <div class="card" style="padding:10px">
           <div class="flex-between" style="margin-bottom:6px">
             <span style="font:700 14px var(--font-mono);color:var(--accent)">RMD-${item}</span>
@@ -1204,27 +1218,13 @@ function renderDashboard() {
     <div id="zoom-outer-dashboard" class="zoom-outer">
       <div id="zoom-wrap-dashboard" class="zoom-wrap">
         <h2 class="section-title">Dashboard Overview</h2>
-        <div class="stat-row">
-          <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${cages.length}</div><div class="stat-lbl">Total Cages</div></div>
-          <div class="stat-card"><div class="stat-val" style="color:var(--blue)">${inFac}</div><div class="stat-lbl">In Facility</div></div>
-          <div class="stat-card"><div class="stat-val" style="color:var(--green)">${inRMD}</div><div class="stat-lbl">In RMD</div></div>
-          <div class="stat-card"><div class="stat-val" style="color:var(--orange)">${inFrm}</div><div class="stat-lbl">In Frames</div></div>
-          <div class="stat-card"><div class="stat-val" style="color:var(--red)">${ready}</div><div class="stat-lbl">Ready to Ship</div></div>
-        </div>
-        <div class="stat-row">
-          <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${fFac}</div><div class="stat-lbl">Frames at Facility</div></div>
-          <div class="stat-card"><div class="stat-val" style="color:var(--blue)">${fBoat}</div><div class="stat-lbl">Frames on Boat</div></div>
-          <div class="stat-card"><div class="stat-val" style="color:var(--purple)">${fClient}</div><div class="stat-lbl">Frames w/ Client</div></div>
-          <div class="stat-card"><div class="stat-val" style="color:var(--orange)">${todayMoves}</div><div class="stat-lbl">Today's Moves</div></div>
-          <div class="stat-card"><div class="stat-val" style="color:var(--yellow)">${pending}</div><div class="stat-lbl">Pending Plans</div></div>
-        </div>
         ${renderFrameReturnsStat()}
         ${renderRMDHeatmap()}
         ${renderNextDueDelivery()}
         ${renderDashboardFrames()}
         <div style="display:grid;grid-template-columns:1fr;gap:14px">
           <div class="card" style="overflow-x:auto">
-            <div class="card-title">RMD Storage — Live View <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(click any bay to manage)</span></div>
+            <div class="card-title">RMD Storage — Live View <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(click any cage to toggle shipping preference ★)</span></div>
             ${rmdLegendHTML}
             <div class="rmd-site-layout" style="min-width:700px">${rmdMiniHTML}</div>
           </div>
@@ -3068,6 +3068,7 @@ async function completeMove(id) {
   else if (m.typeKey === 'frame-return-from-client' && frame) {
     frame.location = 'facility';
     frame.fixedForShipping = false;
+    frame.returnedAt = todayStr(); // record actual return date for dashboard stats
     // Any cages in this frame should also be cleared (it should be empty, but just in case)
     frame.cages = [];
   }
@@ -3935,6 +3936,22 @@ function renderAnalytics() {
     <div class="flex-between" style="margin-bottom:18px">
       <h2 class="section-title" style="margin:0">Analytics</h2>
       <span style="font:500 11px var(--font-mono);color:var(--text-muted)">Excludes cages at facility · Live</span>
+    </div>
+
+    <!-- Stat rows moved from dashboard -->
+    <div class="stat-row" style="margin-bottom:10px">
+      <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${STATE.cages.length}</div><div class="stat-lbl">Total Cages</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--blue)">${STATE.cages.filter(c=>c.location==='facility').length}</div><div class="stat-lbl">In Facility</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--green)">${STATE.cages.filter(c=>c.location==='rmd').length}</div><div class="stat-lbl">In RMD</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--orange)">${STATE.cages.filter(c=>c.location==='frame').length}</div><div class="stat-lbl">In Frames</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--red)">${STATE.frames.filter(f=>f.fixedForShipping&&f.location==='facility').length}</div><div class="stat-lbl">Ready to Ship</div></div>
+    </div>
+    <div class="stat-row" style="margin-bottom:20px">
+      <div class="stat-card"><div class="stat-val" style="color:var(--accent)">${STATE.frames.filter(f=>f.location==='facility').length}</div><div class="stat-lbl">Frames at Facility</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--blue)">${STATE.frames.filter(f=>f.location==='boat').length}</div><div class="stat-lbl">Frames on Boat</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--purple)">${STATE.frames.filter(f=>f.location==='client').length}</div><div class="stat-lbl">Frames w/ Client</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--orange)">${STATE.plannedMovements.filter(m=>m.date===todayStr()&&!m.completed).length}</div><div class="stat-lbl">Today's Moves</div></div>
+      <div class="stat-card"><div class="stat-val" style="color:var(--yellow)">${STATE.plannedMovements.filter(m=>!m.completed).length}</div><div class="stat-lbl">Pending Plans</div></div>
     </div>
 
     <!-- KPI strip -->
