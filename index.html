@@ -2580,27 +2580,31 @@ function buildPlanFormHTML() {
     showRmd = false;
   }
 
-  // Build RMD slot dropdown options for Frame→RMD
+  // Build RMD slot dropdown options for Frame-to-RMD — show ALL slots so multi-move planning works
   let rmdSlotOpts = '';
   if (planFormType === 'frame-to-rmd') {
-    const seenSides = new Set();
     const sortedRmd = [...STATE.rmdSlots].sort((a,b)=>a.number-b.number);
+    // Count planned frame-to-rmd moves per side key so we can show how many are already queued
+    const plannedToRmd = {};
+    STATE.plannedMovements.filter(m => !m.completed && m.typeKey === 'frame-to-rmd' && m.rmdSlot).forEach(m => {
+      const key = String(m.rmdSlot).replace(/\s/g,'');
+      plannedToRmd[key] = (plannedToRmd[key] || 0) + 1;
+    });
     sortedRmd.forEach(r => {
       [...SIDES].sort().forEach(side => {
         const sideKey = r.number + side;
-        if (seenSides.has(sideKey)) return;
-        const hasFree = !r[side].cage1 || !r[side].cage2;
-        if (!hasFree) return;
-        seenSides.add(sideKey);
-        const occupiedCount = [r[side].cage1, r[side].cage2].filter(Boolean).length;
-        const otherCid = r[side].cage1 || r[side].cage2;
-        const other = otherCid ? getCage(otherCid) : null;
-        const pairNote = other ? ` — pairs with ${other.name} (${hCat(other.height)})` : ` — empty side`;
-        const freeSlots = occupiedCount === 0 ? '2 free' : '1 slot free';
-        rmdSlotOpts += `<option value="${sideKey}">RMD-${r.number}${side} (${freeSlots}${pairNote})</option>`;
+        const occupiedCids = [r[side].cage1, r[side].cage2, r[side].cage3, r[side].cage4].filter(Boolean);
+        const occupiedCount = occupiedCids.length;
+        const plannedCount = plannedToRmd[sideKey] || 0;
+        const effectiveOccupied = occupiedCount + plannedCount;
+        const cageNames = occupiedCids.map(cid => { const c = getCage(cid); return c ? c.name : '?'; });
+        const occupancyNote = occupiedCount === 0 ? 'empty' : 'has: ' + cageNames.join(', ');
+        const plannedNote = plannedCount > 0 ? ' \u00b7 ' + plannedCount + ' move' + (plannedCount>1?'s':'') + ' planned' : '';
+        const fullWarning = effectiveOccupied >= 4 ? ' \u26a0 FULL' : '';
+        rmdSlotOpts += '<option value="' + sideKey + '">RMD-' + r.number + side + ' (' + occupancyNote + plannedNote + fullWarning + ')</option>';
       });
     });
-    if (!rmdSlotOpts) rmdSlotOpts = '<option value="" disabled>No free RMD slots</option>';
+    if (!rmdSlotOpts) rmdSlotOpts = '<option value="" disabled>No RMD slots configured</option>';
   }
 
   // For RMD→Frame, annotate frames with suitability note + planned movements
