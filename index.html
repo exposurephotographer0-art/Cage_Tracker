@@ -2766,8 +2766,11 @@ async function updateFrameLoc(fid,loc) {
   const f=getFrame(fid);
   f.location=loc;
   if(loc!=='facility') f.fixedForShipping=false;
-  // Clear returnDate when frame returns to facility
-  if(loc==='facility') f.returnDate = null;
+  // When frame returns to facility, record the return timestamp and clear returnDate
+  if(loc==='facility') {
+    if (!f.returnedAt) f.returnedAt = todayStr(); // stamp actual return for dashboard stats
+    f.returnDate = null;
+  }
   if(loc!=='facility') {
     f.cages.forEach(cid=>{
       const c=getCage(cid);
