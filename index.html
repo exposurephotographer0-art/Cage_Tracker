@@ -5662,43 +5662,64 @@ let mvFilter = 'all';
 function openMvCageMovements(cageId) {
   const cage = getCage(cageId);
   if (!cage) return;
-  const moves = STATE.plannedMovements.filter(m => m.cageId === cageId && !m.completed);
+  _mvEditCageId = cageId;
+  renderMvCageEditModal();
+}
+
+let _mvEditCageId = null;
+
+function renderMvCageEditModal() {
   const existing = document.getElementById('mv-cage-edit-overlay');
   if (existing) existing.remove();
+  if (!_mvEditCageId) return;
 
-  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','frame-to-frame':'#e05c1a','facility-to-frame':'#2563b0','frame-fix-shipping':'#c08520'};
-  const MVLABELS = {'rmd-to-frame':'RMD → Frame','frame-to-rmd':'Frame → RMD','frame-to-frame':'Frame → Frame','facility-to-frame':'Facility → Frame','frame-fix-shipping':'Fix for Shipping'};
+  const cage = getCage(_mvEditCageId);
+  if (!cage) return;
+  const moves = STATE.plannedMovements.filter(m => m.cageId === _mvEditCageId && !m.completed);
+
+  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','frame-to-frame':'#e05c1a','facility-to-frame':'#2563b0','frame-fix-shipping':'#c08520','frame-return-from-client':'#0e7490'};
+
+  function resolveDesc(m) {
+    const frame = getFrame(m.frameId);
+    const srcFrame = getFrame(m.srcFrameId);
+    if (m.typeKey === 'rmd-to-frame') return `RMD-${m.rmdSlot||'?'} → ${frame?frame.name:'?'}`;
+    if (m.typeKey === 'frame-to-rmd') return `${frame?frame.name:'?'} → RMD-${m.rmdSlot||'?'}`;
+    if (m.typeKey === 'facility-to-frame') return `Facility → ${frame?frame.name:'?'}`;
+    if (m.typeKey === 'frame-to-frame') return `${srcFrame?srcFrame.name:'?'} → ${frame?frame.name:'?'}`;
+    if (m.typeKey === 'frame-fix-shipping') return `Fix ${frame?frame.name:'frame'} for shipping`;
+    if (m.typeKey === 'frame-return-from-client') return `${frame?frame.name:'frame'} → Facility`;
+    return m.description || m.type || m.typeKey;
+  }
 
   const movesHTML = moves.length === 0
-    ? `<div class="empty-msg">No pending movements for this cage.</div>`
+    ? `<div class="empty-msg" style="margin-bottom:12px">No pending movements for this cage.</div>`
     : moves.map((m, i) => {
         const col = MVCOLS[m.typeKey] || 'var(--accent)';
-        const label = MVLABELS[m.typeKey] || m.type || m.typeKey;
-        return `<div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;background:var(--bg-elevated)" id="mv-edit-row-${m.id}">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-            <div style="width:24px;height:24px;border-radius:50%;background:${col};color:#fff;font:700 11px var(--font-mono);display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
-            <span style="font:700 13px var(--font-mono);color:${col}">${label}</span>
-            <button onclick="deleteMvEdit('${m.id}')" style="margin-left:auto;border:none;background:none;cursor:pointer;color:var(--red);font-size:16px;line-height:1;padding:2px 6px;border-radius:4px;background:rgba(200,50,50,0.08)" title="Delete this movement">🗑</button>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-            <div>
-              <label>Date</label>
-              <input type="date" id="mv-edit-date-${m.id}" value="${m.date||''}" style="width:100%"/>
+        const desc = resolveDesc(m);
+        const shiftLabel = m.shift === 'night' ? '🌙 Night' : '☀ Day';
+        return `<div style="border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:10px;background:var(--bg-elevated)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <div style="width:22px;height:22px;border-radius:50%;background:${col};color:#fff;font:700 11px var(--font-mono);display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font:600 12px var(--font-mono);color:${col}">${esc(m.type||m.typeKey)}</div>
+              <div style="font-size:11px;color:var(--text-muted);margin-top:1px">${esc(desc)}</div>
             </div>
-            <div>
-              <label>Movement Type</label>
-              <select id="mv-edit-type-${m.id}" style="width:100%">
-                ${Object.entries(MVLABELS).map(([k,v])=>`<option value="${k}" ${m.typeKey===k?'selected':''}>${v}</option>`).join('')}
-              </select>
-            </div>
+            <span style="font-size:10px;color:var(--text-muted)">${shiftLabel}</span>
           </div>
-          <div style="margin-top:10px">
-            <label>Notes / Description</label>
-            <input type="text" id="mv-edit-note-${m.id}" value="${esc(m.note||m.description||'')}" placeholder="Optional notes..." style="width:100%"/>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <label style="margin:0;white-space:nowrap">Date</label>
+            <input type="date" value="${m.date||''}" style="flex:1;font:600 12px var(--font-mono);color:var(--accent)"
+              onchange="mvEditReschedule('${m.id}',this.value)" />
           </div>
-          <div style="margin-top:10px;display:flex;gap:8px">
-            <button class="btn btn-primary btn-sm" onclick="saveMvEdit('${m.id}')">💾 Save</button>
-            <button class="btn btn-secondary btn-sm" onclick="completeMvEdit('${m.id}')">✅ Mark Complete</button>
+          ${m.notes ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;font-style:italic">${esc(m.notes)}</div>` : ''}
+          <div style="margin-bottom:8px">
+            <input class="move-note-edit" placeholder="Add completion note…" value="${esc(m.completionNote||'')}"
+              oninput="setMoveNote('${m.id}',this.value)"
+              style="width:100%;font-size:12px" />
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-primary btn-sm" onclick="mvEditComplete('${m.id}')">✓ Mark Complete</button>
+            <button class="btn btn-danger btn-sm" onclick="mvEditDelete('${m.id}')">🗑 Delete</button>
           </div>
         </div>`;
       }).join('');
@@ -5706,52 +5727,62 @@ function openMvCageMovements(cageId) {
   const overlay = document.createElement('div');
   overlay.id = 'mv-cage-edit-overlay';
   overlay.className = 'search-overlay';
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  overlay.onclick = (e) => { if (e.target === overlay) { _mvEditCageId = null; overlay.remove(); } };
   overlay.innerHTML = `
-    <div class="search-modal" style="width:580px;max-height:85vh;display:flex;flex-direction:column">
+    <div class="search-modal" style="width:540px;max-height:85vh;display:flex;flex-direction:column">
       <div class="search-input-row">
         <span style="font-size:18px">📦</span>
         <div style="flex:1">
           <div style="font:700 15px var(--font-display);color:var(--text-primary)">Cage ${esc(cage.name)} — Planned Movements</div>
-          <div style="font-size:11px;color:var(--text-muted)">${cage.width}m × ${cage.height}m × ${cage.length}m · ${cage.weight}t · Currently: <span style="font-weight:600">${locLabel(cage)}</span></div>
+          <div style="font-size:11px;color:var(--text-muted)">${cage.width}m × ${cage.height}m × ${cage.length}m · ${cage.weight}t · <span style="font-weight:600">${locLabel(cage)}</span></div>
         </div>
-        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('mv-cage-edit-overlay').remove()">✕</button>
+        <button class="btn btn-secondary btn-sm" onclick="_mvEditCageId=null;document.getElementById('mv-cage-edit-overlay').remove()">✕</button>
       </div>
       <div style="flex:1;overflow-y:auto;padding:14px 18px">
         ${movesHTML}
-        <button class="btn btn-primary btn-sm" style="width:100%;margin-top:4px" onclick="document.getElementById('mv-cage-edit-overlay').remove();planFormOpen=true;render()">+ Add New Movement</button>
+        <button class="btn btn-primary btn-sm" style="width:100%;margin-top:4px"
+          onclick="_mvEditCageId=null;document.getElementById('mv-cage-edit-overlay').remove();planFormOpen=true;render()">
+          + Add New Movement
+        </button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
 }
-function saveMvEdit(id) {
-  const m = STATE.plannedMovements.find(x=>x.id===id);
-  if (!m) return;
-  const date = document.getElementById('mv-edit-date-'+id)?.value;
-  const typeKey = document.getElementById('mv-edit-type-'+id)?.value;
-  const note = document.getElementById('mv-edit-note-'+id)?.value;
-  if (date) m.date = date;
-  if (typeKey) { m.typeKey = typeKey; }
-  if (note !== undefined) m.note = note;
-  saveState(); apiUpdateMovement(m);
-  render();
-  document.getElementById('mv-cage-edit-overlay')?.remove();
+
+async function mvEditReschedule(id, newDate) {
+  // Reuse the exact same rescheduleMove from the planner
+  await rescheduleMove(id, newDate);
+  renderMvCageEditModal(); // refresh modal with updated date
 }
-function deleteMvEdit(id) {
+
+async function mvEditComplete(id) {
+  // Reuse the exact same completeMove from the planner — handles location updates, history, API calls
+  await completeMove(id);
+  // After completing, re-render modal (cage may have no moves left)
+  if (_mvEditCageId) {
+    const remaining = STATE.plannedMovements.filter(m => m.cageId === _mvEditCageId && !m.completed).length;
+    if (remaining > 0) {
+      renderMvCageEditModal();
+    } else {
+      _mvEditCageId = null;
+      document.getElementById('mv-cage-edit-overlay')?.remove();
+    }
+  }
+}
+
+async function mvEditDelete(id) {
   if (!confirm('Delete this planned movement?')) return;
-  STATE.plannedMovements = STATE.plannedMovements.filter(x=>x.id!==id);
-  saveState(); apiDeleteMovement(id);
-  render();
-  document.getElementById('mv-cage-edit-overlay')?.remove();
-}
-function completeMvEdit(id) {
-  const m = STATE.plannedMovements.find(x=>x.id===id);
-  if (!m) return;
-  m.completed = true;
-  m.completedAt = new Date().toISOString().slice(0,10);
-  saveState(); apiUpdateMovement(m);
-  render();
-  document.getElementById('mv-cage-edit-overlay')?.remove();
+  // Reuse the exact same deleteMove from the planner
+  await deleteMove(id);
+  if (_mvEditCageId) {
+    const remaining = STATE.plannedMovements.filter(m => m.cageId === _mvEditCageId && !m.completed).length;
+    if (remaining > 0) {
+      renderMvCageEditModal();
+    } else {
+      _mvEditCageId = null;
+      document.getElementById('mv-cage-edit-overlay')?.remove();
+    }
+  }
 }
 
 function renderMovementsMap() {
