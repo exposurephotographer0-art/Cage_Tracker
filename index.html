@@ -1055,7 +1055,9 @@ function switchTab(id) {
     const svg = document.getElementById('mv-svg-arrows');
     if (svg) svg.innerHTML = '';
   }
-  activeTab=id; renderSidebar(); renderMain();
+  activeTab=id;
+  try { sessionStorage.setItem('ct_activeTab', id); } catch(e) {}
+  renderSidebar(); renderMain();
 }
 
 function renderMain() {
@@ -6809,6 +6811,12 @@ async function submitPin() {
     if (data.ok) {
       _sessionPin = pin;
       _sessionLevel = data.level;
+      // Cache PIN for today — won't ask again until tomorrow
+      try {
+        localStorage.setItem('ct_pin_cache', JSON.stringify({
+          pin, level: data.level, date: new Date().toISOString().slice(0,10)
+        }));
+      } catch(e) {}
       // Reset error style in case admin unlock changed it
       const errEl = document.getElementById('pin-error');
       errEl.style.color = ''; errEl.style.background = ''; errEl.style.borderColor = '';
@@ -6834,7 +6842,61 @@ async function submitPin() {
   }
 }
 
+function logout() {
+  _sessionPin = null;
+  _sessionLevel = null;
+  try { localStorage.removeItem('ct_pin_cache'); } catch(e) {}
+  document.getElementById('pin-overlay').style.display = 'flex';
+  document.getElementById('app-wrapper').style.display = 'none';
+  const inp = document.getElementById('pin-input');
+  if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 100); }
+  const errEl = document.getElementById('pin-error');
+  if (errEl) { errEl.style.display = 'none'; }
+}
+
 document.addEventListener("DOMContentLoaded", async function() {
+  // Restore last active tab from session
+  try {
+    const savedTab = sessionStorage.getItem('ct_activeTab');
+    if (savedTab) activeTab = savedTab;
+  } catch(e) {}
+
+  // Try today's cached PIN first — skip PIN screen if valid
+  try {
+    const cached = JSON.parse(localStorage.getItem('ct_pin_cache') || 'null');
+    const today = new Date().toISOString().slice(0,10);
+    if (cached && cached.pin && cached.date === today) {
+      // Attempt silent auth with cached PIN
+      const res = await fetch(API_BASE + '/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: cached.pin })
+      });
+      const data = await res.json();
+      if (data.ok && (data.level === cached.level || data.level)) {
+        _sessionPin = cached.pin;
+        _sessionLevel = data.level || cached.level;
+        hidePinScreen();
+        try { await loadState(); } catch(e) { console.error('loadState failed:', e); }
+        try { render(); } catch(e) { console.error('render failed:', e); }
+        // Set up Enter key listener still
+        document.getElementById('pin-input').addEventListener('keydown', e => {
+          if (e.key === 'Enter') submitPin();
+        });
+        document.getElementById('pin-input').addEventListener('input', e => {
+          const btn = document.getElementById('pin-submit-btn');
+          if (e.target.value.trim().length > 0) {
+            btn.disabled = false;
+            if (btn.textContent.startsWith('Locked')) btn.textContent = 'Unlock';
+          } else {
+            if (_lockoutTimer) { btn.disabled = true; }
+          }
+        });
+        return; // Skip showing PIN screen
+      }
+    }
+  } catch(e) { /* silent fail — fall through to PIN screen */ }
+
   // Check if IP is already locked before showing screen
   try {
     const res = await fetch(API_BASE + '/api/lockout-status');
@@ -6894,6 +6956,9 @@ document.addEventListener("DOMContentLoaded", async function() {
     <div id="hdr-time" style="font:700 15px var(--font-mono);color:#e8a830;letter-spacing:0.05em"></div>
     <div id="hdr-date" style="font:500 10px var(--font-mono);color:#8899aa;letter-spacing:0.06em"></div>
   </div>
+  <button onclick="logout()" title="Log out and switch PIN" style="border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#aabbcc;border-radius:6px;padding:6px 12px;font:600 11px var(--font-display);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.12s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,0.14)';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,0.07)';this.style.color='#aabbcc'">
+    🔓 Log Out
+  </button>
 </header>
 
 <div class="layout">
