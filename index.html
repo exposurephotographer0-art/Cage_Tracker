@@ -6813,61 +6813,6 @@ function renderMovementsMap(dayCtx) {
                     }).join('') : '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no movements</div>'}
                   </div>
                 </div>
-                <div>
-                  <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🚢 Boat / Client</div>
-                  ${(() => {
-                    const framesWithReturn = STATE.frames
-                      .filter(f => (f.location==='client'||f.location==='boat') && f.returnDate)
-                      .sort((a,b) => a.returnDate.localeCompare(b.returnDate));
-                    const hasExitMoves = filtered.some(m => m.typeKey === 'frame-to-rmd' && framesWithReturn.some(f => f.id === m.frameId));
-                    const hasAny = framesWithReturn.length > 0 || boatMoves.length > 0 || hasExitMoves;
-                    return `<div id="mv-boat-box" style="background:var(--bg-card);border:${hasAny?'2px solid #0e7490;box-shadow:0 0 0 3px rgba(14,116,144,0.12);':'1px solid var(--border);'}border-radius:8px;padding:12px 16px;min-width:145px;">
-                      <div style="font:700 13px var(--font-mono);color:#0e7490;margin-bottom:8px">Boat / Client</div>
-                      ${boatMoves.map(m=>{
-                        const fr=getFrame(m.frameId); if(!fr) return '';
-                        return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #a5f3fc;background:#ecfeff;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
-                          <span style="color:#0e7490;font-weight:800">→</span>
-                          <span style="font:600 10px var(--font-mono)">${esc(fr.name)}</span>
-                          <span style="color:var(--text-muted)">${fr.width}m</span>
-                        </div>`;
-                      }).join('')}
-                      ${framesWithReturn.map(f=>{
-                        const daysLeft = Math.ceil((new Date(f.returnDate+'T12:00:00') - new Date()) / 86400000);
-                        const retCol = daysLeft < 0 ? 'var(--red)' : daysLeft <= 7 ? 'var(--orange)' : '#0e7490';
-                        const retStr = fmt(f.returnDate) + ` (${daysLeft < 0 ? Math.abs(daysLeft)+'d OVR' : daysLeft+'d'})`;
-                        // Cages planned to go into this frame
-                        const plannedIntoCages = filtered
-                          .filter(m => (m.typeKey === 'facility-to-frame' || m.typeKey === 'rmd-to-frame') && m.frameId === f.id)
-                          .map(m => getCage(m.cageId)).filter(Boolean);
-                        // Facility-exit cages: planned Frame→RMD (passing through this boat frame on the way out)
-                        const exitingCages = filtered
-                          .filter(m => m.typeKey === 'frame-to-rmd' && m.frameId === f.id)
-                          .map(m => getCage(m.cageId)).filter(Boolean);
-                        const plannedHTML = plannedIntoCages.map(c =>
-                          `<div id="mvboat-cage-${c.id}-${f.id}" style="font-size:9px;padding:2px 5px;border-radius:3px;border:1px solid #fbbf24;background:#fffbeb;margin-top:2px;display:flex;align-items:center;gap:3px">
-                            <span style="color:#b45309;font-weight:800">→</span>
-                            <span style="font:600 9px var(--font-mono);color:#92400e">${esc(c.name)}</span>
-                            <span style="color:var(--text-muted);font-size:8px">${c.height}m</span>
-                          </div>`
-                        ).join('');
-                        const exitHTML = exitingCages.map(c =>
-                          `<div style="font-size:9px;padding:2px 5px;border-radius:3px;border:1px solid #c4b5fd;background:#f5f3ff;margin-top:2px;display:flex;align-items:center;gap:3px">
-                            <span style="color:#7040c0;font-weight:800">→RMD</span>
-                            <span style="font:600 9px var(--font-mono);color:#5b21b6">${esc(c.name)}</span>
-                            <span style="color:var(--text-muted);font-size:8px">${c.height}m</span>
-                          </div>`
-                        ).join('');
-                        const hasExiting = exitingCages.length > 0;
-                        return `<div id="mvboat-${f.id}" style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid ${plannedIntoCages.length ? '#fbbf24' : hasExiting ? '#c4b5fd' : '#a5f3fc'};background:${plannedIntoCages.length ? '#fffbeb' : hasExiting ? '#f5f3ff' : '#ecfeff'};margin-bottom:3px;">
-                          <div style="font:700 10px var(--font-mono);color:#0e7490">${esc(f.name)} <span style="font-weight:400;font-size:9px;color:var(--text-muted)">${f.location}</span></div>
-                          <div style="font-size:9px;color:${retCol};font-family:var(--font-mono)">↩ ${retStr}</div>
-                          ${plannedHTML}${exitHTML}
-                        </div>`;
-                      }).join('')}
-                      ${!hasAny ? '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no frames away</div>' : ''}
-                    </div>`;
-                  })()}
-                </div>
               </div>
 
               <!-- Divider -->
@@ -6879,6 +6824,83 @@ function renderMovementsMap(dayCtx) {
               <div id="mv-frame-zone" style="display:flex;gap:6px;flex-wrap:wrap;">
                 ${framesHTML}
               </div>
+
+              <!-- Boat / Client divider and frames -->
+              ${(() => {
+                const framesWithReturn = STATE.frames
+                  .filter(f => (f.location==='client'||f.location==='boat'))
+                  .sort((a,b) => (a.returnDate||'').localeCompare(b.returnDate||''));
+                const hasAny = framesWithReturn.length > 0 || boatMoves.length > 0;
+
+                function buildBoatFrameCard(f) {
+                  const isActive = activeFrames.has(f.id);
+                  const movesForFrame = filtered.filter(m => resolveFrameId(m) === f.id);
+                  const daysLeft = f.returnDate ? Math.ceil((new Date(f.returnDate+'T12:00:00') - new Date()) / 86400000) : null;
+                  const retCol = daysLeft === null ? '#0e7490' : daysLeft < 0 ? 'var(--red)' : daysLeft <= 7 ? 'var(--orange)' : '#0e7490';
+                  const retStr = f.returnDate ? (fmt(f.returnDate) + ` (${daysLeft < 0 ? Math.abs(daysLeft)+'d OVR' : daysLeft+'d'})`) : 'no return date';
+                  // Cages planned to go into this frame
+                  const plannedIntoCages = filtered
+                    .filter(m => (m.typeKey === 'facility-to-frame' || m.typeKey === 'rmd-to-frame') && m.frameId === f.id)
+                    .map(m => getCage(m.cageId)).filter(Boolean);
+                  // Cages planned to exit from this frame via RMD
+                  const exitingCages = filtered
+                    .filter(m => m.typeKey === 'frame-to-rmd' && m.frameId === f.id)
+                    .map(m => getCage(m.cageId)).filter(Boolean);
+                  // Cages returning to facility
+                  const returningMoves = boatMoves.filter(m => m.frameId === f.id);
+                  const isReturning = returningMoves.length > 0;
+                  const hasActivity = plannedIntoCages.length > 0 || exitingCages.length > 0 || isReturning;
+                  const border = isActive
+                    ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);'
+                    : hasActivity
+                      ? 'border:2px solid #0e7490;box-shadow:0 0 0 3px rgba(14,116,144,0.10);'
+                      : 'border:1px solid #a5f3fc;';
+                  let cageHTML = '';
+                  // Returning to facility
+                  returningMoves.forEach(m => {
+                    cageHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #a5f3fc;background:#ecfeff;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
+                      <span style="color:#0e7490;font-weight:800">→Fac</span>
+                      <span style="font:600 10px var(--font-mono)">return</span>
+                    </div>`;
+                  });
+                  // Planned into this boat frame
+                  plannedIntoCages.forEach(c => {
+                    const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
+                    cageHTML += `<div id="mvboat-cage-${c.id}-${f.id}" style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #fbbf24;background:#fffbeb;margin-bottom:2px;">
+                      <div style="display:flex;align-items:center;gap:2px;"><span style="color:#b45309;font-weight:800">→</span><span style="font:600 10px var(--font-mono);color:#92400e;cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
+                      <div style="font-size:9px;padding-left:13px;color:var(--text-muted)">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
+                    </div>`;
+                  });
+                  // Exiting to RMD from this boat frame
+                  exitingCages.forEach(c => {
+                    const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
+                    cageHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #c4b5fd;background:#f5f3ff;margin-bottom:2px;">
+                      <div style="display:flex;align-items:center;gap:2px;"><span style="color:#7040c0;font-weight:800">→RMD</span><span style="font:600 10px var(--font-mono);color:#5b21b6;cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
+                      <div style="font-size:9px;padding-left:30px;color:var(--text-muted)">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
+                    </div>`;
+                  });
+                  if (!cageHTML) cageHTML = '<div style="font-size:10px;color:var(--text-muted);font-style:italic">away</div>';
+                  return `<div id="mvboat-${f.id}" style="background:var(--bg-card);${border}border-radius:8px;padding:9px 10px;min-width:100px;">
+                    <div style="font:700 12px var(--font-mono);color:${isActive?'var(--accent)':'#0e7490'}">${esc(f.name)}</div>
+                    <div style="font-size:9px;color:var(--text-muted);margin-bottom:2px">${f.width}m · ${f.location}</div>
+                    <div style="font-size:9px;color:${retCol};font-family:var(--font-mono);margin-bottom:4px">↩ ${retStr}</div>
+                    ${cageHTML}
+                  </div>`;
+                }
+
+                if (!hasAny) return '';
+                const boatFramesHTML = framesWithReturn.map(f => buildBoatFrameCard(f)).join('');
+                // Also render any boatMoves for frames not already listed (frames returning without returnDate set)
+                const extraReturnFrames = boatMoves.map(m => getFrame(m.frameId)).filter(f => f && !framesWithReturn.find(x=>x.id===f.id));
+                const extraHTML = extraReturnFrames.map(f => buildBoatFrameCard(f)).join('');
+                return `
+                  <div style="border-top:2px dashed #a5f3fc;margin:20px 0 16px;position:relative">
+                    <span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--bg-deep);padding:0 12px;font:600 10px var(--font-mono);color:#0e7490;letter-spacing:.06em">🚢 FRAMES AT BOAT / CLIENT</span>
+                  </div>
+                  <div id="mv-boat-zone" style="display:flex;gap:6px;flex-wrap:wrap;">
+                    ${boatFramesHTML}${extraHTML}
+                  </div>`;
+              })()}
             </div>
 
             <!-- SVG overlay: absolutely positioned within mv-content for reliable arrow drawing -->
@@ -7153,7 +7175,7 @@ function mvRedraw() {
       // pointing downward toward the facility frames zone (using mv-facility-box as anchor)
       const fk = String(m.frameId||'');
       const boatFramePos = getPos('mvboat-' + fk);
-      const boatPos = getPos('mv-boat-box');
+      const boatPos = getPos('mv-boat-zone') || getPos('mvboat-' + fk);
       const facilityPos = getPos('mv-facility-box');
 
       if (m.isReturnDate) {
