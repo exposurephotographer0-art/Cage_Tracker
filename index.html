@@ -5349,14 +5349,8 @@ async function generateBoatMovements() {
     return null;
   }
 
-  // exitReservedFrameIds tracks frames used by facility-exit cages (Facility→Frame→RMD).
-  // Declared here (before the pre-pass) so findBestFrame can reference it during sorting.
-  // Populated in Step 1a post-processing after exit assignments are complete.
-  const exitReservedFrameIds = new Set();
-  const reservedFrameIds = new Set();
-
-  // No pre-pass needed — facility-exit cages go directly to RMD (no frame transit).
   // exitReservedFrameIds is kept for compatibility with findBestFrame sorting logic.
+  // reservedFrameIds is used by Step 1b (boat cage frame assignment).
   const exitReservedFrameIds = new Set();
   const reservedFrameIds = new Set();
 
