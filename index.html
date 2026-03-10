@@ -5162,29 +5162,35 @@ async function generateBoatMovements() {
   if (bpSelectedCages.size === 0) return alert('Please select at least one cage to plan for the boat.');
   if (!bpBoatDate) return alert('Please set a boat loading date.');
 
-  const selectedCages = [...bpSelectedCages].map(id => getCage(id)).filter(Boolean);
+  // ── Gather cages ──────────────────────────────────────────────────────────
+  // BOAT CAGES: those the user explicitly selected
+  const boatCages = [...bpSelectedCages].map(id => getCage(id)).filter(Boolean);
+
+  // FACILITY-EXIT CAGES: all facility cages with a departureDate on or before the
+  // boat date, NOT assigned to any trip, NOT already selected as boat cages.
+  // These need Facility → Frame by their departureDate so they can leave the
+  // facility — the frame then parks in the RMD area until the boat trip.
+  const facilityExitCages = STATE.cages.filter(c =>
+    c.location === 'facility' &&
+    c.departureDate &&
+    c.departureDate <= bpBoatDate &&
+    !c.proposedTripId &&
+    !bpSelectedCages.has(c.id)
+  );
+
   const warnings = [];
   const assignments = [];
 
   // ── Frame availability simulation ─────────────────────────────────────────
-  // Virtual frame state: starts from real state, then layered with planned movements
-  // frameSim[frameId] = { frame, cages: [cageId,...], returningOn?: string }
   const frameSim = {};
-
-  // Include currently on-site frames
   STATE.frames.filter(f => f.location === 'facility').forEach(f => {
     frameSim[f.id] = { frame: f, cages: [...f.cages] };
   });
-
-  // ── ALSO include frames currently away that return ON OR BEFORE the boat date ──
-  // These frames are still at client/boat but will be available in time for loading
   STATE.frames
     .filter(f => (f.location === 'client' || f.location === 'boat') && f.returnDate && f.returnDate <= bpBoatDate)
     .forEach(f => {
       frameSim[f.id] = { frame: f, cages: [], returningOn: f.returnDate };
     });
-
-  // Layer in existing planned (not completed) movements
   STATE.plannedMovements.filter(m => !m.completed).forEach(m => {
     if (m.typeKey === 'facility-to-frame' && m.frameId && m.cageId && !bpSelectedCages.has(m.cageId)) {
       if (frameSim[m.frameId]) frameSim[m.frameId].cages.push(m.cageId);
@@ -5194,101 +5200,80 @@ async function generateBoatMovements() {
     }
   });
 
-  // ── RMD availability simulation ───────────────────────────────────────────
-  // Build a virtual view of RMD occupancy so we can suggest free slots for
-  // facility→RMD staging moves when no frame is immediately available.
-  // rmdSim[`${number}${side}`] = count of cages currently in that side
-  const rmdSim = {};
-  STATE.rmdSlots.forEach(r => {
-    ['A','B'].forEach(side => {
-      const key = `${r.number}${side}`;
-      const occ = [r[side].cage1, r[side].cage2, r[side].cage3, r[side].cage4].filter(Boolean).length;
-      rmdSim[key] = occ;
-    });
-  });
-  // Layer in planned facility→RMD movements
-  STATE.plannedMovements.filter(m => !m.completed && m.typeKey === 'facility-to-rmd' && m.rmdNumber && m.rmdSide).forEach(m => {
-    const key = `${m.rmdNumber}${m.rmdSide}`;
-    rmdSim[key] = (rmdSim[key] || 0) + 1;
-  });
-  // Find the first RMD side with a free slot (capacity 2 per side)
-  function findFreeRMDSlot() {
-    for (let n = 1; n <= 12; n++) {
-      for (const side of ['A','B']) {
-        const key = `${n}${side}`;
-        if ((rmdSim[key] || 0) < 2) return { number: n, side, key };
-      }
-    }
-    return null;
-  }
-
   function simCageCount(fid) { return (frameSim[fid]?.cages || []).length; }
   function simCages(fid) { return (frameSim[fid]?.cages || []).map(id => getCage(id)).filter(Boolean); }
-
-  // ── Frame finder ──────────────────────────────────────────────────────────
   function isReturning(fid) { return !!frameSim[fid]?.returningOn; }
+
+  // ── Frame finder (boat cages — frames must still be available on boat date) ─
   function findBestFrame(cage, reservedIds) {
     const needsW = needsWaler(cage);
-    // Sort: on-site frames first (no returningOn), then by returnDate ascending, then narrowest-fit
     const all = Object.values(frameSim)
       .map(s => s.frame)
       .filter(f => !f.fixedForShipping && !reservedIds.has(f.id) && cage.width <= f.width && simCageCount(f.id) < 2)
       .sort((a, b) => {
         const aRet = frameSim[a.id]?.returningOn || '';
         const bRet = frameSim[b.id]?.returningOn || '';
-        if (!aRet && bRet) return -1;   // on-site first
+        if (!aRet && bRet) return -1;
         if (aRet && !bRet) return 1;
-        if (aRet !== bRet) return aRet.localeCompare(bRet); // earlier return first
-        return a.width - b.width;       // then narrowest fit
+        if (aRet !== bRet) return aRet.localeCompare(bRet);
+        return a.width - b.width;
       });
+    for (const f of all) { if (isReturning(f.id)) continue; if (simCageCount(f.id) !== 1) continue; if (needsW && !f.hasWaler) continue; const ex = simCages(f.id); if (ex.length && !canFitTwo(ex[0], cage, f.width)) continue; return f; }
+    for (const f of all) { if (isReturning(f.id)) continue; if (simCageCount(f.id) !== 0) continue; if (needsW && !f.hasWaler) continue; return f; }
+    for (const f of all) { if (!isReturning(f.id)) continue; if (simCageCount(f.id) !== 1) continue; if (needsW && !f.hasWaler) continue; const ex = simCages(f.id); if (ex.length && !canFitTwo(ex[0], cage, f.width)) continue; return f; }
+    for (const f of all) { if (!isReturning(f.id)) continue; if (simCageCount(f.id) !== 0) continue; if (needsW && !f.hasWaler) continue; return f; }
+    for (const f of all) { if (isReturning(f.id)) continue; if (simCageCount(f.id) === 1) { const ex = simCages(f.id); if (ex.length && !canFitTwo(ex[0], cage, f.width)) continue; } return f; }
+    for (const f of all) { if (simCageCount(f.id) === 1) { const ex = simCages(f.id); if (ex.length && !canFitTwo(ex[0], cage, f.width)) continue; } return f; }
+    return null;
+  }
 
-    // Pass 1: prefer frames already carrying a compatible cage (space efficiency) — on-site only
-    for (const f of all) {
-      if (isReturning(f.id)) continue;
-      if (simCageCount(f.id) !== 1) continue;
+  // ── Frame finder for facility-exit cages (transit frames — ANY on-site frame works,
+  //    including those reserved for boat loading, because these moves happen BEFORE
+  //    the boat trip. Two cages can share a frame if widths allow.) ────────────
+  // exitFrameSim tracks virtual occupancy for facility-exit pairings only
+  const exitFrameSim = {}; // frameId -> [cageId, ...]
+  STATE.frames.filter(f => f.location === 'facility' && !f.fixedForShipping).forEach(f => {
+    exitFrameSim[f.id] = [...f.cages];
+  });
+  // Also layer in planned facility-to-frame moves (so we don't double-book)
+  STATE.plannedMovements.filter(m => !m.completed && m.typeKey === 'facility-to-frame' && m.frameId).forEach(m => {
+    if (exitFrameSim[m.frameId]) exitFrameSim[m.frameId].push(m.cageId);
+  });
+
+  function findExitFrame(cage) {
+    const needsW = needsWaler(cage);
+    const frames = STATE.frames
+      .filter(f => f.location === 'facility' && !f.fixedForShipping && cage.width <= f.width)
+      .sort((a, b) => a.width - b.width); // narrowest fit first
+
+    // Pass 1: partially occupied frame where this cage fits alongside existing cage
+    for (const f of frames) {
+      const occ = exitFrameSim[f.id] || [];
+      if (occ.length !== 1) continue;
       if (needsW && !f.hasWaler) continue;
-      const existing = simCages(f.id);
-      if (existing.length && !canFitTwo(existing[0], cage, f.width)) continue;
+      const partner = getCage(occ[0]);
+      if (partner && !canFitTwo(partner, cage, f.width)) continue;
       return f;
     }
-    // Pass 2: empty on-site frames with waler if needed
-    for (const f of all) {
-      if (isReturning(f.id)) continue;
-      if (simCageCount(f.id) !== 0) continue;
+    // Pass 2: empty frame, waler respected
+    for (const f of frames) {
+      const occ = exitFrameSim[f.id] || [];
+      if (occ.length !== 0) continue;
       if (needsW && !f.hasWaler) continue;
       return f;
     }
-    // Pass 3: returning frames — partial fill first
-    for (const f of all) {
-      if (!isReturning(f.id)) continue;
-      if (simCageCount(f.id) !== 1) continue;
-      if (needsW && !f.hasWaler) continue;
-      const existing = simCages(f.id);
-      if (existing.length && !canFitTwo(existing[0], cage, f.width)) continue;
+    // Pass 3: relax waler — partial fill
+    for (const f of frames) {
+      const occ = exitFrameSim[f.id] || [];
+      if (occ.length !== 1) continue;
+      const partner = getCage(occ[0]);
+      if (partner && !canFitTwo(partner, cage, f.width)) continue;
       return f;
     }
-    // Pass 4: returning frames — empty, waler respected
-    for (const f of all) {
-      if (!isReturning(f.id)) continue;
-      if (simCageCount(f.id) !== 0) continue;
-      if (needsW && !f.hasWaler) continue;
-      return f;
-    }
-    // Pass 5: relax waler — on-site first
-    for (const f of all) {
-      if (isReturning(f.id)) continue;
-      if (simCageCount(f.id) === 1) {
-        const existing = simCages(f.id);
-        if (existing.length && !canFitTwo(existing[0], cage, f.width)) continue;
-      }
-      return f;
-    }
-    // Pass 6: relax waler — returning frames
-    for (const f of all) {
-      if (simCageCount(f.id) === 1) {
-        const existing = simCages(f.id);
-        if (existing.length && !canFitTwo(existing[0], cage, f.width)) continue;
-      }
+    // Pass 4: relax waler — empty
+    for (const f of frames) {
+      const occ = exitFrameSim[f.id] || [];
+      if (occ.length !== 0) continue;
       return f;
     }
     return null;
@@ -5296,40 +5281,38 @@ async function generateBoatMovements() {
 
   const reservedFrameIds = new Set();
 
-  // ── Step 1: Classify selected cages ───────────────────────────────────────
-  // Two fundamentally different kinds of cage can be selected:
-  //
-  // FACILITY-EXIT cages: location=facility, have a departureDate, NOT assigned
-  //   to any boat trip. These just need Facility → RMD by their departureDate.
-  //   They are NOT going on the boat. Do NOT put them through findBestFrame.
-  //
-  // BOAT cages: everything else — needs to end up in a frame on the boat.
-  //   already_framed    – in a good frame already → just fix-for-shipping
-  //   reframe           – in a frame but wrong one → move to better frame
-  //   rmd_to_frame      – in RMD → lift to frame
-  //   facility_to_frame – in facility, going on boat → lift to frame
+  // ── Step 1a: Plan facility-exit cages (Facility → Frame, by departureDate) ──
+  // Sort soonest deadline first so tightest deadlines get frame priority
+  const sortedExitCages = [...facilityExitCages].sort((a, b) => a.departureDate.localeCompare(b.departureDate));
 
-  selectedCages.forEach(cage => {
+  for (const cage of sortedExitCages) {
+    // Skip if already has a planned movement for this cage
+    const alreadyPlanned = STATE.plannedMovements.some(m =>
+      m.cageId === cage.id && !m.completed &&
+      (m.typeKey === 'facility-to-frame' || m.typeKey === 'facility-to-rmd')
+    );
+    if (alreadyPlanned) continue;
 
-    // ── FACILITY-EXIT: just needs to leave facility into RMD by departureDate ──
-    if (cage.location === 'facility' && cage.departureDate && !cage.proposedTripId) {
-      const rmdSlot = findFreeRMDSlot();
-      if (rmdSlot) {
-        rmdSim[rmdSlot.key] = (rmdSim[rmdSlot.key] || 0) + 1;
-        assignments.push({
-          cage, frame: null, action: 'facility_to_rmd',
-          note: `Facility → RMD-${rmdSlot.number}${rmdSlot.side} (must clear facility by ${fmt(cage.departureDate)})`,
-          rmdSlot,
-          deadline: cage.departureDate,
-        });
-      } else {
-        assignments.push({ cage, frame: null, action: 'no_frame', note: `No free RMD slot for cage ${cage.name}` });
-        warnings.push(`⚠ No free RMD slot to clear ${cage.name} from facility by ${fmt(cage.departureDate)}`);
-      }
-      return; // done — skip all frame logic
+    const frame = findExitFrame(cage);
+    if (frame) {
+      exitFrameSim[frame.id] = exitFrameSim[frame.id] || [];
+      exitFrameSim[frame.id].push(cage.id);
+      const partner = exitFrameSim[frame.id].length > 1 ? getCage(exitFrameSim[frame.id][0]) : null;
+      const pairNote = partner ? ` (paired with ${partner.name})` : '';
+      assignments.push({
+        cage, frame, action: 'facility_exit_to_frame',
+        note: `Facility → ${frame.name}${pairNote} — for RMD storage`,
+        deadline: cage.departureDate,
+        isFacilityExit: true,
+      });
+      if (needsWaler(cage) && !frame.hasWaler) warnings.push(`⚠ Cage ${cage.name} may need waler but ${frame.name} has none`);
+    } else {
+      warnings.push(`⚠ No suitable frame for cage ${cage.name} to leave facility by ${fmt(cage.departureDate)} — check frame availability`);
     }
+  }
 
-    // ── BOAT cages: need to end up in a frame ────────────────────────────────
+  // ── Step 1b: Classify boat cages ─────────────────────────────────────────
+  boatCages.forEach(cage => {
     if (cage.location === 'frame') {
       const currentFrame = STATE.frames.find(f => f.cages.includes(cage.id));
       if (!currentFrame) { assignments.push({ cage, frame: null, action: 'no_frame', note: `Cannot find frame for cage ${cage.name}` }); return; }
@@ -5359,21 +5342,21 @@ async function generateBoatMovements() {
         frameSim[frame.id]?.cages.push(cage.id);
         if (needsWaler(cage) && !frame.hasWaler) warnings.push(`⚠ Cage ${cage.name} needs waler but ${frame.name} has none`);
         const retNote = frameSim[frame.id]?.returningOn ? ` [frame returns ${fmt(frameSim[frame.id].returningOn)}]` : '';
-        if (retNote) warnings.push(`ℹ Cage ${cage.name} assigned to ${frame.name} which is currently away — returns ${fmt(frameSim[frame.id].returningOn)}`);
+        if (retNote) warnings.push(`ℹ Cage ${cage.name} assigned to ${frame.name} which returns ${fmt(frameSim[frame.id].returningOn)}`);
         assignments.push({ cage, frame, action: 'rmd_to_frame', note: `${cage.locationDetail || 'RMD'} → ${frame.name}${retNote}`, isReturningFrame: !!frameSim[frame.id]?.returningOn });
       } else {
         assignments.push({ cage, frame: null, action: 'no_frame', note: `No suitable frame for ${cage.name}` });
         warnings.push(`⚠ No suitable frame for cage ${cage.name} (width ${cage.width}m${needsWaler(cage)?' + waler':''})`);
       }
     } else {
-      // Facility cage going on the boat → find a frame
+      // Facility cage going on the boat → find a boat frame
       const frame = findBestFrame(cage, reservedFrameIds);
       if (frame) {
         reservedFrameIds.add(frame.id);
         frameSim[frame.id]?.cages.push(cage.id);
         if (needsWaler(cage) && !frame.hasWaler) warnings.push(`⚠ Cage ${cage.name} needs waler but ${frame.name} has none`);
         const retNote = frameSim[frame.id]?.returningOn ? ` [frame returns ${fmt(frameSim[frame.id].returningOn)}]` : '';
-        if (retNote) warnings.push(`ℹ Cage ${cage.name} assigned to ${frame.name} which is currently away — returns ${fmt(frameSim[frame.id].returningOn)}`);
+        if (retNote) warnings.push(`ℹ Cage ${cage.name} assigned to ${frame.name} which returns ${fmt(frameSim[frame.id].returningOn)}`);
         assignments.push({ cage, frame, action: 'facility_to_frame', note: `Facility → ${frame.name}${retNote}`, isReturningFrame: !!frameSim[frame.id]?.returningOn });
       } else {
         assignments.push({ cage, frame: null, action: 'no_frame', note: `No suitable frame for ${cage.name}` });
@@ -5382,10 +5365,11 @@ async function generateBoatMovements() {
     }
   });
 
-  // ── Step 2: Fix-for-shipping steps ────────────────────────────────────────
-  // Every assigned frame needs to be bolted down before boat loading
+  // ── Step 2: Fix-for-shipping steps (boat frames only) ────────────────────
   const framesNeedingFix = [...new Set(
-    assignments.filter(a => a.frame && a.action !== 'no_frame').map(a => a.frame)
+    assignments
+      .filter(a => a.frame && a.action !== 'no_frame' && a.action !== 'facility_exit_to_frame')
+      .map(a => a.frame)
   )].filter(f => !f.fixedForShipping);
 
   const fixSteps = framesNeedingFix.map(f => ({
@@ -5423,9 +5407,9 @@ async function generateBoatMovements() {
   const liftSteps = assignments.filter(a => a.action !== 'already_framed' && a.action !== 'no_frame');
   const allSteps = [...liftSteps, ...fixSteps];
 
-  // Steps with a hard deadline: facility_to_rmd (deadline field) or facility_to_frame with departureDate
-  const deadlineSteps = allSteps.filter(s => s.deadline || (s.cage?.location === 'facility' && s.cage?.departureDate));
-  const floatingSteps  = allSteps.filter(s => !(s.deadline || (s.cage?.location === 'facility' && s.cage?.departureDate)));
+  // Steps with a hard deadline: facility_exit_to_frame (deadline field) or facility_to_frame with departureDate
+  const deadlineSteps = allSteps.filter(s => s.deadline || (s.cage?.location === 'facility' && s.cage?.departureDate && s.action !== 'facility_exit_to_frame'));
+  const floatingSteps  = allSteps.filter(s => !(s.deadline || (s.cage?.location === 'facility' && s.cage?.departureDate && s.action !== 'facility_exit_to_frame')));
 
   // Sort deadline steps soonest-first
   deadlineSteps.sort((a, b) => {
@@ -5500,6 +5484,12 @@ async function generateBoatMovements() {
       moves.push({ type: '📤 Facility exit deadline', desc: step.note, category: 'facility-exit' });
     } else if (step.isFixStep) {
       moves.push({ type: `🔩 Move ${moveNum++}`, desc: step.note, category: 'move' });
+    } else if (step.action === 'facility_exit_to_frame') {
+      moves.push({
+        type: `📦 Facility Exit · Move ${moveNum++}`,
+        desc: `${step.cage.name}: ${step.note}`,
+        category: 'facility-rmd', cage: step.cage, frame: step.frame
+      });
     } else if (step.action === 'facility_to_rmd') {
       moves.push({
         type: `📦 Facility→RMD · Move ${moveNum++}`,
@@ -5598,6 +5588,17 @@ async function commitBoatPlan() {
         rmdSlot: 'cage1',
         completed: false,
       });
+    } else if (step.action === 'facility_exit_to_frame') {
+      const walerNote = needsWaler(step.cage) ? ' [waler req.]' : '';
+      newMovements.push({
+        id: uid(), date: step.date,
+        type: 'Facility → Frame (exit)',
+        typeKey: 'facility-to-frame',
+        description: `${step.cage.name}: ${step.note}${walerNote}`,
+        shift: 'day', notes: `Facility exit — must leave by ${fmt(step.deadline)} · Boat plan: ${fmt(bpBoatDate)}`,
+        cageId: step.cage.id,
+        frameId: step.frame?.id || null, completed: false,
+      });
     } else {
       const typeKey = step.action === 'rmd_to_frame' ? 'rmd-to-frame'
         : step.action === 'reframe' ? 'frame-to-rmd'
@@ -5634,12 +5635,12 @@ async function commitBoatPlan() {
   // Store committed IDs for undo
   const days = new Set(scheduledSteps.map(s => s.date).filter(Boolean));
   const liftCount = newMovements.filter(m => m.typeKey !== 'frame-fix-shipping' && !m.type.includes('Deadline')).length;
-  const rmdStagingCount = newMovements.filter(m => m.typeKey === 'facility-to-rmd').length;
+  const exitCount = newMovements.filter(m => m.type.includes('exit')).length;
   bpLastCommit = {
     ids: newMovements.map(m => m.id),
-    label: `${liftCount} movements across ${days.size} day${days.size!==1?'s':''}`,
-    rmdStagingCount,
+    label: `${liftCount} movements across ${days.size} day${days.size!==1?'s':''}${exitCount > 0 ? ` (incl. ${exitCount} facility exit${exitCount!==1?'s':''})` : ''}`,
     liftCount,
+    exitCount,
     fixCount: newMovements.filter(m=>m.typeKey==='frame-fix-shipping').length,
   };
 
@@ -5861,7 +5862,7 @@ function renderBoatPlanner() {
         ${bpLastCommit ? `
           <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#e6f5ec;border:1px solid #b0dcc0;border-radius:8px;margin-bottom:12px">
             <span style="font-size:16px">✅</span>
-            <div style="flex:1;font-size:13px;color:var(--green)"><strong>Plan added to planner</strong> — ${esc(bpLastCommit.label)}${bpLastCommit.rmdStagingCount > 0 ? ` (incl. ${bpLastCommit.rmdStagingCount} RMD staging move${bpLastCommit.rmdStagingCount!==1?'s':''})` : ''}</div>
+            <div style="flex:1;font-size:13px;color:var(--green)"><strong>Plan added to planner</strong> — ${esc(bpLastCommit.label)}</div>
             <button class="btn btn-danger btn-sm" onclick="undoBoatPlan()">↩ Undo</button>
           </div>` : ''}
         ${movementsHTML}
