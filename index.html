@@ -5297,12 +5297,39 @@ async function generateBoatMovements() {
   const reservedFrameIds = new Set();
 
   // ── Step 1: Classify selected cages ───────────────────────────────────────
-  // already_framed    – cage is in a frame, frame is suitable → just need fix-for-shipping
-  // reframe           – cage is in a frame but it's wrong → move to better frame
-  // rmd_to_frame      – cage is in RMD → lift to frame
-  // facility_to_frame – cage is in facility → lift directly to frame (1 lift)
+  // Two fundamentally different kinds of cage can be selected:
+  //
+  // FACILITY-EXIT cages: location=facility, have a departureDate, NOT assigned
+  //   to any boat trip. These just need Facility → RMD by their departureDate.
+  //   They are NOT going on the boat. Do NOT put them through findBestFrame.
+  //
+  // BOAT cages: everything else — needs to end up in a frame on the boat.
+  //   already_framed    – in a good frame already → just fix-for-shipping
+  //   reframe           – in a frame but wrong one → move to better frame
+  //   rmd_to_frame      – in RMD → lift to frame
+  //   facility_to_frame – in facility, going on boat → lift to frame
 
   selectedCages.forEach(cage => {
+
+    // ── FACILITY-EXIT: just needs to leave facility into RMD by departureDate ──
+    if (cage.location === 'facility' && cage.departureDate && !cage.proposedTripId) {
+      const rmdSlot = findFreeRMDSlot();
+      if (rmdSlot) {
+        rmdSim[rmdSlot.key] = (rmdSim[rmdSlot.key] || 0) + 1;
+        assignments.push({
+          cage, frame: null, action: 'facility_to_rmd',
+          note: `Facility → RMD-${rmdSlot.number}${rmdSlot.side} (must clear facility by ${fmt(cage.departureDate)})`,
+          rmdSlot,
+          deadline: cage.departureDate,
+        });
+      } else {
+        assignments.push({ cage, frame: null, action: 'no_frame', note: `No free RMD slot for cage ${cage.name}` });
+        warnings.push(`⚠ No free RMD slot to clear ${cage.name} from facility by ${fmt(cage.departureDate)}`);
+      }
+      return; // done — skip all frame logic
+    }
+
+    // ── BOAT cages: need to end up in a frame ────────────────────────────────
     if (cage.location === 'frame') {
       const currentFrame = STATE.frames.find(f => f.cages.includes(cage.id));
       if (!currentFrame) { assignments.push({ cage, frame: null, action: 'no_frame', note: `Cannot find frame for cage ${cage.name}` }); return; }
@@ -5313,7 +5340,6 @@ async function generateBoatMovements() {
         reservedFrameIds.add(currentFrame.id);
         assignments.push({ cage, frame: currentFrame, action: 'already_framed', note: `Already in ${currentFrame.name} ✓` });
       } else {
-        // Remove from sim so it looks available
         if (frameSim[currentFrame.id]) frameSim[currentFrame.id].cages = frameSim[currentFrame.id].cages.filter(id => id !== cage.id);
         const better = findBestFrame(cage, reservedFrameIds);
         if (better) {
@@ -5340,7 +5366,7 @@ async function generateBoatMovements() {
         warnings.push(`⚠ No suitable frame for cage ${cage.name} (width ${cage.width}m${needsWaler(cage)?' + waler':''})`);
       }
     } else {
-      // facility (or unknown) → try direct to frame first
+      // Facility cage going on the boat → find a frame
       const frame = findBestFrame(cage, reservedFrameIds);
       if (frame) {
         reservedFrameIds.add(frame.id);
@@ -5350,20 +5376,8 @@ async function generateBoatMovements() {
         if (retNote) warnings.push(`ℹ Cage ${cage.name} assigned to ${frame.name} which is currently away — returns ${fmt(frameSim[frame.id].returningOn)}`);
         assignments.push({ cage, frame, action: 'facility_to_frame', note: `Facility → ${frame.name}${retNote}`, isReturningFrame: !!frameSim[frame.id]?.returningOn });
       } else {
-        // No frame available — try staging to RMD if the cage needs to leave the facility
-        const rmdSlot = findFreeRMDSlot();
-        if (rmdSlot && (cage.departureDate || cage.shippingPreference)) {
-          rmdSim[rmdSlot.key] = (rmdSim[rmdSlot.key] || 0) + 1;
-          assignments.push({
-            cage, frame: null, action: 'facility_to_rmd',
-            note: `Facility → RMD-${rmdSlot.number}${rmdSlot.side} (staging — no frame available yet)`,
-            rmdSlot,
-          });
-          warnings.push(`ℹ No frame available for ${cage.name} — staging to RMD-${rmdSlot.number}${rmdSlot.side} until a frame is free`);
-        } else {
-          assignments.push({ cage, frame: null, action: 'no_frame', note: `No suitable frame for ${cage.name}` });
-          warnings.push(`⚠ No suitable frame for cage ${cage.name} (width ${cage.width}m${needsWaler(cage)?' + waler':''})`);
-        }
+        assignments.push({ cage, frame: null, action: 'no_frame', note: `No suitable frame for ${cage.name}` });
+        warnings.push(`⚠ No suitable frame for cage ${cage.name} (width ${cage.width}m${needsWaler(cage)?' + waler':''})`);
       }
     }
   });
@@ -5379,24 +5393,10 @@ async function generateBoatMovements() {
     note: `Fix frame ${f.name} for shipping (bolt cage(s) to frame)`
   }));
 
-  // ── Step 3: Facility-exit deadline notes ─────────────────────────────────
-  // These are pinned to the departureDate as a visible reminder.
-  const facilityExitSteps = [];
-  assignments.forEach(a => {
-    if (a.cage.location !== 'facility') return;
-    if (!a.cage.departureDate) return;
-    if (a.action === 'no_frame') return; // warning already shown
-    facilityExitSteps.push({
-      isFacilityExit: true, cage: a.cage,
-      date: a.cage.departureDate,
-      note: `Cage ${a.cage.name} — must leave facility by this date`,
-    });
-  });
-
-  // ── Step 4: Schedule lifts across working days ────────────────────────────
-  // Facility cages are scheduled ON OR BEFORE their departureDate (hard deadline).
-  // Other cages (rmd, reframe, fix) are scheduled as early as possible within the
-  // available working days, respecting the daily movements limit.
+  // ── Step 3: Schedule lifts across working days ────────────────────────────
+  // facility_to_rmd steps have step.deadline = cage.departureDate (hard deadline).
+  // facility_to_frame boat cages also respect departureDate if set.
+  // All other steps (rmd→frame, fixes) float to earliest available slot.
 
   const boatDate = new Date(bpBoatDate + 'T12:00:00');
   const todayD = new Date(); todayD.setHours(12,0,0,0);
@@ -5407,7 +5407,6 @@ async function generateBoatMovements() {
     if (dow !== 0 && dow !== 6) workDays.push(toISO(d));
     d.setDate(d.getDate() + 1);
   }
-  // Also include the boat date itself as a fallback day
   workDays.push(bpBoatDate);
   if (workDays.length === 1) {
     warnings.push('⚠ No working days before boat date — scheduling everything on boat date.');
@@ -5421,45 +5420,42 @@ async function generateBoatMovements() {
 
   const scheduledSteps = [];
 
-  // Pin facility exit deadline notes to their exact departure dates (informational only)
-  facilityExitSteps.forEach(step => scheduledSteps.push({ ...step }));
-
-  // Separate: steps with a hard deadline (facility cages with departureDate)
-  // vs steps without (rmd→frame, fixes, etc.)
   const liftSteps = assignments.filter(a => a.action !== 'already_framed' && a.action !== 'no_frame');
   const allSteps = [...liftSteps, ...fixSteps];
 
-  const deadlineSteps = allSteps.filter(s => s.cage?.location === 'facility' && s.cage?.departureDate);
-  const floatingSteps = allSteps.filter(s => !(s.cage?.location === 'facility' && s.cage?.departureDate));
+  // Steps with a hard deadline: facility_to_rmd (deadline field) or facility_to_frame with departureDate
+  const deadlineSteps = allSteps.filter(s => s.deadline || (s.cage?.location === 'facility' && s.cage?.departureDate));
+  const floatingSteps  = allSteps.filter(s => !(s.deadline || (s.cage?.location === 'facility' && s.cage?.departureDate)));
 
-  // Sort deadline steps by their deadline ascending (soonest first)
-  deadlineSteps.sort((a, b) => (a.cage.departureDate || '').localeCompare(b.cage.departureDate || ''));
+  // Sort deadline steps soonest-first
+  deadlineSteps.sort((a, b) => {
+    const da = a.deadline || a.cage?.departureDate || '';
+    const db = b.deadline || b.cage?.departureDate || '';
+    return da.localeCompare(db);
+  });
 
-  // Helper: find the latest available working day on or before a deadline date
+  // Find latest working day on or before the deadline that still has capacity
   function latestDayByDeadline(deadlineStr) {
-    const deadline = deadlineStr;
-    // Walk workDays backwards from the deadline to find the last available slot
-    const eligible = workDays.filter(d => d <= deadline);
-    if (eligible.length === 0) return workDays[0]; // best effort: first day
-    // Pick the latest eligible day that still has capacity (try from latest back)
+    const eligible = workDays.filter(d => d <= deadlineStr);
+    if (eligible.length === 0) return workDays[0];
     for (let i = eligible.length - 1; i >= 0; i--) {
       if ((existingCounts[eligible[i]] || 0) < DAILY_LIMIT) return eligible[i];
     }
-    // All days full — return the deadline day anyway (will exceed limit, flagged below)
     return eligible[eligible.length - 1];
   }
 
-  // Schedule deadline steps: assign each to the latest day before its deadline
+  // Schedule deadline steps
   for (const step of deadlineSteps) {
-    const day = latestDayByDeadline(step.cage.departureDate);
+    const deadlineStr = step.deadline || step.cage.departureDate;
+    const day = latestDayByDeadline(deadlineStr);
     existingCounts[day] = (existingCounts[day] || 0) + 1;
     scheduledSteps.push({ ...step, date: day });
-    if (day > step.cage.departureDate) {
-      warnings.push(`⚠ Cage ${step.cage.name} departure is ${fmt(step.cage.departureDate)} but no slot available before then — scheduled ${fmt(day)}`);
+    if (day > deadlineStr) {
+      warnings.push(`⚠ Cage ${step.cage.name} must leave by ${fmt(deadlineStr)} but no slot available — scheduled ${fmt(day)}`);
     }
   }
 
-  // Schedule floating steps: fill from the first available day forward
+  // Schedule floating steps from earliest available day
   let dayIdx = 0;
   let usedToday = existingCounts[workDays[0]] || 0;
   for (const step of floatingSteps) {
@@ -5589,10 +5585,9 @@ async function commitBoatPlan() {
         frameId: step.frame?.id || null, completed: false,
       });
     } else if (step.action === 'facility_to_rmd') {
-      // Facility → RMD staging move
       newMovements.push({
         id: uid(), date: step.date,
-        type: 'Facility → RMD (staging)',
+        type: 'Facility → RMD',
         typeKey: 'facility-to-rmd',
         description: `${step.cage.name}: ${step.note}`,
         shift: 'day', notes: `Boat plan — load date: ${fmt(bpBoatDate)}`,
@@ -5761,10 +5756,12 @@ function renderBoatPlanner() {
           : '';
         const urgentBorder = isOverdue ? 'border-left:3px solid var(--red)' : isUrgent ? 'border-left:3px solid var(--orange)' : '';
         const locTag = `<span class="badge badge-${locBadge(c.location)}" style="font-size:9px;padding:1px 5px">${esc(locLabel(c))}</span>`;
+        const isRmdExit = c.location === 'facility' && c.departureDate && !c.proposedTripId;
+        const exitTag = isRmdExit ? `<span style="font:600 9px var(--font-mono);padding:1px 6px;background:#f0e8fa;color:var(--purple);border:1px solid #c8b0e8;border-radius:10px">→ RMD</span>` : '';
         return `<div class="bp-cage-card ${sel?'selected':''}" onclick="toggleBPCage('${c.id}')" style="${urgentBorder}">
           <div class="bp-check">${sel?'✓':''}</div>
           <div class="bp-cage-info">
-            <div class="bp-cage-name">${esc(c.name)} ${locTag}</div>
+            <div class="bp-cage-name">${esc(c.name)} ${locTag} ${exitTag}</div>
             <div class="bp-cage-meta">${c.width}m × ${c.height}m × ${c.length}m · ${c.weight}t ${depTag}</div>
           </div>
         </div>`;
