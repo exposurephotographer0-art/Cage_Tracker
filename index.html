@@ -5311,6 +5311,22 @@ async function generateBoatMovements() {
     }
   }
 
+  // ── Step 1a post-processing: frames used for facility-exit become available
+  //    in frameSim (at RMD, empty) so findBestFrame can reuse them for boat
+  //    cages. The sequence will be: Facility→Frame→RMD (exit cage drops off),
+  //    then Frame→Boat (boat cage loads). ─────────────────────────────────────
+  assignments.filter(a => a.action === 'facility_exit_to_frame' && a.frame).forEach(a => {
+    const fid = a.frame.id;
+    if (!frameSim[fid]) {
+      // Frame wasn't in frameSim yet (only in exitFrameSim) — add it as empty
+      frameSim[fid] = { frame: a.frame, cages: [] };
+    } else {
+      // Frame is already tracked — remove the exit cage from its sim occupancy
+      // (it will be at RMD after the drop-off, so the frame is free again)
+      frameSim[fid].cages = frameSim[fid].cages.filter(id => id !== a.cage.id);
+    }
+  });
+
   // ── Step 1b: Classify boat cages ─────────────────────────────────────────
   boatCages.forEach(cage => {
     if (cage.location === 'frame') {
@@ -5350,6 +5366,8 @@ async function generateBoatMovements() {
       }
     } else {
       // Facility cage going on the boat → find a boat frame
+      // Frames freed up by facility-exit steps are now visible in frameSim
+      const exitFrameIds = new Set(assignments.filter(a => a.action === 'facility_exit_to_frame' && a.frame).map(a => a.frame.id));
       const frame = findBestFrame(cage, reservedFrameIds);
       if (frame) {
         reservedFrameIds.add(frame.id);
@@ -5357,7 +5375,8 @@ async function generateBoatMovements() {
         if (needsWaler(cage) && !frame.hasWaler) warnings.push(`⚠ Cage ${cage.name} needs waler but ${frame.name} has none`);
         const retNote = frameSim[frame.id]?.returningOn ? ` [frame returns ${fmt(frameSim[frame.id].returningOn)}]` : '';
         if (retNote) warnings.push(`ℹ Cage ${cage.name} assigned to ${frame.name} which returns ${fmt(frameSim[frame.id].returningOn)}`);
-        assignments.push({ cage, frame, action: 'facility_to_frame', note: `Facility → ${frame.name}${retNote}`, isReturningFrame: !!frameSim[frame.id]?.returningOn });
+        const reuseNote = exitFrameIds.has(frame.id) ? ` [reusing ${frame.name} after facility exit drop-off]` : '';
+        assignments.push({ cage, frame, action: 'facility_to_frame', note: `Facility → ${frame.name}${retNote}${reuseNote}`, isReturningFrame: !!frameSim[frame.id]?.returningOn, isReusingExitFrame: exitFrameIds.has(frame.id) });
       } else {
         assignments.push({ cage, frame: null, action: 'no_frame', note: `No suitable frame for ${cage.name}` });
         warnings.push(`⚠ No suitable frame for cage ${cage.name} (width ${cage.width}m${needsWaler(cage)?' + waler':''})`);
