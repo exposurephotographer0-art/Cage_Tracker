@@ -6301,15 +6301,19 @@ function renderMovementsMap() {
     {k:'frame-return-from-client',label:`🚢 Frame Return (${ct['frame-return-from-client']||0})`},
   ].map(b=>`<button class="filter-btn ${mvFilter===b.k?'active':''}" onclick="mvFilter='${b.k}';render()">${b.label}</button>`).join('');
 
-  // Helper: resolve rmdSlot from cage's current RMD location when not stored
+  // Helper: resolve rmdSlot from a movement into "NNA" format (e.g. "1A", "10B")
+  // m.rmdSlot may be a cage-slot key like "cage1" (from boat planner) — ignore those.
+  // m.rmdNumber + m.rmdSide is the authoritative source for boat-planner movements.
   function resolveRmdSlot(m) {
-    if (m.rmdSlot) return m.rmdSlot;
-    // facility-to-rmd and frame-to-rmd from boat planner store rmdNumber + rmdSide instead of rmdSlot
+    // Prefer rmdNumber+rmdSide (set by boat planner) — always authoritative
     if (m.rmdNumber != null) return String(m.rmdNumber) + (m.rmdSide || '');
+    // rmdSlot may be a "NNA" string (manually planned) OR a cage-slot key like "cage1" (boat planner legacy)
+    // Only use it if it looks like a real slot reference (starts with a digit or contains a digit)
+    if (m.rmdSlot && /^\d/.test(String(m.rmdSlot))) return m.rmdSlot;
+    // Fall back: read from cage's current RMD locationDetail
     if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') {
       const cage = getCage(m.cageId);
       if (cage && cage.location === 'rmd' && cage.locationDetail) {
-        // locationDetail is like "RMD-04A" — extract just "4A"
         const detailMatch = String(cage.locationDetail).match(/(\d+)\s*([ABab]?)\s*$/);
         if (detailMatch) return String(parseInt(detailMatch[1], 10)) + (detailMatch[2] || '');
         return cage.locationDetail;
@@ -6332,6 +6336,7 @@ function renderMovementsMap() {
         const f = STATE.frames.find(fr => fr.cages.includes(m.cageId));
         if (f) return f.id;
       }
+      // Also check pending facility-to-frame moves (cage may still be at facility pre-lift)
       const pending = STATE.plannedMovements.find(
         pm => !pm.completed && pm.cageId === m.cageId && pm.typeKey === 'facility-to-frame' && pm.frameId
       );
@@ -6436,9 +6441,13 @@ function renderMovementsMap() {
     const isActive = activeFrames.has(f.id);
     const movesForFrame = filtered.filter(m => resolveFrameId(m) === f.id);
     const fCages = f.cages.map(cid=>getCage(cid)).filter(Boolean);
-    const outIds = movesForFrame.filter(m=>m.typeKey==='frame-to-rmd').map(m=>m.cageId);
-    const inIds  = movesForFrame.filter(m=>m.typeKey==='rmd-to-frame'||m.typeKey==='facility-to-frame').map(m=>m.cageId);
+    const outIds  = movesForFrame.filter(m=>m.typeKey==='frame-to-rmd').map(m=>m.cageId);
+    const inIds   = movesForFrame.filter(m=>m.typeKey==='rmd-to-frame'||m.typeKey==='facility-to-frame').map(m=>m.cageId);
+    // facility-exit cages: planned Facility→Frame then Frame→RMD — show them as incoming+outgoing
+    const transitIds = movesForFrame.filter(m=>m.typeKey==='frame-to-rmd').map(m=>m.cageId)
+      .filter(cid => filtered.some(m2=>m2.cageId===cid && m2.typeKey==='facility-to-frame' && resolveFrameId(m2)===f.id));
     let html = '';
+    // Show cages physically on the frame
     fCages.forEach(c=>{
       const out = outIds.includes(c.id);
       const _fShade = shipmentShadeClass(c, _mvShipDays);
@@ -6458,6 +6467,7 @@ function renderMovementsMap() {
     inIds.forEach(cid=>{
       const c=getCage(cid); if(!c)return;
       if(fCages.find(x=>x.id===cid))return; // already shown
+      if(transitIds.includes(cid))return; // will be shown as transit below
       const _iShade = shipmentShadeClass(c, _mvShipDays);
       let iBg;
       if (_iShade === 'next') iBg = 'background:#3b1d6e;border-color:#7040c0;';
@@ -6526,7 +6536,27 @@ function renderMovementsMap() {
   // Resolve missing frameId for frame-to-rmd movements (older data may lack it)
   window._mvMovesData = filtered.map(m=>{
     let frameId = m.frameId || '';
-    let rmdSlot = m.rmdSlot || '';
+    let rmdSlot = '';
+    // For boat-planner movements: rmdNumber+rmdSide is the canonical reference
+    if (m.rmdNumber != null) {
+      rmdSlot = String(m.rmdNumber) + (m.rmdSide || '');
+    } else if (m.rmdSlot && /^\d/.test(String(m.rmdSlot))) {
+      // Manual planner: rmdSlot is already in "NNA" format
+      rmdSlot = m.rmdSlot;
+    }
+    // Fallback: infer from cage's current RMD locationDetail
+    if (!rmdSlot && (m.typeKey === 'frame-to-rmd' || m.typeKey === 'rmd-to-frame')) {
+      const cage = getCage(m.cageId);
+      if (cage && cage.location === 'rmd' && cage.locationDetail) {
+        const detailMatch = String(cage.locationDetail).match(/(\d+)\s*([ABab]?)\s*$/);
+        if (detailMatch) {
+          rmdSlot = String(parseInt(detailMatch[1], 10)) + (detailMatch[2] || '');
+        } else {
+          rmdSlot = cage.locationDetail;
+        }
+      }
+    }
+    // Resolve missing frameId for frame-to-rmd / rmd-to-frame
     if (!frameId && (m.typeKey === 'frame-to-rmd' || m.typeKey === 'rmd-to-frame')) {
       // Try to find the frame from the cage's current location
       const cage = getCage(m.cageId);
@@ -6540,19 +6570,6 @@ function renderMovementsMap() {
           pm => !pm.completed && pm.cageId === m.cageId && pm.typeKey === 'facility-to-frame' && pm.frameId
         );
         if (pending) frameId = pending.frameId;
-      }
-    }
-    // Resolve missing rmdSlot for frame-to-rmd: use cage's current RMD location
-    if (!rmdSlot && (m.typeKey === 'frame-to-rmd' || m.typeKey === 'rmd-to-frame')) {
-      const cage = getCage(m.cageId);
-      if (cage && cage.location === 'rmd' && cage.locationDetail) {
-        // locationDetail is like "RMD-04A" or "RMD-7B" — extract just "4A" or "7B"
-        const detailMatch = String(cage.locationDetail).match(/(\d+)\s*([ABab]?)\s*$/);
-        if (detailMatch) {
-          rmdSlot = String(parseInt(detailMatch[1], 10)) + (detailMatch[2] || '');
-        } else {
-          rmdSlot = cage.locationDetail;
-        }
       }
     }
     // Resolve srcFrameId for frame-to-frame if missing
@@ -6662,7 +6679,8 @@ function renderMovementsMap() {
                     const framesWithReturn = STATE.frames
                       .filter(f => (f.location==='client'||f.location==='boat') && f.returnDate)
                       .sort((a,b) => a.returnDate.localeCompare(b.returnDate));
-                    const hasAny = framesWithReturn.length > 0 || boatMoves.length > 0;
+                    const hasExitMoves = filtered.some(m => m.typeKey === 'frame-to-rmd' && framesWithReturn.some(f => f.id === m.frameId));
+                    const hasAny = framesWithReturn.length > 0 || boatMoves.length > 0 || hasExitMoves;
                     return `<div id="mv-boat-box" style="background:var(--bg-card);border:${hasAny?'2px solid #0e7490;box-shadow:0 0 0 3px rgba(14,116,144,0.12);':'1px solid var(--border);'}border-radius:8px;padding:12px 16px;min-width:145px;">
                       <div style="font:700 13px var(--font-mono);color:#0e7490;margin-bottom:8px">Boat / Client</div>
                       ${boatMoves.map(m=>{
@@ -6681,6 +6699,10 @@ function renderMovementsMap() {
                         const plannedIntoCages = filtered
                           .filter(m => (m.typeKey === 'facility-to-frame' || m.typeKey === 'rmd-to-frame') && m.frameId === f.id)
                           .map(m => getCage(m.cageId)).filter(Boolean);
+                        // Facility-exit cages: planned Frame→RMD (passing through this boat frame on the way out)
+                        const exitingCages = filtered
+                          .filter(m => m.typeKey === 'frame-to-rmd' && m.frameId === f.id)
+                          .map(m => getCage(m.cageId)).filter(Boolean);
                         const plannedHTML = plannedIntoCages.map(c =>
                           `<div id="mvboat-cage-${c.id}-${f.id}" style="font-size:9px;padding:2px 5px;border-radius:3px;border:1px solid #fbbf24;background:#fffbeb;margin-top:2px;display:flex;align-items:center;gap:3px">
                             <span style="color:#b45309;font-weight:800">→</span>
@@ -6688,10 +6710,18 @@ function renderMovementsMap() {
                             <span style="color:var(--text-muted);font-size:8px">${c.height}m</span>
                           </div>`
                         ).join('');
-                        return `<div id="mvboat-${f.id}" style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid ${plannedIntoCages.length ? '#fbbf24' : '#a5f3fc'};background:${plannedIntoCages.length ? '#fffbeb' : '#ecfeff'};margin-bottom:3px;">
+                        const exitHTML = exitingCages.map(c =>
+                          `<div style="font-size:9px;padding:2px 5px;border-radius:3px;border:1px solid #c4b5fd;background:#f5f3ff;margin-top:2px;display:flex;align-items:center;gap:3px">
+                            <span style="color:#7040c0;font-weight:800">→RMD</span>
+                            <span style="font:600 9px var(--font-mono);color:#5b21b6">${esc(c.name)}</span>
+                            <span style="color:var(--text-muted);font-size:8px">${c.height}m</span>
+                          </div>`
+                        ).join('');
+                        const hasExiting = exitingCages.length > 0;
+                        return `<div id="mvboat-${f.id}" style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid ${plannedIntoCages.length ? '#fbbf24' : hasExiting ? '#c4b5fd' : '#a5f3fc'};background:${plannedIntoCages.length ? '#fffbeb' : hasExiting ? '#f5f3ff' : '#ecfeff'};margin-bottom:3px;">
                           <div style="font:700 10px var(--font-mono);color:#0e7490">${esc(f.name)} <span style="font-weight:400;font-size:9px;color:var(--text-muted)">${f.location}</span></div>
                           <div style="font-size:9px;color:${retCol};font-family:var(--font-mono)">↩ ${retStr}</div>
-                          ${plannedHTML}
+                          ${plannedHTML}${exitHTML}
                         </div>`;
                       }).join('')}
                       ${!hasAny ? '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no frames away</div>' : ''}
@@ -6855,9 +6885,10 @@ function mvRedraw() {
       const rk = cleanRk(m.rmdSlot);
       const fk = String(m.frameId||'');
       const rPos = getPos('mvr-' + rk);
-      const fPos = getPos('mvf-' + fk);
+      // Frame may be a facility frame (mvf-) or a boat frame (mvboat-) — try both
+      const fPos = getPos('mvf-' + fk) || getPos('mvboat-' + fk);
       if (!rPos || !fPos) {
-        console.warn('[mvRedraw] missing element:', !rPos ? 'mvr-'+rk : '', !fPos ? 'mvf-'+fk : '', 'rmdSlot='+m.rmdSlot, 'frameId='+m.frameId);
+        console.warn('[mvRedraw] missing element:', !rPos ? 'mvr-'+rk : '', !fPos ? 'mvf-'+fk+' / mvboat-'+fk : '', 'rmdSlot='+m.rmdSlot, 'frameId='+m.frameId);
         return;
       }
 
