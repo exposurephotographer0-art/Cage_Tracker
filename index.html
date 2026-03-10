@@ -5306,6 +5306,51 @@ async function generateBoatMovements() {
   // Sort soonest deadline first so tightest deadlines get frame priority
   const sortedExitCages = [...facilityExitCages].sort((a, b) => a.departureDate.localeCompare(b.departureDate));
 
+  // Track RMD slots virtually claimed by exit assignments in this planning run
+  // rmdSimClaimed: Set of "NNX" keys (e.g. "10B") already claimed this run
+  const rmdSimClaimed = new Set();
+
+  // Build set of already-occupied RMD side/slots
+  function getRMDOccupancyCounts() {
+    const counts = {}; // "NNX" -> number of cages currently there
+    STATE.rmdSlots.forEach(r => {
+      SIDES.forEach(side => {
+        const key = `${r.number}${side}`;
+        const used = [r[side].cage1, r[side].cage2, r[side].cage3, r[side].cage4].filter(Boolean).length;
+        counts[key] = used;
+      });
+    });
+    return counts;
+  }
+
+  // Find a suggested free (or partially occupied) RMD slot for an exit cage
+  function findFreeRMDSlotForExit() {
+    const maxPerSide = 4; // cage1-cage4
+    const occ = getRMDOccupancyCounts();
+    // Prefer slots with 1 cage (so we fill them), then empty slots
+    const sorted = STATE.rmdSlots.flatMap(r =>
+      SIDES.map(side => ({ number: r.number, side, key: `${r.number}${side}`, count: occ[`${r.number}${side}`] || 0 }))
+    ).sort((a, b) => {
+      if (a.count === 0 && b.count === 0) return a.number - b.number;
+      if (a.count > 0 && b.count > 0) return a.number - b.number;
+      return a.count > 0 ? -1 : 1; // prefer partially filled
+    });
+    for (const slot of sorted) {
+      if (slot.count >= maxPerSide) continue;
+      if (rmdSimClaimed.has(slot.key)) {
+        // Check if virtually full (occ + claimed >= maxPerSide)
+        const virtualCount = slot.count + [...rmdSimClaimed].filter(k => k === slot.key).length;
+        if (virtualCount >= maxPerSide) continue;
+      }
+      rmdSimClaimed.add(slot.key);
+      return { number: slot.number, side: slot.side };
+    }
+    // All slots full — just pick a slot and warn
+    const first = STATE.rmdSlots[0];
+    if (first) return { number: first.number, side: 'A' };
+    return null;
+  }
+
   for (const cage of sortedExitCages) {
     // Skip if already has a planned movement for this cage
     const alreadyPlanned = STATE.plannedMovements.some(m =>
@@ -5319,13 +5364,26 @@ async function generateBoatMovements() {
       exitFrameSim[frame.id] = exitFrameSim[frame.id] || [];
       exitFrameSim[frame.id].push(cage.id);
       const partner = exitFrameSim[frame.id].length > 1 ? getCage(exitFrameSim[frame.id][0]) : null;
-      const pairNote = partner ? ` (paired with ${partner.name})` : '';
+      const pairNote = partner ? ` (paired with cage ${partner.name})` : '';
+      // Suggest an RMD slot for this cage to park in after exiting
+      const suggestedRMD = findFreeRMDSlotForExit();
+      const rmdLabel = suggestedRMD ? `RMD-${suggestedRMD.number}${suggestedRMD.side}` : 'RMD (no slot available)';
       assignments.push({
         cage, frame, action: 'facility_exit_to_frame',
-        note: `Facility → ${frame.name}${pairNote} — for RMD storage`,
+        note: `Cage ${cage.name}: Facility → ${frame.name}${pairNote} → ${rmdLabel} for storage`,
         deadline: cage.departureDate,
         isFacilityExit: true,
+        suggestedRMD,
       });
+      // Add a follow-on frame-to-rmd step so the cage is tracked into RMD storage
+      if (suggestedRMD) {
+        assignments.push({
+          cage, frame, action: 'facility_exit_frame_to_rmd',
+          note: `Cage ${cage.name}: ${frame.name} → ${rmdLabel} (park in RMD storage)`,
+          deadline: cage.departureDate,
+          rmdSlot: suggestedRMD,
+        });
+      }
       if (needsWaler(cage) && !frame.hasWaler) warnings.push(`⚠ Cage ${cage.name} may need waler but ${frame.name} has none`);
     } else {
       warnings.push(`⚠ No suitable frame for cage ${cage.name} to leave facility by ${fmt(cage.departureDate)} — check frame availability`);
@@ -5451,12 +5509,13 @@ async function generateBoatMovements() {
 
   const scheduledSteps = [];
 
-  const liftSteps = assignments.filter(a => a.action !== 'already_framed' && a.action !== 'no_frame');
-  const allSteps = [...liftSteps, ...fixSteps];
+  const liftSteps = assignments.filter(a => a.action !== 'already_framed' && a.action !== 'no_frame' && a.action !== 'facility_exit_frame_to_rmd');
+  const exitRmdSteps = assignments.filter(a => a.action === 'facility_exit_frame_to_rmd');
+  const allSteps = [...liftSteps, ...fixSteps, ...exitRmdSteps];
 
-  // Steps with a hard deadline: facility_exit_to_frame (deadline field) or facility_to_frame with departureDate
-  const deadlineSteps = allSteps.filter(s => s.deadline || (s.cage?.location === 'facility' && s.cage?.departureDate && s.action !== 'facility_exit_to_frame'));
-  const floatingSteps  = allSteps.filter(s => !(s.deadline || (s.cage?.location === 'facility' && s.cage?.departureDate && s.action !== 'facility_exit_to_frame')));
+  // Steps with a hard deadline: facility_exit_to_frame and facility_exit_frame_to_rmd (deadline field) or facility_to_frame with departureDate
+  const deadlineSteps = allSteps.filter(s => s.deadline || (s.cage?.location === 'facility' && s.cage?.departureDate && s.action !== 'facility_exit_to_frame' && s.action !== 'facility_exit_frame_to_rmd'));
+  const floatingSteps  = allSteps.filter(s => !(s.deadline || (s.cage?.location === 'facility' && s.cage?.departureDate && s.action !== 'facility_exit_to_frame' && s.action !== 'facility_exit_frame_to_rmd')));
 
   // Sort deadline steps soonest-first
   deadlineSteps.sort((a, b) => {
@@ -5465,28 +5524,51 @@ async function generateBoatMovements() {
     return da.localeCompare(db);
   });
 
-  // Find latest working day on or before the deadline (no capacity cap — just find the day)
-  function latestDayByDeadline(deadlineStr) {
-    const eligible = workDays.filter(d => d <= deadlineStr);
-    if (eligible.length === 0) return workDays[0];
+  // Find latest working day on or before the deadline, but no earlier than the frame's return date
+  function latestDayByDeadline(deadlineStr, earliestStr) {
+    const eligible = workDays.filter(d => d <= deadlineStr && (!earliestStr || d >= earliestStr));
+    if (eligible.length === 0) {
+      // Fallback: if no day satisfies both constraints, find first day >= earliestStr
+      if (earliestStr) {
+        const afterReturn = workDays.filter(d => d >= earliestStr);
+        return afterReturn.length > 0 ? afterReturn[0] : workDays[workDays.length - 1];
+      }
+      return workDays[0];
+    }
     return eligible[eligible.length - 1];
   }
 
-  // Schedule deadline steps — placed on latest available day before deadline
+  // Schedule deadline steps — placed on latest available day before deadline (but after frame returns)
   for (const step of deadlineSteps) {
     const deadlineStr = step.deadline || step.cage.departureDate;
-    const day = latestDayByDeadline(deadlineStr);
+    // For steps using a returning frame, the earliest possible day is the frame's return date
+    const frameReturnsOn = step.frame ? (frameSim[step.frame.id]?.returningOn || null) : null;
+    const day = latestDayByDeadline(deadlineStr, frameReturnsOn);
     existingCounts[day] = (existingCounts[day] || 0) + 1;
     scheduledSteps.push({ ...step, date: day });
     if (day > deadlineStr) {
-      warnings.push(`⚠ Cage ${step.cage.name} must leave by ${fmt(deadlineStr)} but no suitable day found — scheduled ${fmt(day)}`);
+      warnings.push(`⚠ Cage ${step.cage.name} must leave by ${fmt(deadlineStr)} but earliest available day is ${fmt(day)} — check frame return dates`);
     }
   }
 
   // Schedule floating steps from earliest available day (no cap — spread evenly, warn if heavy)
+  // Floating steps that use a returning frame must be scheduled on or after that frame's return date.
   let dayIdx = 0;
   for (const step of floatingSteps) {
-    const assignedDay = workDays[Math.min(dayIdx, workDays.length - 1)];
+    const frameReturnsOn = step.frame ? (frameSim[step.frame.id]?.returningOn || null) : null;
+    let assignedDay;
+    if (frameReturnsOn) {
+      // Find earliest working day on or after the frame's return date, starting from dayIdx
+      const eligibleDays = workDays.filter(d => d >= frameReturnsOn);
+      if (eligibleDays.length > 0) {
+        // Round-robin within eligible days
+        assignedDay = eligibleDays[dayIdx % eligibleDays.length];
+      } else {
+        assignedDay = workDays[workDays.length - 1];
+      }
+    } else {
+      assignedDay = workDays[Math.min(dayIdx, workDays.length - 1)];
+    }
     existingCounts[assignedDay] = (existingCounts[assignedDay] || 0) + 1;
     scheduledSteps.push({ ...step, date: assignedDay });
     dayIdx = (dayIdx + 1) % workDays.length; // round-robin across all days
@@ -5529,7 +5611,14 @@ async function generateBoatMovements() {
     } else if (step.action === 'facility_exit_to_frame') {
       moves.push({
         type: `📦 Facility Exit · Move ${moveNum++}`,
-        desc: `${step.cage.name}: ${step.note}`,
+        desc: `${step.note}`,
+        category: 'facility-rmd', cage: step.cage, frame: step.frame
+      });
+    } else if (step.action === 'facility_exit_frame_to_rmd') {
+      const rmdLabel = step.rmdSlot ? `RMD-${step.rmdSlot.number}${step.rmdSlot.side}` : 'RMD';
+      moves.push({
+        type: `🏪 Park in RMD · Move ${moveNum++}`,
+        desc: `${step.note}`,
         category: 'facility-rmd', cage: step.cage, frame: step.frame
       });
     } else if (step.action === 'facility_to_rmd') {
@@ -5625,6 +5714,21 @@ async function commitBoatPlan() {
         shift: 'day', notes: `Boat plan — load date: ${fmt(bpBoatDate)}`,
         cageId: step.cage.id,
         frameId: null,
+        rmdNumber: step.rmdSlot?.number || null,
+        rmdSide: step.rmdSlot?.side || null,
+        rmdSlot: 'cage1',
+        completed: false,
+      });
+    } else if (step.action === 'facility_exit_frame_to_rmd') {
+      const rmdLabel = step.rmdSlot ? `RMD-${step.rmdSlot.number}${step.rmdSlot.side}` : 'RMD';
+      newMovements.push({
+        id: uid(), date: step.date,
+        type: 'Frame → RMD (exit storage)',
+        typeKey: 'frame-to-rmd',
+        description: `Cage ${step.cage.name}: ${step.frame?.name || 'frame'} → ${rmdLabel} for storage`,
+        shift: 'day', notes: `Facility exit — cage must leave by ${fmt(step.deadline)} · Boat plan: ${fmt(bpBoatDate)}`,
+        cageId: step.cage.id,
+        frameId: step.frame?.id || null,
         rmdNumber: step.rmdSlot?.number || null,
         rmdSide: step.rmdSlot?.side || null,
         rmdSlot: 'cage1',
