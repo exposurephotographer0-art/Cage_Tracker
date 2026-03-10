@@ -3686,6 +3686,7 @@ async function completeMove(id) {
     if (m.typeKey === 'facility-to-frame' && frame) recordLocationChange(cage, 'frame', frame.name);
     else if (m.typeKey === 'rmd-to-frame' && frame) recordLocationChange(cage, 'frame', frame.name);
     else if (m.typeKey === 'frame-to-rmd' && m.rmdSlot) recordLocationChange(cage, 'rmd', 'RMD-' + m.rmdSlot);
+    else if (m.typeKey === 'facility-to-rmd' && m.rmdNumber != null) recordLocationChange(cage, 'rmd', `RMD-${m.rmdNumber}${m.rmdSide||''}`);
     else if (m.typeKey === 'frame-to-frame' && frame) recordLocationChange(cage, 'frame', frame.name);
   }
 
@@ -3742,6 +3743,21 @@ async function completeMove(id) {
     cage.location = 'frame';
     cage.locationDetail = frame.name;
     cage.departureDate = null;
+  }
+  else if (m.typeKey === 'facility-to-rmd' && cage && m.rmdNumber != null) {
+    const rmdNum = parseInt(m.rmdNumber);
+    const side = (m.rmdSide || 'A').toUpperCase();
+    const rmdIdx = STATE.rmdSlots.findIndex(r => r.number === rmdNum);
+    if (rmdIdx !== -1) {
+      const r = STATE.rmdSlots[rmdIdx];
+      const slot = !r[side].cage1 ? 'cage1' : !r[side].cage2 ? 'cage2' : !r[side].cage3 ? 'cage3' : !r[side].cage4 ? 'cage4' : null;
+      if (!slot) { alert(`Cannot complete: RMD-${rmdNum}${side} is full.`); return; }
+      clearCageFromCurrentLocation(cage.id);
+      r[side][slot] = cage.id;
+      cage.location = 'rmd';
+      cage.locationDetail = `RMD-${rmdNum}${side}`;
+      cage.departureDate = null;
+    }
   }
   else if (m.typeKey === 'frame-fix-shipping' && frame) {
     if (frame.cages.length === 1) {
@@ -4838,8 +4854,8 @@ function drawAnalyticsCharts() {
 
 
 function renderAuditLog() {
-  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','frame-to-frame':'#e05c1a','facility-to-frame':'#2563b0','frame-fix-shipping':'#c08520'};
-  const MVLABELS = {'rmd-to-frame':'RMD → Frame','frame-to-rmd':'Frame → RMD','frame-to-frame':'Frame → Frame','facility-to-frame':'Facility → Frame','frame-fix-shipping':'Fix for Shipping'};
+  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','frame-to-frame':'#e05c1a','facility-to-frame':'#2563b0','facility-to-rmd':'#0d9488','frame-fix-shipping':'#c08520'};
+  const MVLABELS = {'rmd-to-frame':'RMD → Frame','frame-to-rmd':'Frame → RMD','frame-to-frame':'Frame → Frame','facility-to-frame':'Facility → Frame','facility-to-rmd':'Facility → RMD','frame-fix-shipping':'Fix for Shipping'};
 
   let movements = [...STATE.plannedMovements];
 
@@ -4882,6 +4898,7 @@ function renderAuditLog() {
     {k:'frame-to-rmd', label:`Frame→RMD (${byType['frame-to-rmd']||0})`},
     {k:'frame-to-frame', label:`Frame→Frame (${byType['frame-to-frame']||0})`},
     {k:'facility-to-frame', label:`Facility→Frame (${byType['facility-to-frame']||0})`},
+    {k:'facility-to-rmd', label:`Facility→RMD (${byType['facility-to-rmd']||0})`},
     {k:'frame-fix-shipping', label:`Fix Ship (${byType['frame-fix-shipping']||0})`},
   ].map(b => `<button class="filter-btn ${auditFilter===b.k?'active':''}" onclick="auditFilter='${b.k}';render()">${b.label}</button>`).join('');
 
@@ -6075,7 +6092,7 @@ function renderMvCageEditModal() {
   if (!cage) return;
   const moves = STATE.plannedMovements.filter(m => m.cageId === _mvEditCageId && !m.completed);
 
-  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','frame-to-frame':'#e05c1a','facility-to-frame':'#2563b0','frame-fix-shipping':'#c08520','frame-return-from-client':'#0e7490'};
+  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','frame-to-frame':'#e05c1a','facility-to-frame':'#2563b0','facility-to-rmd':'#0d9488','frame-fix-shipping':'#c08520','frame-return-from-client':'#0e7490'};
 
   function resolveDesc(m) {
     const frame = getFrame(m.frameId);
@@ -6209,6 +6226,7 @@ function renderMovementsMap() {
     {k:'frame-to-rmd',     label:`Frame → RMD (${ct['frame-to-rmd']||0})`},
     {k:'frame-to-frame',   label:`Frame → Frame (${ct['frame-to-frame']||0})`},
     {k:'facility-to-frame',label:`Facility → Frame (${ct['facility-to-frame']||0})`},
+    {k:'facility-to-rmd',label:`Facility → RMD (${ct['facility-to-rmd']||0})`},
     {k:'frame-fix-shipping',label:`Fix Shipping (${ct['frame-fix-shipping']||0})`},
     {k:'frame-return-from-client',label:`🚢 Frame Return (${ct['frame-return-from-client']||0})`},
   ].map(b=>`<button class="filter-btn ${mvFilter===b.k?'active':''}" onclick="mvFilter='${b.k}';render()">${b.label}</button>`).join('');
@@ -6216,7 +6234,9 @@ function renderMovementsMap() {
   // Helper: resolve rmdSlot from cage's current RMD location when not stored
   function resolveRmdSlot(m) {
     if (m.rmdSlot) return m.rmdSlot;
-    if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-to-rmd') {
+    // facility-to-rmd and frame-to-rmd from boat planner store rmdNumber + rmdSide instead of rmdSlot
+    if (m.rmdNumber != null) return String(m.rmdNumber) + (m.rmdSide || '');
+    if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') {
       const cage = getCage(m.cageId);
       if (cage && cage.location === 'rmd' && cage.locationDetail) {
         // locationDetail is like "RMD-04A" — extract just "4A"
@@ -6301,7 +6321,7 @@ function renderMovementsMap() {
 
     // Show cages planned to move INTO this RMD slot (frame-to-rmd) that aren't already in an RMD slot shown above
     const existingCageIds = new Set(['cage1','cage2','cage3','cage4'].flatMap(sk => ['A','B'].map(side => r[side][sk])).filter(Boolean));
-    const incomingCages = movesForRmd.filter(m => m.typeKey === 'frame-to-rmd' && m.cageId && !existingCageIds.has(m.cageId));
+    const incomingCages = movesForRmd.filter(m => (m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') && m.cageId && !existingCageIds.has(m.cageId));
     if (incomingCages.length > 0) {
       // Group incoming cages by which side (A/B) they're going to
       const incomingBySide = {A:[], B:[], unknown:[]};
@@ -6394,11 +6414,11 @@ function renderMovementsMap() {
   const framesHTML = sortedFrames.map(f=>buildFrameCard(f)).join('');
 
   // ── Facility movements (for facility box display) ──
-  const facilityMoves = filtered.filter(m => m.typeKey === 'facility-to-frame');
+  const facilityMoves = filtered.filter(m => m.typeKey === 'facility-to-frame' || m.typeKey === 'facility-to-rmd');
   const boatMoves = filtered.filter(m => m.typeKey === 'frame-return-from-client');
 
   // ── Movement list sidebar ──
-  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','facility-to-frame':'#2563b0','frame-fix-shipping':'#c08520'};
+  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','facility-to-frame':'#2563b0','facility-to-rmd':'#0d9488','frame-fix-shipping':'#c08520'};
   const moveListHTML = filtered.map((m,i)=>{
     const col = MVCOLS[m.typeKey]||'var(--accent)';
     const cage = getCage(m.cageId);
@@ -6419,6 +6439,7 @@ function renderMovementsMap() {
     const dir = m.typeKey==='rmd-to-frame' ? `RMD-${resolvedRmdSlot||'?'} → ${frame?frame.name:'?'}`
               : m.typeKey==='frame-to-rmd' ? `${frame?frame.name:'?'} → RMD-${resolvedRmdSlot||'?'}`
               : m.typeKey==='facility-to-frame' ? `Facility → ${frame?frame.name:'?'}`
+              : m.typeKey==='facility-to-rmd' ? `Facility → RMD-${m.rmdNumber!=null?m.rmdNumber+(m.rmdSide||''):'?'}`
               : m.typeKey==='frame-return-from-client' ? `🚢 ${frame?frame.name:'?'} → Facility`
               : m.description;
     return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-light)">
