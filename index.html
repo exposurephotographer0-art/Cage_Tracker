@@ -5379,16 +5379,13 @@ async function generateBoatMovements() {
     note: `Fix frame ${f.name} for shipping (bolt cage(s) to frame)`
   }));
 
-  // ── Step 3: Facility-exit steps ───────────────────────────────────────────
-  // Cages coming from facility that have a departureDate (when they physically
-  // need to leave the compound) get an additional intake/movement note pinned
-  // to that date. This is informational — the actual "Facility → Frame" lift
-  // may happen before the boat date.
+  // ── Step 3: Facility-exit deadline notes ─────────────────────────────────
+  // These are pinned to the departureDate as a visible reminder.
   const facilityExitSteps = [];
   assignments.forEach(a => {
-    if (a.action !== 'facility_to_frame' && a.action !== 'reframe') return;
     if (a.cage.location !== 'facility') return;
     if (!a.cage.departureDate) return;
+    if (a.action === 'no_frame') return; // warning already shown
     facilityExitSteps.push({
       isFacilityExit: true, cage: a.cage,
       date: a.cage.departureDate,
@@ -5397,8 +5394,9 @@ async function generateBoatMovements() {
   });
 
   // ── Step 4: Schedule lifts across working days ────────────────────────────
-  const liftSteps = assignments.filter(a => a.action !== 'already_framed' && a.action !== 'no_frame');
-  const allSteps = [...liftSteps, ...fixSteps]; // lifts first, then fixes
+  // Facility cages are scheduled ON OR BEFORE their departureDate (hard deadline).
+  // Other cages (rmd, reframe, fix) are scheduled as early as possible within the
+  // available working days, respecting the daily movements limit.
 
   const boatDate = new Date(bpBoatDate + 'T12:00:00');
   const todayD = new Date(); todayD.setHours(12,0,0,0);
@@ -5409,9 +5407,10 @@ async function generateBoatMovements() {
     if (dow !== 0 && dow !== 6) workDays.push(toISO(d));
     d.setDate(d.getDate() + 1);
   }
-  if (workDays.length === 0) {
-    warnings.push('⚠ No working days before boat date — scheduling on boat date.');
-    workDays = [bpBoatDate];
+  // Also include the boat date itself as a fallback day
+  workDays.push(bpBoatDate);
+  if (workDays.length === 1) {
+    warnings.push('⚠ No working days before boat date — scheduling everything on boat date.');
   }
 
   const DAILY_LIMIT = STATE.settings.movementsPerDay || MAX_MOVES;
@@ -5422,14 +5421,48 @@ async function generateBoatMovements() {
 
   const scheduledSteps = [];
 
-  // Pin facility exit notes to their departure dates (don't count vs daily limit — informational)
+  // Pin facility exit deadline notes to their exact departure dates (informational only)
   facilityExitSteps.forEach(step => scheduledSteps.push({ ...step }));
 
-  // Schedule actual lifts across days, back-loading from the boat date
-  // (we fill days closest to the boat date last, so breathing room is at the start)
+  // Separate: steps with a hard deadline (facility cages with departureDate)
+  // vs steps without (rmd→frame, fixes, etc.)
+  const liftSteps = assignments.filter(a => a.action !== 'already_framed' && a.action !== 'no_frame');
+  const allSteps = [...liftSteps, ...fixSteps];
+
+  const deadlineSteps = allSteps.filter(s => s.cage?.location === 'facility' && s.cage?.departureDate);
+  const floatingSteps = allSteps.filter(s => !(s.cage?.location === 'facility' && s.cage?.departureDate));
+
+  // Sort deadline steps by their deadline ascending (soonest first)
+  deadlineSteps.sort((a, b) => (a.cage.departureDate || '').localeCompare(b.cage.departureDate || ''));
+
+  // Helper: find the latest available working day on or before a deadline date
+  function latestDayByDeadline(deadlineStr) {
+    const deadline = deadlineStr;
+    // Walk workDays backwards from the deadline to find the last available slot
+    const eligible = workDays.filter(d => d <= deadline);
+    if (eligible.length === 0) return workDays[0]; // best effort: first day
+    // Pick the latest eligible day that still has capacity (try from latest back)
+    for (let i = eligible.length - 1; i >= 0; i--) {
+      if ((existingCounts[eligible[i]] || 0) < DAILY_LIMIT) return eligible[i];
+    }
+    // All days full — return the deadline day anyway (will exceed limit, flagged below)
+    return eligible[eligible.length - 1];
+  }
+
+  // Schedule deadline steps: assign each to the latest day before its deadline
+  for (const step of deadlineSteps) {
+    const day = latestDayByDeadline(step.cage.departureDate);
+    existingCounts[day] = (existingCounts[day] || 0) + 1;
+    scheduledSteps.push({ ...step, date: day });
+    if (day > step.cage.departureDate) {
+      warnings.push(`⚠ Cage ${step.cage.name} departure is ${fmt(step.cage.departureDate)} but no slot available before then — scheduled ${fmt(day)}`);
+    }
+  }
+
+  // Schedule floating steps: fill from the first available day forward
   let dayIdx = 0;
   let usedToday = existingCounts[workDays[0]] || 0;
-  for (const step of allSteps) {
+  for (const step of floatingSteps) {
     while (dayIdx < workDays.length - 1 && usedToday >= DAILY_LIMIT) {
       dayIdx++;
       usedToday = existingCounts[workDays[dayIdx]] || 0;
@@ -5440,13 +5473,13 @@ async function generateBoatMovements() {
     usedToday++;
   }
 
-  // Sort chronologically
+  // Sort chronologically for display
   scheduledSteps.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
   const moveSlotsNeeded = allSteps.length;
-  const slotsAvailable = workDays.length * DAILY_LIMIT;
+  const slotsAvailable = (workDays.length - 1) * DAILY_LIMIT; // exclude boat date from "normal" days
   if (moveSlotsNeeded > slotsAvailable) {
-    warnings.push(`⚠ ${moveSlotsNeeded} lifts needed but only ${slotsAvailable} slots available (${workDays.length} days × ${DAILY_LIMIT}). Some days will exceed the limit.`);
+    warnings.push(`⚠ ${moveSlotsNeeded} moves needed but only ~${slotsAvailable} slots available (${workDays.length - 1} days × ${DAILY_LIMIT}). Some days may exceed the limit.`);
   }
 
   // ── Step 5: Build display list ────────────────────────────────────────────
@@ -5637,17 +5670,26 @@ function renderBoatPlanner() {
   const today = new Date();
   const in7Days = new Date(today); in7Days.setDate(in7Days.getDate() + 7);
 
-  // Cages to show: those leaving facility in next 7 days OR already in RMD/frame
+  // Boat date cutoff — show all facility cages that must leave by or before the boat loading date
+  const boatCutoff = bpBoatDate ? new Date(bpBoatDate + 'T23:59:59') : in7Days;
+
+  // Cages to show: those leaving facility before the boat date OR already in RMD/frame
   const eligibleCages = STATE.cages.filter(c => {
     if (c.location === 'shipped') return false;
     if (c.location === 'rmd' || c.location === 'frame') return true;
     if (c.location === 'facility' && c.departureDate) {
       const dep = new Date(c.departureDate + 'T12:00:00');
-      return dep <= in7Days;
+      return dep <= boatCutoff;
     }
+    // Also include facility cages explicitly assigned to the selected trip
+    if (c.location === 'facility' && bpTripId && c.proposedTripId === bpTripId) return true;
     return false;
   }).sort((a,b) => {
-    // Sort: facility with departure first, then rmd, then frame
+    // Sort: facility with departure first (by date), then rmd, then frame
+    if (a.location === 'facility' && b.location === 'facility') {
+      const da = a.departureDate || 'zzz'; const db = b.departureDate || 'zzz';
+      return da.localeCompare(db) || a.name.localeCompare(b.name, undefined, {numeric:true});
+    }
     const order = {facility:0, rmd:1, frame:2};
     if (order[a.location] !== order[b.location]) return order[a.location] - order[b.location];
     return a.name.localeCompare(b.name, undefined, {numeric:true});
@@ -5659,7 +5701,7 @@ function renderBoatPlanner() {
     .sort((a,b) => a.departureDate.localeCompare(b.departureDate));
 
   const cageCardsHTML = (() => {
-    if (eligibleCages.length === 0) return '<div class="empty-msg">No cages leaving in the next 7 days, and no cages in RMD or frames.</div>';
+    if (eligibleCages.length === 0) return '<div class="empty-msg">No cages departing before the boat date, and no cages in RMD or frames. Set a boat date or assign cages to a trip to see them here.</div>';
 
     // Group by proposedTripId (falling back to proposedShipDay date for legacy cages)
     const groups = {};
@@ -5710,9 +5752,16 @@ function renderBoatPlanner() {
       const cards = groupCages.map(c => {
         const sel = bpSelectedCages.has(c.id);
         const daysLeft = c.departureDate ? Math.ceil((new Date(c.departureDate+'T12:00:00') - new Date()) / 86400000) : null;
-        const depTag = c.departureDate ? `<span style="color:${daysLeft !== null && daysLeft <= 3 ? 'var(--red)' : daysLeft <= 7 ? 'var(--orange)' : 'var(--text-muted)'}">📅 ${fmt(c.departureDate)} (${daysLeft}d)</span>` : '';
+        const isOverdue = daysLeft !== null && daysLeft < 0;
+        const isUrgent = daysLeft !== null && daysLeft <= 3 && !isOverdue;
+        const isSoon = daysLeft !== null && daysLeft <= 7 && !isUrgent && !isOverdue;
+        const depColor = isOverdue ? 'var(--red)' : isUrgent ? 'var(--red)' : isSoon ? 'var(--orange)' : 'var(--text-muted)';
+        const depTag = c.departureDate
+          ? `<span style="color:${depColor};font-weight:${isOverdue||isUrgent?'700':'400'}">📅 ${fmt(c.departureDate)} (${isOverdue ? 'OVERDUE' : daysLeft+'d'})</span>`
+          : '';
+        const urgentBorder = isOverdue ? 'border-left:3px solid var(--red)' : isUrgent ? 'border-left:3px solid var(--orange)' : '';
         const locTag = `<span class="badge badge-${locBadge(c.location)}" style="font-size:9px;padding:1px 5px">${esc(locLabel(c))}</span>`;
-        return `<div class="bp-cage-card ${sel?'selected':''}" onclick="toggleBPCage('${c.id}')">
+        return `<div class="bp-cage-card ${sel?'selected':''}" onclick="toggleBPCage('${c.id}')" style="${urgentBorder}">
           <div class="bp-check">${sel?'✓':''}</div>
           <div class="bp-cage-info">
             <div class="bp-cage-name">${esc(c.name)} ${locTag}</div>
@@ -5785,7 +5834,7 @@ function renderBoatPlanner() {
 
   return `
     <h2 class="section-title" style="margin-bottom:4px">🚢 Boat Planner</h2>
-    <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Showing cages leaving facility within 7 days, plus all cages already in RMD or frames. Frame availability reflects existing planned movements from the Movement Planner.</div>
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Showing all cages with a departure date on or before the boat loading date, plus all cages already in RMD or frames. Select a trip or set a date to filter. Frame availability reflects existing planned movements.</div>
     <div style="display:grid;grid-template-columns:1fr 340px;gap:16px">
       <div>
         <div class="card">
