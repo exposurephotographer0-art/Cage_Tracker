@@ -629,7 +629,7 @@ const RMD_COUNT = 12;
 const SIDES = ['A','B'];
 const MAX_MOVES = 4;
 const H_SHORT = 2.7, H_MED = 4.7;
-const DOUBLE_SPARE = 0.3, DOUBLE_WT = 14;
+const DOUBLE_SPARE = 0.2, DOUBLE_WT = 14; // RMD transport: combined widths + 0.2m ≤ frame width
 
 const TABS = [
   {id:'dashboard', label:'Dashboard', icon:'◉'},
@@ -2403,7 +2403,7 @@ async function changeCageLocation(cid, target) {
     if (frame.cages.length === 1) {
       const existing = getCage(frame.cages[0]);
       if (existing && !canFitTwo(existing, cage, frame.width)) {
-        return alert(`Cannot fit both cages. Need combined width + 0.3m ≤ ${frame.width}m and each cage ≤ 14t.`);
+        return alert(`Cannot fit both cages. Need combined width + 0.2m ≤ ${frame.width}m and each cage ≤ 14t.`);
       }
     }
     frame.cages.push(cid);
@@ -2871,7 +2871,7 @@ async function assignCageToFrame(fid,cid) {
   if(f.cages.length>=2) return alert('Frame already has max cages.');
   if(f.cages.length===1) {
     const ex=getCage(f.cages[0]);
-    if(ex && !canFitTwo(ex,c,f.width)) return alert(`Cannot fit both cages. Need combined width + 0.3m ≤ ${f.width}m and each ≤ 14t.`);
+    if(ex && !canFitTwo(ex,c,f.width)) return alert(`Cannot fit both cages. Need combined width + 0.2m ≤ ${f.width}m and each ≤ 14t.`);
   }
   f.cages.push(cid);
   c.location='frame'; c.locationDetail=f.name;
@@ -5246,14 +5246,16 @@ async function generateBoatMovements() {
   function simCages(fid) { return (frameSim[fid]?.cages || []).map(id => getCage(id)).filter(Boolean); }
   function isReturning(fid) { return !!frameSim[fid]?.returningOn; }
 
-  // ── Frame finder (boat cages — frames must still be available on boat date) ─
+  // ── Frame finder (boat cages going to client — SHIPPING RULE: only 1 cage per frame) ─
   // Prefers facility frames not involved in facility-exit moves; falls back to
   // exit-reuse frames (available after the exit drop-off) and returning frames.
+  // Shipping to client requires exactly 1 cage per frame — no pairing allowed.
   function findBestFrame(cage, reservedIds) {
     const needsW = needsWaler(cage);
     const all = Object.values(frameSim)
       .map(s => s.frame)
-      .filter(f => !f.fixedForShipping && !reservedIds.has(f.id) && cage.width <= f.width && simCageCount(f.id) < 2)
+      // SHIPPING RULE: only 1 cage per frame — simCageCount must be 0 (empty frames only)
+      .filter(f => !f.fixedForShipping && !reservedIds.has(f.id) && cage.width <= f.width && simCageCount(f.id) === 0)
       .sort((a, b) => {
         // Tier 1: facility frames not used for exit (best — immediately available)
         // Tier 2: facility frames reused after exit drop-off
@@ -5268,18 +5270,19 @@ async function generateBoatMovements() {
         if (aRet !== bRet) return aRet.localeCompare(bRet);
         return a.width - b.width;
       });
-    for (const f of all) { if (isReturning(f.id)) continue; if (simCageCount(f.id) !== 1) continue; if (needsW && !f.hasWaler) continue; const ex = simCages(f.id); if (ex.length && !canFitTwo(ex[0], cage, f.width)) continue; return f; }
-    for (const f of all) { if (isReturning(f.id)) continue; if (simCageCount(f.id) !== 0) continue; if (needsW && !f.hasWaler) continue; return f; }
-    for (const f of all) { if (!isReturning(f.id)) continue; if (simCageCount(f.id) !== 1) continue; if (needsW && !f.hasWaler) continue; const ex = simCages(f.id); if (ex.length && !canFitTwo(ex[0], cage, f.width)) continue; return f; }
-    for (const f of all) { if (!isReturning(f.id)) continue; if (simCageCount(f.id) !== 0) continue; if (needsW && !f.hasWaler) continue; return f; }
-    for (const f of all) { if (isReturning(f.id)) continue; if (simCageCount(f.id) === 1) { const ex = simCages(f.id); if (ex.length && !canFitTwo(ex[0], cage, f.width)) continue; } return f; }
-    for (const f of all) { if (simCageCount(f.id) === 1) { const ex = simCages(f.id); if (ex.length && !canFitTwo(ex[0], cage, f.width)) continue; } return f; }
+    // Pass 1: non-returning frames, waler respected (all are already filtered to count=0)
+    for (const f of all) { if (isReturning(f.id)) continue; if (needsW && !f.hasWaler) continue; return f; }
+    // Pass 2: returning frames, waler respected
+    for (const f of all) { if (!isReturning(f.id)) continue; if (needsW && !f.hasWaler) continue; return f; }
+    // Pass 3: relax waler — non-returning
+    for (const f of all) { if (isReturning(f.id)) continue; return f; }
+    // Pass 4: relax waler — returning
+    for (const f of all) { return f; }
     return null;
   }
 
-  // ── Frame finder for facility-exit cages (transit frames — ANY on-site frame works,
-  //    including those reserved for boat loading, because these moves happen BEFORE
-  //    the boat trip. Two cages can share a frame if widths allow.) ────────────
+  // ── Frame finder for facility-exit cages (transit to RMD — 2 cages per frame allowed,
+  //    combined widths + 0.2m ≤ frame width. These moves happen BEFORE the boat trip.) ──
   // exitFrameSim tracks virtual occupancy for facility-exit pairings only
   const exitFrameSim = {}; // frameId -> [cageId, ...]
   STATE.frames.filter(f => f.location === 'facility' && !f.fixedForShipping).forEach(f => {
