@@ -5387,7 +5387,7 @@ async function generateBoatMovements() {
       const rmdLabel = suggestedRMD ? `RMD-${suggestedRMD.number}${suggestedRMD.side}` : 'RMD (no slot available)';
       assignments.push({
         cage, frame, action: 'facility_exit_to_frame',
-        note: `Cage ${cage.name}: Facility → ${frame.name}${pairNote} → ${rmdLabel} for storage`,
+        note: `Cage ${cage.name}: Facility → ${frame.name}${pairNote}`,
         deadline: cage.departureDate,
         isFacilityExit: true,
         suggestedRMD,
@@ -6497,6 +6497,8 @@ function renderMovementsMap() {
     return {
       id:m.id, typeKey:m.typeKey, cageId:m.cageId,
       rmdSlot:rmdSlot, frameId:frameId,
+      rmdNumber: m.rmdNumber != null ? m.rmdNumber : null,
+      rmdSide: m.rmdSide || null,
       srcFrameId:srcFrameId,
       description:m.description, date:m.date,
     };
@@ -6711,6 +6713,7 @@ function mvRedraw() {
     'frame-to-rmd':        '#7040c0',
     'frame-to-frame':      '#e05c1a',
     'facility-to-frame':   '#2563b0',
+    'facility-to-rmd':     '#0d9488',
     'frame-fix-shipping':  '#c08520',
     'frame-return-from-client': '#0e7490',
     'cage-to-boat-frame':  '#b45309',
@@ -7081,6 +7084,47 @@ function mvRedraw() {
         lblTxt.textContent = lbl;
         svg.appendChild(lblTxt);
       }
+    } else if (m.typeKey === 'facility-to-rmd') {
+      // Arrow from Facility box to RMD card (teal dashed, similar style to facility-to-frame)
+      const facPos = getPos('mv-facility-box');
+      const rk = m.rmdNumber != null ? String(parseInt(m.rmdNumber, 10)) : cleanRk(m.rmdSlot);
+      const rPos = getPos('mvr-' + rk);
+      if (!facPos || !rPos) return;
+
+      // FROM Facility box (bottom edge) TO RMD card (bottom edge — RMD is above frames)
+      const sx = facPos.cx;
+      const sy = facPos.bottom;
+      const ex = rPos.cx;
+      const ey = rPos.bottom;
+      const gap = Math.abs(ey - sy);
+      const cpOff = Math.max(gap * 0.35, 40);
+
+      const path = svgEl('path', {
+        d: `M${sx},${sy} C${sx},${sy+cpOff} ${ex},${ey+cpOff} ${ex},${ey}`,
+        stroke: color, 'stroke-width': '2.5', fill: 'none',
+        'stroke-linecap': 'round', 'stroke-dasharray': '7,4',
+        'marker-end': `url(#arrow-facility-to-rmd)`
+      });
+      svg.appendChild(path);
+
+      // Midpoint label
+      const mt = 0.5;
+      const bx = (1-mt)**3*sx + 3*(1-mt)**2*mt*sx + 3*(1-mt)*mt**2*ex + mt**3*ex;
+      const by = (1-mt)**3*sy + 3*(1-mt)**2*mt*(sy+cpOff) + 3*(1-mt)*mt**2*(ey+cpOff) + mt**3*ey;
+      const circle = svgEl('circle', { cx: bx, cy: by, r: '12', fill: color, stroke: '#fff', 'stroke-width': '2' });
+      svg.appendChild(circle);
+      const numText = svgEl('text', { x: bx, y: by, fill: '#fff', 'font-size': '11', 'font-weight': 'bold', 'font-family': 'monospace', 'text-anchor': 'middle', 'dominant-baseline': 'central' });
+      numText.textContent = String(num);
+      svg.appendChild(numText);
+      if (cLabel) {
+        const lblBg = svgEl('text', { x: bx, y: by + 18, fill: '#fff', 'font-size': '10', 'font-weight': 'bold', 'font-family': 'monospace', 'text-anchor': 'middle', 'dominant-baseline': 'hanging', stroke: '#fff', 'stroke-width': '3', 'paint-order': 'stroke' });
+        lblBg.textContent = cLabel;
+        svg.appendChild(lblBg);
+        const lblTxt = svgEl('text', { x: bx, y: by + 18, fill: color, 'font-size': '10', 'font-weight': 'bold', 'font-family': 'monospace', 'text-anchor': 'middle', 'dominant-baseline': 'hanging' });
+        lblTxt.textContent = cLabel;
+        svg.appendChild(lblTxt);
+      }
+
     } else if (m.typeKey === 'cage-to-boat-frame') {
       // Dashed amber arrow from the cage's source (RMD or Facility box) to the cage chip inside the boat frame card
       const fk = String(m.frameId || '');
