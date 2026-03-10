@@ -6718,15 +6718,16 @@ function renderMovementsMap(dayCtx) {
   });
 
   // Inject virtual "cage-to-boat-frame" entries: cages planned into frames currently away
-  // These show a dashed arrow from the cage in RMD to the frame card in the boat box.
-  // NOTE: facility-to-frame moves already draw their own blue dashed arrow to the frame card,
-  // so we only inject this for rmd-to-frame moves to avoid double arrows.
+  // These replace the standard facility-to-frame / rmd-to-frame arrows so there is only ONE arrow.
   filtered.forEach(m => {
-    if (m.typeKey !== 'rmd-to-frame') return;
+    if (m.typeKey !== 'rmd-to-frame' && m.typeKey !== 'facility-to-frame') return;
     const frame = getFrame(m.frameId);
     if (!frame) return;
     if (frame.location === 'facility') return; // only away frames
     if (!frame.returnDate) return; // only if they have a return date
+    // Remove the original move from _mvMovesData so it doesn't also draw a blue/green arrow
+    const idx = window._mvMovesData.findIndex(x => x.id === m.id);
+    if (idx !== -1) window._mvMovesData.splice(idx, 1);
     window._mvMovesData.push({
       id: 'ctbf-' + m.id, typeKey: 'cage-to-boat-frame', cageId: m.cageId,
       rmdSlot: m.rmdSlot || '', frameId: m.frameId,
@@ -6828,9 +6829,9 @@ function renderMovementsMap(dayCtx) {
               <!-- Boat / Client divider and frames -->
               ${(() => {
                 const framesWithReturn = STATE.frames
-                  .filter(f => (f.location==='client'||f.location==='boat'))
-                  .sort((a,b) => (a.returnDate||'').localeCompare(b.returnDate||''));
-                const hasAny = framesWithReturn.length > 0 || boatMoves.length > 0;
+                  .filter(f => (f.location==='client'||f.location==='boat') && f.returnDate)
+                  .sort((a,b) => a.returnDate.localeCompare(b.returnDate));
+                const hasAny = framesWithReturn.length > 0;
 
                 function buildBoatFrameCard(f) {
                   const isActive = activeFrames.has(f.id);
@@ -6890,15 +6891,12 @@ function renderMovementsMap(dayCtx) {
 
                 if (!hasAny) return '';
                 const boatFramesHTML = framesWithReturn.map(f => buildBoatFrameCard(f)).join('');
-                // Also render any boatMoves for frames not already listed (frames returning without returnDate set)
-                const extraReturnFrames = boatMoves.map(m => getFrame(m.frameId)).filter(f => f && !framesWithReturn.find(x=>x.id===f.id));
-                const extraHTML = extraReturnFrames.map(f => buildBoatFrameCard(f)).join('');
                 return `
                   <div style="border-top:2px dashed #a5f3fc;margin:20px 0 16px;position:relative">
                     <span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--bg-deep);padding:0 12px;font:600 10px var(--font-mono);color:#0e7490;letter-spacing:.06em">🚢 FRAMES AT BOAT / CLIENT</span>
                   </div>
                   <div id="mv-boat-zone" style="display:flex;gap:6px;flex-wrap:wrap;">
-                    ${boatFramesHTML}${extraHTML}
+                    ${boatFramesHTML}
                   </div>`;
               })()}
             </div>
@@ -7268,19 +7266,8 @@ function mvRedraw() {
         const facPos = getPos('mv-facility-box');
         const fk = String(m.frameId||'');
         const fPos = getPos('mvf-' + fk);
-        if (!facPos || !fPos) {
-          // Fallback: draw dashed vertical line above the frame
-          const fallbackFPos = fPos || getPos('mvf-' + fk);
-          if (!fallbackFPos) return;
-          const x = fallbackFPos.cx;
-          const y2 = fallbackFPos.top;
-          const y1 = y2 - 48;
-          const line = svgEl('line', { x1: x, y1: y1, x2: x, y2: y2 - 5, stroke: color, 'stroke-width': '2.5', 'stroke-dasharray': '7,4', 'stroke-linecap': 'round' });
-          svg.appendChild(line);
-          const tri = svgEl('polygon', { points: `${x},${y2+1} ${x-7},${y2-11} ${x+7},${y2-11}`, fill: color });
-          svg.appendChild(tri);
-          return;
-        }
+        // If no facility frame card found (frame is away/boat), skip — handled by cage-to-boat-frame
+        if (!facPos || !fPos) return;
 
         // FROM Facility box (bottom edge) TO Frame (top edge) — bezier curve
         const sx = facPos.cx;
