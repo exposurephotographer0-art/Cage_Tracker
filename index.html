@@ -5349,6 +5349,10 @@ async function generateBoatMovements() {
     return null;
   }
 
+  // exitReservedFrameIds tracks frames used by facility-exit cages (Facility→Frame→RMD).
+  // Declared here (before the pre-pass) so findBestFrame can reference it during sorting.
+  // Populated in Step 1a post-processing after exit assignments are complete.
+  const exitReservedFrameIds = new Set();
   const reservedFrameIds = new Set();
 
   // ── Pre-pass: Reserve frames for boat cages BEFORE planning facility-exit cages ──
@@ -5519,7 +5523,7 @@ async function generateBoatMovements() {
   //    then Frame→Boat (boat cage loads). ─────────────────────────────────────
   // Also: returning frames claimed by facility-exit assignments must be reserved
   // so findBestFrame won't double-assign them to boat cages before they're free.
-  const exitReservedFrameIds = new Set();
+  // (exitReservedFrameIds is declared earlier so findBestFrame can reference it)
   assignments.filter(a => a.action === 'facility_exit_to_frame' && a.frame).forEach(a => {
     const fid = a.frame.id;
     exitReservedFrameIds.add(fid);
