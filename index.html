@@ -89,6 +89,7 @@ body {
 .tab-content { display: none; animation: fadeIn 0.2s ease; }
 .tab-content.active { display: block; }
 @keyframes fadeIn { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: translateY(0); } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 /* ── Components ── */
 .section-title { font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 16px; letter-spacing: -0.02em; }
@@ -5156,7 +5157,7 @@ function toggleBPCage(id) {
   render();
 }
 
-function generateBoatMovements() {
+async function generateBoatMovements() {
   if (bpSelectedCages.size === 0) return alert('Please select at least one cage to plan for the boat.');
   if (!bpBoatDate) return alert('Please set a boat loading date.');
 
@@ -5166,11 +5167,21 @@ function generateBoatMovements() {
 
   // ── Frame availability simulation ─────────────────────────────────────────
   // Virtual frame state: starts from real state, then layered with planned movements
-  // frameSim[frameId] = { frame, cages: [cageId,...] }
+  // frameSim[frameId] = { frame, cages: [cageId,...], returningOn?: string }
   const frameSim = {};
+
+  // Include currently on-site frames
   STATE.frames.filter(f => f.location === 'facility').forEach(f => {
     frameSim[f.id] = { frame: f, cages: [...f.cages] };
   });
+
+  // ── ALSO include frames currently away that return ON OR BEFORE the boat date ──
+  // These frames are still at client/boat but will be available in time for loading
+  STATE.frames
+    .filter(f => (f.location === 'client' || f.location === 'boat') && f.returnDate && f.returnDate <= bpBoatDate)
+    .forEach(f => {
+      frameSim[f.id] = { frame: f, cages: [], returningOn: f.returnDate };
+    });
 
   // Layer in existing planned (not completed) movements
   STATE.plannedMovements.filter(m => !m.completed).forEach(m => {
@@ -5186,28 +5197,64 @@ function generateBoatMovements() {
   function simCages(fid) { return (frameSim[fid]?.cages || []).map(id => getCage(id)).filter(Boolean); }
 
   // ── Frame finder ──────────────────────────────────────────────────────────
+  function isReturning(fid) { return !!frameSim[fid]?.returningOn; }
   function findBestFrame(cage, reservedIds) {
     const needsW = needsWaler(cage);
+    // Sort: on-site frames first (no returningOn), then by returnDate ascending, then narrowest-fit
     const all = Object.values(frameSim)
       .map(s => s.frame)
       .filter(f => !f.fixedForShipping && !reservedIds.has(f.id) && cage.width <= f.width && simCageCount(f.id) < 2)
-      .sort((a, b) => a.width - b.width);
+      .sort((a, b) => {
+        const aRet = frameSim[a.id]?.returningOn || '';
+        const bRet = frameSim[b.id]?.returningOn || '';
+        if (!aRet && bRet) return -1;   // on-site first
+        if (aRet && !bRet) return 1;
+        if (aRet !== bRet) return aRet.localeCompare(bRet); // earlier return first
+        return a.width - b.width;       // then narrowest fit
+      });
 
-    // Pass 1: prefer frames already carrying a compatible cage (space efficiency)
+    // Pass 1: prefer frames already carrying a compatible cage (space efficiency) — on-site only
     for (const f of all) {
+      if (isReturning(f.id)) continue;
       if (simCageCount(f.id) !== 1) continue;
       if (needsW && !f.hasWaler) continue;
       const existing = simCages(f.id);
       if (existing.length && !canFitTwo(existing[0], cage, f.width)) continue;
       return f;
     }
-    // Pass 2: empty frames with waler if needed
+    // Pass 2: empty on-site frames with waler if needed
     for (const f of all) {
+      if (isReturning(f.id)) continue;
       if (simCageCount(f.id) !== 0) continue;
       if (needsW && !f.hasWaler) continue;
       return f;
     }
-    // Pass 3: relax waler
+    // Pass 3: returning frames — partial fill first
+    for (const f of all) {
+      if (!isReturning(f.id)) continue;
+      if (simCageCount(f.id) !== 1) continue;
+      if (needsW && !f.hasWaler) continue;
+      const existing = simCages(f.id);
+      if (existing.length && !canFitTwo(existing[0], cage, f.width)) continue;
+      return f;
+    }
+    // Pass 4: returning frames — empty, waler respected
+    for (const f of all) {
+      if (!isReturning(f.id)) continue;
+      if (simCageCount(f.id) !== 0) continue;
+      if (needsW && !f.hasWaler) continue;
+      return f;
+    }
+    // Pass 5: relax waler — on-site first
+    for (const f of all) {
+      if (isReturning(f.id)) continue;
+      if (simCageCount(f.id) === 1) {
+        const existing = simCages(f.id);
+        if (existing.length && !canFitTwo(existing[0], cage, f.width)) continue;
+      }
+      return f;
+    }
+    // Pass 6: relax waler — returning frames
     for (const f of all) {
       if (simCageCount(f.id) === 1) {
         const existing = simCages(f.id);
@@ -5256,7 +5303,9 @@ function generateBoatMovements() {
         reservedFrameIds.add(frame.id);
         frameSim[frame.id]?.cages.push(cage.id);
         if (needsWaler(cage) && !frame.hasWaler) warnings.push(`⚠ Cage ${cage.name} needs waler but ${frame.name} has none`);
-        assignments.push({ cage, frame, action: 'rmd_to_frame', note: `${cage.locationDetail || 'RMD'} → ${frame.name}` });
+        const retNote = frameSim[frame.id]?.returningOn ? ` [frame returns ${fmt(frameSim[frame.id].returningOn)}]` : '';
+        if (retNote) warnings.push(`ℹ Cage ${cage.name} assigned to ${frame.name} which is currently away — returns ${fmt(frameSim[frame.id].returningOn)}`);
+        assignments.push({ cage, frame, action: 'rmd_to_frame', note: `${cage.locationDetail || 'RMD'} → ${frame.name}${retNote}`, isReturningFrame: !!frameSim[frame.id]?.returningOn });
       } else {
         assignments.push({ cage, frame: null, action: 'no_frame', note: `No suitable frame for ${cage.name}` });
         warnings.push(`⚠ No suitable frame for cage ${cage.name} (width ${cage.width}m${needsWaler(cage)?' + waler':''})`);
@@ -5268,7 +5317,9 @@ function generateBoatMovements() {
         reservedFrameIds.add(frame.id);
         frameSim[frame.id]?.cages.push(cage.id);
         if (needsWaler(cage) && !frame.hasWaler) warnings.push(`⚠ Cage ${cage.name} needs waler but ${frame.name} has none`);
-        assignments.push({ cage, frame, action: 'facility_to_frame', note: `Facility → ${frame.name}` });
+        const retNote = frameSim[frame.id]?.returningOn ? ` [frame returns ${fmt(frameSim[frame.id].returningOn)}]` : '';
+        if (retNote) warnings.push(`ℹ Cage ${cage.name} assigned to ${frame.name} which is currently away — returns ${fmt(frameSim[frame.id].returningOn)}`);
+        assignments.push({ cage, frame, action: 'facility_to_frame', note: `Facility → ${frame.name}${retNote}`, isReturningFrame: !!frameSim[frame.id]?.returningOn });
       } else {
         assignments.push({ cage, frame: null, action: 'no_frame', note: `No suitable frame for ${cage.name}` });
         warnings.push(`⚠ No suitable frame for cage ${cage.name} (width ${cage.width}m${needsWaler(cage)?' + waler':''})`);
@@ -5383,17 +5434,53 @@ function generateBoatMovements() {
       const typeLabel = step.action === 'rmd_to_frame' ? '🏗 RMD→Frame'
         : step.action === 'reframe' ? '🔄 Reframe'
         : '🏭 Facility→Frame';
+      const retTag = step.isReturningFrame ? ' 🔁 returning frame' : '';
       const walerNote = needsWaler(step.cage) ? ' ⚠ waler req.' : '';
       moves.push({
-        type: `${typeLabel} · Move ${moveNum++}`,
+        type: `${typeLabel} · Move ${moveNum++}${retTag}`,
         desc: `${step.cage.name}: ${step.note}${walerNote}`,
-        category: 'move', cage: step.cage, frame: step.frame
+        category: step.isReturningFrame ? 'returning-frame' : 'move', cage: step.cage, frame: step.frame
       });
     }
   });
 
-  bpGeneratedMovements = { moves, warnings, assignments, framesUsed: framesNeedingFix, scheduledSteps };
+  bpGeneratedMovements = { moves, warnings, assignments, framesUsed: framesNeedingFix, scheduledSteps, aiInsight: null, aiLoading: true };
   render();
+
+  // ── AI insight (non-blocking) ─────────────────────────────────────────────
+  try {
+    const returningFramesUsed = assignments.filter(a => a.frame && a.isReturningFrame);
+    const noFrameCages = assignments.filter(a => a.action === 'no_frame');
+    const payload = {
+      boatDate: bpBoatDate,
+      cages: selectedCages.map(c => ({ name: c.name, width: c.width, height: c.height, length: c.length, weight: c.weight, location: c.location, needsWaler: needsWaler(c) })),
+      facilityFrames: STATE.frames.filter(f => f.location === 'facility').map(f => ({ name: f.name, width: f.width, hasWaler: f.hasWaler, occupancy: f.cages.length })),
+      returningFrames: STATE.frames.filter(f => (f.location==='client'||f.location==='boat') && f.returnDate && f.returnDate <= bpBoatDate).map(f => ({ name: f.name, width: f.width, hasWaler: f.hasWaler, returnDate: f.returnDate })),
+      assignments: assignments.map(a => ({ cage: a.cage.name, frame: a.frame?.name || null, action: a.action, isReturningFrame: !!a.isReturningFrame })),
+      warnings: warnings.filter(w => w.startsWith('⚠')),
+      noFrameCages: noFrameCages.map(a => a.cage.name),
+      workDays: workDays.length,
+      dailyLimit: DAILY_LIMIT,
+    };
+    const aiRes = await fetch(API_BASE + '/api/ai-boat-plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': _sessionPin ? `Bearer ${_sessionPin}` : '' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(30000)
+    });
+    const res = aiRes.ok ? await aiRes.json() : null;
+    if (res && res.insight) {
+      bpGeneratedMovements.aiInsight = res.insight;
+      bpGeneratedMovements.aiLoading = false;
+      render();
+    } else {
+      bpGeneratedMovements.aiLoading = false;
+      render();
+    }
+  } catch(e) {
+    bpGeneratedMovements.aiLoading = false;
+    render();
+  }
 }
 async function commitBoatPlan() {
   if (!bpGeneratedMovements) return;
@@ -5564,21 +5651,40 @@ function renderBoatPlanner() {
   // Generated movements panel
   let movementsHTML = '';
   if (bpGeneratedMovements) {
-    const {moves, warnings} = bpGeneratedMovements;
-    const warningsHTML = warnings.map(w => `<div class="bp-warning">${esc(w)}</div>`).join('');
+    const {moves, warnings, aiInsight, aiLoading} = bpGeneratedMovements;
+    const warningsHTML = warnings.map(w => {
+      const isInfo = w.startsWith('ℹ');
+      return `<div class="bp-warning" style="${isInfo ? 'background:#e6f0fa;border-color:#a0c8e8;color:var(--blue)' : ''}">${esc(w)}</div>`;
+    }).join('');
     const movesListHTML = moves.map(m => {
       if (m.category === 'date-header') {
         return `<li style="list-style:none;border-top:2px solid var(--border);margin-top:8px;padding-top:6px"><span style="font:700 11px var(--font-mono);color:var(--blue)">${esc(m.type)} — ${esc(m.desc)}</span></li>`;
       }
-      const typeColor = m.category === 'info' ? 'var(--green)' : m.category === 'warning' ? 'var(--orange)' : m.category === 'facility-exit' ? 'var(--purple)' : 'var(--accent)';
+      const typeColor = m.category === 'info' ? 'var(--green)'
+        : m.category === 'warning' ? 'var(--orange)'
+        : m.category === 'facility-exit' ? 'var(--purple)'
+        : m.category === 'returning-frame' ? '#0e7490'
+        : 'var(--accent)';
       return `<li><div class="bp-movement-desc"><span class="bp-movement-type" style="color:${typeColor}">${esc(m.type)}</span> — ${esc(m.desc)}</div></li>`;
     }).join('');
-    const hasMoves = moves.some(m => m.category === 'move');
+    const hasMoves = moves.some(m => m.category === 'move' || m.category === 'returning-frame');
+
+    // AI insight panel
+    const aiHTML = aiLoading
+      ? `<div style="margin-top:12px;padding:10px 14px;background:#f6f7f9;border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:8px"><span style="animation:spin 1s linear infinite;display:inline-block">⏳</span> AI is analysing this plan…</div>`
+      : aiInsight
+        ? `<div style="margin-top:12px;padding:12px 14px;background:linear-gradient(135deg,#fff8e6,#fffdf5);border:1px solid #e0c880;border-radius:8px">
+            <div style="font:700 11px var(--font-mono);color:var(--accent);margin-bottom:6px">🤖 AI PLAN ADVISOR</div>
+            <div style="font-size:12.5px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap">${esc(aiInsight)}</div>
+           </div>`
+        : '';
+
     movementsHTML = `
       <div class="card">
         <div class="card-title">Generated Movement Plan for ${fmt(bpBoatDate)}</div>
         ${warningsHTML}
         ${movesListHTML ? `<ul class="bp-movement-list">${movesListHTML}</ul>` : '<div class="empty-msg">No movements needed.</div>'}
+        ${aiHTML}
         ${hasMoves ? `<div class="form-actions" style="margin-top:12px">
           <button class="btn btn-primary" onclick="commitBoatPlan()">✅ Add to Planner</button>
           <button class="btn btn-secondary" onclick="bpGeneratedMovements=null;render()">Clear</button>
@@ -5648,6 +5754,21 @@ function renderBoatPlanner() {
               <span class="badge ${cls}">${lbl}</span>
             </div>`;
           }).join('')}
+          ${(() => {
+            const returningFrames = STATE.frames.filter(f =>
+              (f.location === 'client' || f.location === 'boat') && f.returnDate && bpBoatDate && f.returnDate <= bpBoatDate
+            );
+            if (!returningFrames.length) return '';
+            return `<div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border)">
+              <div style="font:700 10px var(--font-mono);color:#0e7490;margin-bottom:6px;letter-spacing:0.06em">🔁 RETURNING BEFORE BOAT DATE</div>
+              ${returningFrames.map(f => `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px">
+                  <span style="font-family:var(--font-mono);color:#0e7490">${esc(f.name)}</span>
+                  <span style="color:var(--text-muted)">${f.width}m</span>
+                  <span style="font-size:10px;color:#0e7490;font-weight:600">↩ ${fmt(f.returnDate)}</span>
+                </div>`).join('')}
+            </div>`;
+          })()}
         </div>
       </div>
     </div>
