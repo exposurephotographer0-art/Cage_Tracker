@@ -673,9 +673,17 @@ function locLabel(c) {
   if (c.location === 'shipped') return 'Shipped';
   return c.location;
 }
-function canPairRMD(c1,c2) {
-  const a=hCat(c1.height), b=hCat(c2.height);
-  return ['Short-Tall','Tall-Short','Medium-Medium','Short-Medium','Medium-Short'].includes(a+'-'+b);
+// canPairRMD(inside, outside) — c1 is the inside cage, c2 is the outside cage.
+// Valid combinations:
+//   Short  + Short  = OK
+//   Medium + Medium = OK
+//   Tall   + Short  = OK (Tall MUST be on the inside)
+// All other combinations are rejected.
+function canPairRMD(c1, c2) {
+  const a = hCat(c1.height), b = hCat(c2.height);
+  return (a === 'Short'  && b === 'Short')  ||
+         (a === 'Medium' && b === 'Medium') ||
+         (a === 'Tall'   && b === 'Short');
 }
 function canFitTwo(c1,c2,fw) {
   return c1.width+c2.width+DOUBLE_SPARE<=fw && c1.weight<=DOUBLE_WT && c2.weight<=DOUBLE_WT;
@@ -2018,7 +2026,10 @@ function renderCages() {
             const pairCid = r[side][pairSlot];
             if(pairCid) {
               const other = getCage(pairCid);
-              if(other && canPairRMD(other, c)) {
+              if(other && canPairRMD(
+                  (slot==='cage1'||slot==='cage3') ? c : other,   // inside
+                  (slot==='cage1'||slot==='cage3') ? other : c    // outside
+                )) {
                 rmdOptsList.push(`<option value="rmd:${r.number}:${side}:${slot}">→ RMD-${r.number}${side} (${posLabel}${slot==='cage3'||slot==='cage4'?' #2':''}) [with ${other.name}]</option>`);
               }
             } else {
@@ -2419,7 +2430,10 @@ async function changeCageLocation(cid, target) {
     const pairCid = r[side][pairSlot];
     if (pairCid) {
       const other = getCage(pairCid);
-      if (other && !canPairRMD(other, cage)) {
+      if (other && !canPairRMD(
+          (slot==='cage1'||slot==='cage3') ? cage : other,   // inside
+          (slot==='cage1'||slot==='cage3') ? other : cage    // outside
+        )) {
         if (!confirm(`Height pairing ${hCat(cage.height)} + ${hCat(other.height)} not standard. Override?`)) {
           cage.location = 'facility'; cage.locationDetail = '';
           render(); saveCage(cage); return;
@@ -3003,7 +3017,7 @@ function renderRMD() {
     <div id="zoom-outer-rmd" class="zoom-outer">
       <div id="zoom-wrap-rmd" class="zoom-wrap">
         <h2 class="section-title">RMD Storage Bays</h2>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Each side has 2 inside and 2 outside spaces. Combined length per inside or outside row must be ≤${RMD_MAX_LENGTH}m. Cages are filtered accordingly.</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Each side has 1 inside and 1 outside space. Valid pairings: Short+Short, Medium+Medium, or Tall (inside) + Short (outside).</div>
         ${shipmentLegendHTML(_rmdTabShipDays)}
         <div class="rmd-site-layout">
           ${RMD_LAYOUT.map(row=>{
@@ -3080,7 +3094,10 @@ async function assignToRMD(idx,side,slot,cid,groupSlotsStr) {
   const pairCid = r[side][pairSlot];
   if (pairCid) {
     const other = getCage(pairCid);
-    if (other && !canPairRMD(other,cage)) {
+    if (other && !canPairRMD(
+        (slot==='cage1'||slot==='cage3') ? cage : other,   // inside
+        (slot==='cage1'||slot==='cage3') ? other : cage    // outside
+      )) {
       if (!confirm(`Height pairing ${hCat(cage.height)} + ${hCat(other.height)} not standard. Override?`)) return;
       r[side].overridden = true;
     }
@@ -3707,16 +3724,24 @@ async function completeMove(id) {
     cage.locationDetail = frame.name;
     cage.departureDate = null; // cage has left facility
   }
-  else if (m.typeKey === 'frame-to-rmd' && cage && m.rmdSlot) {
-    // Parse RMD slot like "3A" or "3a"
-    const rmdMatch = m.rmdSlot.match(/^(\d+)\s*([ABab])/);
-    if (rmdMatch) {
-      const rmdNum = parseInt(rmdMatch[1]);
-      const side = rmdMatch[2].toUpperCase();
+  else if (m.typeKey === 'frame-to-rmd' && cage) {
+    // Parse RMD location — boat planner stores rmdNumber+rmdSide; manual planner may use rmdSlot like "3A"
+    let rmdNum = null, side = null;
+    if (m.rmdNumber != null) {
+      rmdNum = parseInt(m.rmdNumber);
+      side = (m.rmdSide || 'A').toUpperCase();
+    } else if (m.rmdSlot && /^\d/.test(String(m.rmdSlot))) {
+      const rmdMatch = String(m.rmdSlot).match(/^(\d+)\s*([ABab])/);
+      if (rmdMatch) { rmdNum = parseInt(rmdMatch[1]); side = rmdMatch[2].toUpperCase(); }
+    }
+    if (rmdNum != null && side) {
       const rmdIdx = STATE.rmdSlots.findIndex(r=>r.number===rmdNum);
       if (rmdIdx !== -1) {
         const r = STATE.rmdSlots[rmdIdx];
-        const slot = !r[side].cage1 ? 'cage1' : !r[side].cage2 ? 'cage2' : null;
+        // Use the specific slot if given, otherwise find the first free slot
+        const targetSlot = (m.rmdSlot && (m.rmdSlot === 'cage1' || m.rmdSlot === 'cage2')) ? m.rmdSlot : null;
+        const slot = targetSlot && !r[side][targetSlot] ? targetSlot
+                   : !r[side].cage1 ? 'cage1' : !r[side].cage2 ? 'cage2' : null;
         if (!slot) { alert(`Cannot complete: RMD-${rmdNum}${side} is full.`); return; }
         clearCageFromCurrentLocation(cage.id);
         r[side][slot] = cage.id;
@@ -3724,7 +3749,7 @@ async function completeMove(id) {
         cage.locationDetail = `RMD-${rmdNum}${side}`;
       }
     } else {
-      // Just move to facility if can't parse RMD
+      // Can't determine RMD slot — just park at facility
       clearCageFromCurrentLocation(cage.id);
       cage.location = 'facility';
       cage.locationDetail = '';
@@ -5330,77 +5355,65 @@ async function generateBoatMovements() {
   const rmdSimPlanned = {}; // built up as we assign exit cages
 
   function findFreeRMDSlotForExit(cage) {
-    const RMD_MAX_LENGTH = 13;
-    const slotPairs = [['cage1','cage2'],['cage3','cage4']]; // inside/outside pairs per row
-    const insideSlots  = ['cage1','cage3'];
-    const outsideSlots = ['cage2','cage4'];
+    // Each RMD side has exactly two slots:
+    //   cage1 = inside, cage2 = outside
+    // Valid pairings (inside, outside):
+    //   Short  + Short  = OK
+    //   Medium + Medium = OK
+    //   Tall   + Short  = OK  (Tall MUST be inside)
+    // A Tall cage can never go in the outside slot.
+    const cageH = hCat(cage.height);
 
-    // Build a virtual view of each RMD side combining real state + planned exits (cages
-    // planned to LEAVE this run free up their slot, but we haven't done that yet here;
-    // conversely cages planned IN this run occupy slots virtually).
-    // Also: cages already in planned movements as rmd-to-frame (boat cages) free up their slot.
-    const rmdDeparting = new Set(); // cageIds that are planned to leave RMD (boat step)
+    // Build a virtual view of each RMD side (real state + planned placements this run).
+    // Cages already planned to leave RMD (boat plan rmd_to_frame steps) are treated as free.
+    const rmdDeparting = new Set();
     assignments.forEach(a => {
       if (a.action === 'rmd_to_frame' && a.cage) rmdDeparting.add(a.cage.id);
     });
 
     function getSimSide(rNum, side) {
       const r = STATE.rmdSlots.find(x => x.number === rNum);
-      if (!r) return { cage1: null, cage2: null, cage3: null, cage4: null };
+      if (!r) return { cage1: null, cage2: null };
       const key = `${rNum}${side}`;
       const planned = rmdSimPlanned[key] || {};
       function resolve(slot) {
         if (planned.hasOwnProperty(slot)) return planned[slot];
         const cid = r[side][slot];
         if (!cid) return null;
-        // If this cage is departing RMD as part of the boat plan, treat slot as free
         if (rmdDeparting.has(cid)) return null;
         return getCage(cid);
       }
-      return { cage1: resolve('cage1'), cage2: resolve('cage2'), cage3: resolve('cage3'), cage4: resolve('cage4') };
+      return { cage1: resolve('cage1'), cage2: resolve('cage2') };
     }
 
-    // Check if placing `cage` into `slot` on a given side sim is valid:
-    //   1. Slot must be empty
-    //   2. Height-pairing rule with the opposite slot in the same row (cage1↔cage2, cage3↔cage4)
-    //   3. Length constraint for the group column (inside: cage1+cage3 ≤ 13m, outside: cage2+cage4 ≤ 13m)
-    //   4. No more than 2 Medium cages on the same RMD side (Medium can only sit in cage1/cage2, not cage3/cage4)
+    // Can we place `cage` into `slot` (cage1=inside, cage2=outside) on this simSide?
     function canPlaceInSlot(simSide, slot, cage) {
       // Slot must be free
       if (simSide[slot]) return false;
 
-      // Medium cages: only allowed in cage1 or cage2 (first row), NOT cage3/cage4
-      if (hCat(cage.height) === 'Medium' && (slot === 'cage3' || slot === 'cage4')) return false;
+      // Tall cages may ONLY go in the inside slot (cage1)
+      if (cageH === 'Tall' && slot === 'cage2') return false;
 
-      // Height pairing: cage1↔cage2, cage3↔cage4
-      const pairMap = { cage1:'cage2', cage2:'cage1', cage3:'cage4', cage4:'cage3' };
-      const pairSlot = pairMap[slot];
-      const pairCage = simSide[pairSlot];
-      if (pairCage && !canPairRMD(pairCage, cage)) return false;
-
-      // Length constraint: inside column = cage1+cage3, outside column = cage2+cage4
-      const colSlots = insideSlots.includes(slot) ? insideSlots : outsideSlots;
-      const usedLen = colSlots
-        .filter(s => s !== slot)
-        .reduce((sum, s) => sum + (simSide[s] ? (simSide[s].length || 0) : 0), 0);
-      if ((cage.length || 0) + usedLen > RMD_MAX_LENGTH) return false;
-
-      // Medium count: max 2 Medium cages per side (cage1 + cage2 only)
-      if (hCat(cage.height) === 'Medium') {
-        const medCount = ['cage1','cage2'].filter(s => simSide[s] && hCat(simSide[s].height) === 'Medium').length;
-        if (medCount >= 2) return false;
+      // Check compatibility with the paired slot
+      const pairSlot  = slot === 'cage1' ? 'cage2' : 'cage1';
+      const pairCage  = simSide[pairSlot];
+      if (pairCage) {
+        // Determine which is inside and which is outside for the pairing check
+        const insideCage  = slot === 'cage1' ? cage : pairCage;
+        const outsideCage = slot === 'cage1' ? pairCage : cage;
+        if (!canPairRMD(insideCage, outsideCage)) return false;
       }
 
       return true;
     }
 
-    // Score each candidate slot: prefer partially-filled sides (fill gaps), then lowest RMD number
+    // Gather all valid candidate placements across all RMD sides
     const candidates = [];
     for (const r of STATE.rmdSlots) {
       for (const side of SIDES) {
         const simSide = getSimSide(r.number, side);
-        const filled = ['cage1','cage2','cage3','cage4'].filter(s => simSide[s]).length;
-        for (const slot of ['cage1','cage2','cage3','cage4']) {
+        const filled = ['cage1','cage2'].filter(s => simSide[s]).length;
+        for (const slot of ['cage1','cage2']) {
           if (canPlaceInSlot(simSide, slot, cage)) {
             candidates.push({ number: r.number, side, slot, filled });
           }
@@ -5410,29 +5423,20 @@ async function generateBoatMovements() {
 
     if (candidates.length === 0) return null;
 
-    // Prefer: slots in partially-filled sides first (fills gaps), then cage1/cage2 before cage3/cage4,
-    // then lowest RMD number, then side A before B
+    // Prefer: partially-filled sides first (pair cages up), then lowest RMD number, side A before B
     candidates.sort((a, b) => {
-      // Prefer partially filled over empty (but not over-full)
       const aPartial = a.filled > 0 ? 0 : 1;
       const bPartial = b.filled > 0 ? 0 : 1;
       if (aPartial !== bPartial) return aPartial - bPartial;
-      // Prefer cage1/cage2 (row 1) before cage3/cage4 (row 2)
-      const aRow = (a.slot === 'cage1' || a.slot === 'cage2') ? 0 : 1;
-      const bRow = (b.slot === 'cage1' || b.slot === 'cage2') ? 0 : 1;
-      if (aRow !== bRow) return aRow - bRow;
-      // Lowest RMD number
       if (a.number !== b.number) return a.number - b.number;
-      // Side A before B
       return a.side.localeCompare(b.side);
     });
 
     const best = candidates[0];
     const key = `${best.number}${best.side}`;
     if (!rmdSimPlanned[key]) {
-      // Clone current simSide so we can mutate it
       const simSide = getSimSide(best.number, best.side);
-      rmdSimPlanned[key] = { cage1: simSide.cage1, cage2: simSide.cage2, cage3: simSide.cage3, cage4: simSide.cage4 };
+      rmdSimPlanned[key] = { cage1: simSide.cage1, cage2: simSide.cage2 };
     }
     rmdSimPlanned[key][best.slot] = cage;
 
