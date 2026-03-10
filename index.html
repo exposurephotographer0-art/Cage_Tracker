@@ -5184,6 +5184,7 @@ let bpSelectedCages = new Set();
 let bpGeneratedMovements = null;
 let bpTripId = null;
 let bpLastCommit = null; // { ids: [...], label: string } — set after commitBoatPlan for undo
+let bpGuidance = ''; // user-provided guidance text for re-generation
 
 function bpSetTrip(tripId) {
   bpTripId = tripId || null;
@@ -5199,6 +5200,7 @@ function toggleBPCage(id) {
   if (bpSelectedCages.has(id)) bpSelectedCages.delete(id);
   else bpSelectedCages.add(id);
   bpGeneratedMovements = null;
+  bpGuidance = '';
   render();
 }
 
@@ -5206,9 +5208,54 @@ async function generateBoatMovements() {
   if (bpSelectedCages.size === 0) return alert('Please select at least one cage to plan for the boat.');
   if (!bpBoatDate) return alert('Please set a boat loading date.');
 
+  // ── Parse guidance hints ─────────────────────────────────────────────────
+  // bpGuidance can contain instructions like:
+  //   "put cage 445 in RMD-03A"  → forces that RMD slot for the cage
+  //   "skip cage 320"            → excludes cage from this plan
+  //   "use TF-15 for cage 424"   → forces that frame for the cage
+  //   "cage 591 goes to RMD-05B slot cage2"  → precise slot override
+  const guidanceCageSkips    = new Set();   // cage names to skip
+  const guidanceFrameForCage = {};          // cageName → frame id
+  const guidanceRmdForCage   = {};          // cageName → {number, side, slot}
+
+  if (bpGuidance && bpGuidance.trim()) {
+    const gLines = bpGuidance.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+    gLines.forEach(line => {
+      const lower = line.toLowerCase();
+      // Skip / exclude cage
+      const skipMatch = lower.match(/skip\s+(?:cage\s+)?([\w-]+)/);
+      if (skipMatch) { guidanceCageSkips.add(skipMatch[1]); return; }
+      // Force frame: "use TF-15 for cage 424" or "cage 424 → TF-15" or "cage 424 use TF-15"
+      const frameMatch = lower.match(/(?:use\s+(tf-\w+)\s+for\s+(?:cage\s+)?([\w-]+))|(?:cage\s+([\w-]+)\s+(?:use|to|into|->|→)\s+(tf-\w+))/);
+      if (frameMatch) {
+        const frameName = (frameMatch[1] || frameMatch[4] || '').toUpperCase();
+        const cageName  = (frameMatch[2] || frameMatch[3] || '').toLowerCase();
+        const frame = STATE.frames.find(f => f.name.toLowerCase() === frameName.toLowerCase());
+        if (frame && cageName) { guidanceFrameForCage[cageName] = frame.id; return; }
+      }
+      // Force RMD: "put cage 445 in RMD-03A" or "cage 445 → RMD-03A"
+      const rmdMatch = lower.match(/(?:put\s+(?:cage\s+)?([\w-]+)\s+in\s+rmd-([\w]+))|(?:cage\s+([\w-]+)\s+(?:to|into|->|→|goes?\s+to)\s+rmd-([\w]+))/);
+      if (rmdMatch) {
+        const cageName = (rmdMatch[1] || rmdMatch[3] || '').toLowerCase();
+        const rmdRef   = (rmdMatch[2] || rmdMatch[4] || '').toUpperCase();
+        // parse "03A" → number=3, side='A'
+        const rmdParts = rmdRef.match(/^(\d+)([ABab])?(?:\s+slot\s+(cage\d))?$/);
+        if (rmdParts && cageName) {
+          guidanceRmdForCage[cageName] = {
+            number: parseInt(rmdParts[1], 10),
+            side: (rmdParts[2] || 'A').toUpperCase(),
+            slot: rmdParts[3] || null,
+          };
+          return;
+        }
+      }
+    });
+  }
+
   // ── Gather cages ──────────────────────────────────────────────────────────
   // BOAT CAGES: those the user explicitly selected
-  const boatCages = [...bpSelectedCages].map(id => getCage(id)).filter(Boolean);
+  const boatCages = [...bpSelectedCages].map(id => getCage(id)).filter(Boolean)
+    .filter(c => !guidanceCageSkips.has(c.name.toLowerCase()));
 
   // FACILITY-EXIT CAGES: all facility cages with a departureDate on or before the
   // boat date, NOT assigned to any trip, NOT already selected as boat cages.
@@ -5470,7 +5517,27 @@ async function generateBoatMovements() {
     );
     if (alreadyPlanned) continue;
 
-    const rmdSlot = findRMDSlotForExit(cage);
+    // Check for guidance RMD override
+    const guidedRmd = guidanceRmdForCage[cage.name.toLowerCase()];
+    let rmdSlot;
+    if (guidedRmd) {
+      // Use the guided slot directly — validate it exists and is plausibly free
+      const rmdSlotObj = STATE.rmdSlots.find(r => r.number === guidedRmd.number);
+      if (rmdSlotObj) {
+        const slotKey = guidedRmd.slot || 'cage1';
+        // Mark in rmdExitSim as taken
+        const key = `${guidedRmd.number}${guidedRmd.side}`;
+        if (!rmdExitSim[key]) rmdExitSim[key] = {};
+        rmdExitSim[key][slotKey] = cage;
+        rmdSlot = { number: guidedRmd.number, side: guidedRmd.side, slot: slotKey };
+        warnings.push(`ℹ Cage ${cage.name}: manual RMD override → RMD-${guidedRmd.number}${guidedRmd.side} (${slotKey})`);
+      } else {
+        warnings.push(`⚠ Guidance: RMD-${guidedRmd.number} not found — auto-assigning cage ${cage.name}`);
+        rmdSlot = findRMDSlotForExit(cage);
+      }
+    } else {
+      rmdSlot = findRMDSlotForExit(cage);
+    }
     if (rmdSlot) {
       assignments.push({
         cage, frame: null, action: 'facility_to_rmd',
@@ -5479,7 +5546,7 @@ async function generateBoatMovements() {
         rmdSlot,
       });
     } else {
-      warnings.push(`⚠ No RMD space for cage ${cage.name} (due ${fmt(cage.departureDate)}) — RMD may be full`);
+      warnings.push(`⚠ No RMD space for cage ${cage.name} (due ${fmt(cage.departureDate)}) — RMD may be full. Add guidance to specify a slot manually.`);
     }
   }
 
@@ -5508,7 +5575,10 @@ async function generateBoatMovements() {
         }
       }
     } else if (cage.location === 'rmd') {
-      const frame = findBestFrame(cage, reservedFrameIds);
+      const guidedFrameId2 = guidanceFrameForCage[cage.name.toLowerCase()];
+      const frame = guidedFrameId2
+        ? (STATE.frames.find(f => f.id === guidedFrameId2) || findBestFrame(cage, reservedFrameIds))
+        : findBestFrame(cage, reservedFrameIds);
       if (frame) {
         reservedFrameIds.add(frame.id);
         frameSim[frame.id]?.cages.push(cage.id);
@@ -5522,8 +5592,11 @@ async function generateBoatMovements() {
       }
     } else {
       // Facility cage going on the boat → find a boat frame
-      // (exitReservedFrameIds frames are available after their exit drop-off)
-      const frame = findBestFrame(cage, reservedFrameIds);
+      // Check for guidance frame override first
+      const guidedFrameId = guidanceFrameForCage[cage.name.toLowerCase()];
+      const frame = guidedFrameId
+        ? (STATE.frames.find(f => f.id === guidedFrameId) || findBestFrame(cage, reservedFrameIds))
+        : findBestFrame(cage, reservedFrameIds);
       if (frame) {
         reservedFrameIds.add(frame.id);
         frameSim[frame.id]?.cages.push(cage.id);
@@ -5719,6 +5792,7 @@ async function generateBoatMovements() {
     const noFrameCages = assignments.filter(a => a.action === 'no_frame');
     const payload = {
       boatDate: bpBoatDate,
+      userGuidance: bpGuidance || null,
       cages: selectedCages.map(c => ({ name: c.name, width: c.width, height: c.height, length: c.length, weight: c.weight, location: c.location, needsWaler: needsWaler(c) })),
       facilityFrames: STATE.frames.filter(f => f.location === 'facility').map(f => ({ name: f.name, width: f.width, hasWaler: f.hasWaler, occupancy: f.cages.length })),
       returningFrames: STATE.frames.filter(f => (f.location==='client'||f.location==='boat') && f.returnDate && f.returnDate <= bpBoatDate).map(f => ({ name: f.name, width: f.width, hasWaler: f.hasWaler, returnDate: f.returnDate })),
@@ -6025,10 +6099,26 @@ function renderBoatPlanner() {
         ${warningsHTML}
         ${movesListHTML ? `<ul class="bp-movement-list">${movesListHTML}</ul>` : '<div class="empty-msg">No movements needed.</div>'}
         ${aiHTML}
-        ${hasMoves ? `<div class="form-actions" style="margin-top:12px">
-          <button class="btn btn-primary" onclick="commitBoatPlan()">✅ Add to Planner</button>
-          <button class="btn btn-secondary" onclick="bpGeneratedMovements=null;render()">Clear</button>
-        </div>` : ''}
+        ${hasMoves ? `
+          <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
+            <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">💬 Guidance for Re-generation</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
+              Tell the planner how to handle specific cages before regenerating. Examples:<br>
+              <span style="font-family:var(--font-mono);background:var(--bg-elevated);padding:1px 5px;border-radius:3px">put cage 445 in RMD-03A</span> &nbsp;
+              <span style="font-family:var(--font-mono);background:var(--bg-elevated);padding:1px 5px;border-radius:3px">skip cage 320</span> &nbsp;
+              <span style="font-family:var(--font-mono);background:var(--bg-elevated);padding:1px 5px;border-radius:3px">use TF-15 for cage 424</span>
+            </div>
+            <textarea id="bp-guidance-input" rows="3" placeholder="Enter guidance here, one instruction per line…"
+              style="width:100%;font:400 12px var(--font-display);padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);resize:vertical;margin-bottom:10px"
+              oninput="bpGuidance=this.value">${esc(bpGuidance)}</textarea>
+            <div class="form-actions">
+              <button class="btn btn-primary" onclick="commitBoatPlan()">✅ Add to Planner</button>
+              <button class="btn btn-secondary" onclick="generateBoatMovements()" title="Re-run the plan generator with your guidance applied">🔄 Re-generate with Guidance</button>
+              <button class="btn btn-secondary" onclick="bpGuidance='';bpGeneratedMovements=null;render()">Clear</button>
+            </div>
+          </div>` : `<div class="form-actions" style="margin-top:12px">
+          <button class="btn btn-secondary" onclick="bpGuidance='';bpGeneratedMovements=null;render()">Clear</button>
+        </div>`}
       </div>`;
   }
 
