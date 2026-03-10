@@ -5851,139 +5851,213 @@ async function generateBoatMovements() {
     render();
   }
 }
-// ── Plan Preview Popup ───────────────────────────────────────────────────────
-// Opens a day-by-day modal of the proposed movements so the user can review
-// before clicking "Add to Planner". Each day is a tab; steps show type, cage,
-// frame. Warnings appear at the top. "Add to Planner" button commits directly.
+// ── Plan Preview Popup — Map View ────────────────────────────────────────────
+// Converts scheduledSteps into fake movements (same schema as STATE.plannedMovements),
+// then temporarily swaps STATE.plannedMovements + mvDayDate to render the existing
+// renderMovementsDayView() map inside a fullscreen overlay.
+// A separate state var (bpPreviewDate) tracks the selected day so it never
+// interferes with the real Movements tab.
+let bpPreviewDate = null;
+
 function openBoatPlanPreview() {
   if (!bpGeneratedMovements) return;
   const { scheduledSteps, warnings } = bpGeneratedMovements;
 
-  // Group steps by date
-  const byDate = {};
+  // ── Convert scheduledSteps → fake planned movement objects ─────────────────
+  // Uses identical logic to commitBoatPlan so the map sees exactly what would
+  // be added to the planner.
+  const fakeMoves = [];
+  let _uid = 0;
+  const fid = () => 'prev-' + (_uid++);
+
   scheduledSteps.forEach(step => {
-    const d = step.date || '(unscheduled)';
-    if (!byDate[d]) byDate[d] = [];
-    byDate[d].push(step);
+    if (step.isFacilityExit && !step.action) {
+      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'facility-to-frame',
+        description: step.note, cageId: step.cage?.id || null, frameId: null, completed: false });
+    } else if (step.isFixStep) {
+      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'frame-fix-shipping',
+        description: step.note, cageId: null, frameId: step.frame?.id || null, completed: false });
+    } else if (step.action === 'facility_to_rmd') {
+      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'facility-to-rmd',
+        description: `${step.cage.name}: ${step.note}`,
+        cageId: step.cage.id, frameId: null,
+        rmdNumber: step.rmdSlot?.number || null,
+        rmdSide:   step.rmdSlot?.side   || null,
+        rmdSlot:   step.rmdSlot?.slot   || 'cage1',
+        completed: false });
+    } else if (step.action === 'facility_exit_frame_to_rmd') {
+      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'frame-to-rmd',
+        description: step.note, cageId: step.cage.id, frameId: step.frame?.id || null,
+        rmdNumber: step.rmdSlot?.number || null,
+        rmdSide:   step.rmdSlot?.side   || null,
+        rmdSlot:   step.rmdSlot?.slot   || null,
+        completed: false });
+    } else if (step.action === 'facility_exit_to_frame') {
+      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'facility-to-frame',
+        description: `${step.cage.name}: ${step.note}`,
+        cageId: step.cage.id, frameId: step.frame?.id || null, completed: false });
+    } else if (step.action === 'rmd_to_frame') {
+      // For rmd_to_frame: the cage's locationDetail already encodes the RMD slot,
+      // and rmdNumber/rmdSide are needed by resolveRmdSlot/mvRedraw.
+      const detail = step.cage?.locationDetail || '';
+      const dm = detail.match(/(\d+)\s*([ABab])$/);
+      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'rmd-to-frame',
+        description: `${step.cage.name}: ${step.note}`,
+        cageId: step.cage.id, frameId: step.frame?.id || null,
+        rmdNumber: dm ? parseInt(dm[1], 10) : null,
+        rmdSide:   dm ? dm[2].toUpperCase()  : null,
+        completed: false });
+    } else if (step.action === 'reframe') {
+      // Reframe = frame-to-rmd (park) + rmd-to-frame (load into new frame)
+      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'frame-to-rmd',
+        description: `${step.cage.name}: ${step.note}`,
+        cageId: step.cage.id, frameId: step.frame?.id || null, completed: false });
+      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'rmd-to-frame',
+        description: `${step.cage.name}: ${step.note}`,
+        cageId: step.cage.id, frameId: step.frame?.id || null, completed: false });
+    } else {
+      // facility_to_frame / already_framed / no_frame
+      if (step.action === 'no_frame' || step.action === 'already_framed') return;
+      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'facility-to-frame',
+        description: `${step.cage.name}: ${step.note}`,
+        cageId: step.cage?.id || null, frameId: step.frame?.id || null, completed: false });
+    }
   });
-  const dates = Object.keys(byDate).sort();
 
-  const typeColor = a =>
-    a === 'rmd_to_frame' ? '#27a060' :
-    a === 'facility_to_frame' ? '#2563b0' :
-    a === 'facility_to_rmd' ? '#0d9488' :
-    a === 'facility_exit_to_frame' ? '#7040c0' :
-    a === 'facility_exit_frame_to_rmd' ? '#7040c0' :
-    a === 'reframe' ? '#e05c1a' :
-    a === 'already_framed' ? '#1a8a4a' :
-    a === 'no_frame' ? '#c93030' : '#c08520';
+  const dates = [...new Set(fakeMoves.map(m => m.date).filter(Boolean))].sort();
+  if (!dates.length) { alert('No scheduled movements to preview.'); return; }
 
-  const typeLabel = a =>
-    a === 'rmd_to_frame' ? 'RMD → Frame' :
-    a === 'facility_to_frame' ? 'Facility → Frame' :
-    a === 'facility_to_rmd' ? 'Facility → RMD' :
-    a === 'facility_exit_to_frame' ? 'Facility Exit → Frame' :
-    a === 'facility_exit_frame_to_rmd' ? 'Frame → RMD (park)' :
-    a === 'reframe' ? 'Reframe' :
-    a === 'already_framed' ? 'Already Framed' :
-    a === 'no_frame' ? 'No Frame / Blocked' : (a || 'Movement');
-
-  function fmtD(iso) {
-    try { return new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'short' }); }
-    catch(e) { return iso; }
-  }
-  function fmtShort(iso) {
-    try { return new Date(iso + 'T12:00:00').toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' }); }
-    catch(e) { return iso; }
-  }
-
-  function buildDayHTML(idx) {
-    const date = dates[idx];
-    const steps = byDate[date] || [];
-    const moves = steps.filter(s => s.action && s.action !== 'already_framed' && s.action !== 'no_frame').length;
-    const unres = steps.filter(s => s.action === 'no_frame').length;
-
-    let html = `<div style="margin-bottom:4px;font:700 13px var(--font-display);color:var(--text-primary)">${fmtD(date)}</div>`;
-    html += `<div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">${moves} movement${moves!==1?'s':''}${unres ? ` · <span style="color:var(--red)">${unres} unresolved</span>` : ''}</div>`;
-
-    steps.forEach((step, i) => {
-      const isNoFrame = step.action === 'no_frame';
-      const isFix = step.isFixStep;
-      const col = isFix ? '#c08520' : typeColor(step.action);
-      const lbl = isFix ? '🔩 Fix for Shipping' : (isNoFrame ? '⚠ ' : '') + typeLabel(step.action);
-      const retTag = step.isReturningFrame ? `<span style="font-size:9px;background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;border-radius:3px;padding:1px 5px;margin-left:5px">🔁 returning frame</span>` : '';
-      html += `<div style="display:flex;align-items:flex-start;gap:10px;padding:9px 11px;border-radius:7px;border:1px solid ${isNoFrame ? '#e8b0b0' : 'var(--border)'};background:${isNoFrame ? '#fce8e8' : 'var(--bg-elevated)'};margin-bottom:7px">
-        <div style="width:24px;height:24px;border-radius:50%;background:${col};color:#fff;font:700 11px var(--font-mono);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${i+1}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font:600 12px var(--font-mono);color:${col};margin-bottom:2px">${lbl}${retTag}</div>
-          <div style="font-size:12px;color:var(--text-primary)">${esc(step.note || '')}</div>
-          ${step.cage ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px">${step.cage.width}m · ${hCat(step.cage.height)} · ${step.cage.weight}t</div>` : ''}
-        </div>
-      </div>`;
-    });
-    return html || '<div class="empty-msg">No movements this day.</div>';
-  }
-
-  // Warnings (errors only)
+  // ── Warning strip ──────────────────────────────────────────────────────────
   const warnHTML = warnings.filter(w => w.startsWith('⚠')).map(w =>
     `<div style="padding:6px 10px;background:#fef0e6;border:1px solid #e8c8a0;border-radius:5px;font-size:12px;color:var(--orange);margin-bottom:5px">${esc(w)}</div>`
   ).join('');
 
-  // Total summary
-  const totalMoves = scheduledSteps.filter(s => s.action && s.action !== 'already_framed' && s.action !== 'no_frame').length;
-  const totalUnres = scheduledSteps.filter(s => s.action === 'no_frame').length;
+  // ── Render a day's map by temporarily hijacking the movements-tab state ────
+  // We save/restore STATE.plannedMovements and mvDayDate so nothing leaks.
+  function renderDayMap(date) {
+    const savedMovements = STATE.plannedMovements;
+    const savedDayDate   = mvDayDate;
+    const savedDayView   = mvDayView;
 
-  // Build tab bar HTML
-  const tabsHTML = dates.map((d, i) => {
-    const count = (byDate[d]||[]).filter(s => s.action && s.action !== 'already_framed' && s.action !== 'no_frame').length;
-    const hasWarn = (byDate[d]||[]).some(s => s.action === 'no_frame');
-    return `<button id="bpp-tab-${i}" onclick="bppSetDay(${i})"
-      style="padding:5px 10px;border-radius:5px;border:1px solid ${hasWarn ? 'var(--orange)' : 'var(--border)'};background:${i===0?'var(--accent)':'var(--bg-elevated)'};color:${i===0?'#fff':'var(--text-secondary)'};font:600 11px var(--font-mono);cursor:pointer;white-space:nowrap"
-      title="${d}">${fmtShort(d)} (${count})${hasWarn?' ⚠':''}</button>`;
-  }).join('');
+    STATE.plannedMovements = fakeMoves;
+    mvDayDate = date;
+    mvDayView = true;
 
-  const existing = document.getElementById('bp-preview-overlay');
-  if (existing) existing.remove();
+    let html;
+    try { html = renderMovementsDayView(); }
+    finally {
+      STATE.plannedMovements = savedMovements;
+      mvDayDate  = savedDayDate;
+      mvDayView  = savedDayView;
+    }
+    return html;
+  }
 
-  const overlay = document.createElement('div');
-  overlay.id = 'bp-preview-overlay';
-  overlay.className = 'search-overlay';
-  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
-  overlay.innerHTML = `
-    <div class="search-modal" style="width:680px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden">
-      <div class="search-input-row" style="flex-shrink:0">
-        <span style="font-size:20px">📅</span>
-        <div style="flex:1">
-          <div style="font:700 15px var(--font-display)">Plan Preview — ${esc(bpBoatDate ? fmt(bpBoatDate) : '')}</div>
-          <div style="font-size:11px;color:var(--text-muted)">${totalMoves} movements across ${dates.length} day${dates.length!==1?'s':''}${totalUnres ? ` · <span style="color:var(--red)">${totalUnres} unresolved</span>` : ''}</div>
-        </div>
-        <div style="display:flex;gap:6px">
+  // ── Build / refresh the overlay ────────────────────────────────────────────
+  function mountOverlay(activeDate) {
+    bpPreviewDate = activeDate;
+
+    const existing = document.getElementById('bp-preview-overlay');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'bp-preview-overlay';
+    overlay.style.cssText = [
+      'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1100',
+      'display:flex;align-items:flex-start;justify-content:center',
+      'padding:16px;overflow-y:auto'
+    ].join(';');
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+
+    const mapHTML = renderDayMap(activeDate);
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-base);border-radius:12px;width:100%;max-width:1240px;
+                  display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.35);min-height:0">
+
+        <!-- Fixed header -->
+        <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;
+                    border-bottom:1px solid var(--border);flex-shrink:0;border-radius:12px 12px 0 0;
+                    background:var(--bg-base);position:sticky;top:0;z-index:10">
+          <span style="font-size:18px">📅</span>
+          <div style="flex:1;min-width:0">
+            <div style="font:700 15px var(--font-display)">Plan Preview — ${esc(bpBoatDate ? fmt(bpBoatDate) : '')}</div>
+            <div style="font-size:11px;color:var(--text-muted)">${fakeMoves.length} movements · ${dates.length} day${dates.length !== 1 ? 's' : ''} — review before committing</div>
+          </div>
           <button class="btn btn-primary btn-sm" onclick="document.getElementById('bp-preview-overlay').remove();commitBoatPlan()">✅ Add to Planner</button>
-          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('bp-preview-overlay').remove()">✕</button>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('bp-preview-overlay').remove()">✕ Close</button>
         </div>
-      </div>
-      <div style="flex:1;overflow-y:auto;padding:14px 18px">
-        ${warnHTML ? `<div style="margin-bottom:12px">${warnHTML}</div>` : ''}
-        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:14px" id="bpp-tabs">${tabsHTML}</div>
-        <div id="bpp-day-content">${buildDayHTML(0)}</div>
-      </div>
-    </div>`;
 
-  // Day switcher — exposed to global so inline onclick works
-  window.bppSetDay = function(idx) {
-    const content = document.getElementById('bpp-day-content');
-    if (content) content.innerHTML = buildDayHTML(idx);
-    dates.forEach((_, i) => {
-      const tab = document.getElementById('bpp-tab-' + i);
-      if (!tab) return;
-      const hasWarn = (byDate[dates[i]]||[]).some(s => s.action === 'no_frame');
-      tab.style.background = i === idx ? 'var(--accent)' : 'var(--bg-elevated)';
-      tab.style.color = i === idx ? '#fff' : 'var(--text-secondary)';
-      tab.style.borderColor = hasWarn ? 'var(--orange)' : (i === idx ? 'var(--accent)' : 'var(--border)');
+        ${warnHTML ? `<div style="padding:10px 20px 0;flex-shrink:0">${warnHTML}</div>` : ''}
+
+        <!-- Map body — gets re-rendered on day change -->
+        <div id="bp-preview-map-body" style="padding:16px 20px;overflow-y:auto">
+          ${mapHTML}
+        </div>
+      </div>`;
+
+    document.body.appendChild(overlay);
+
+    // Trigger arrow drawing after DOM paint
+    setTimeout(() => mvRedraw(), 80);
+  }
+
+  // ── Intercept day-navigation clicks from inside the rendered map ───────────
+  // renderMovementsDayView emits buttons like: onclick="mvDayDate='2026-03-15';render()"
+  // We patch those at mount time by replacing render() calls in preview context.
+  // Simpler approach: override window.render temporarily? No — use event delegation.
+  // Instead we wrap the overlay body in a click-interceptor that catches day buttons.
+  //
+  // Actually the cleanest approach: after mounting, rewrite the day-tab button onclicks
+  // to call our own navigation instead of render().
+  function patchDayButtons() {
+    const body = document.getElementById('bp-preview-map-body');
+    if (!body) return;
+    // Find all buttons whose onclick contains mvDayDate= (day tab buttons from renderMovementsDayView)
+    body.querySelectorAll('button').forEach(btn => {
+      const oc = btn.getAttribute('onclick') || '';
+      const m = oc.match(/mvDayDate='([^']+)'/);
+      if (m) {
+        btn.setAttribute('onclick', `bpPreviewGoDay('${m[1]}')`);
+      }
     });
+    // Also fix prev/next navigation buttons
+    body.querySelectorAll('button').forEach(btn => {
+      const oc = btn.getAttribute('onclick') || '';
+      const m2 = oc.match(/mvDayDate='([^']+)';\s*render\(\)/);
+      if (m2) {
+        btn.setAttribute('onclick', `bpPreviewGoDay('${m2[1]}')`);
+      }
+    });
+    // Fix "All Movements" back button — just close preview instead
+    body.querySelectorAll('button').forEach(btn => {
+      const oc = btn.getAttribute('onclick') || '';
+      if (oc.includes('mvDayView=false') || oc.includes('↔ Back') || oc.includes('All Movements')) {
+        btn.setAttribute('onclick', `document.getElementById('bp-preview-overlay').remove()`);
+      }
+    });
+  }
+
+  // Global day-nav for preview
+  window.bpPreviewGoDay = function(date) {
+    const body = document.getElementById('bp-preview-map-body');
+    if (!body) return;
+    bpPreviewDate = date;
+    const saved  = STATE.plannedMovements;
+    const savedD = mvDayDate;
+    const savedV = mvDayView;
+    STATE.plannedMovements = fakeMoves;
+    mvDayDate = date;
+    mvDayView = true;
+    try { body.innerHTML = renderMovementsDayView(); }
+    finally { STATE.plannedMovements = saved; mvDayDate = savedD; mvDayView = savedV; }
+    patchDayButtons();
+    setTimeout(() => mvRedraw(), 80);
   };
 
-  document.body.appendChild(overlay);
+  mountOverlay(dates[0]);
+  // Patch buttons after DOM is inserted
+  setTimeout(() => patchDayButtons(), 10);
 }
 
 async function commitBoatPlan() {
