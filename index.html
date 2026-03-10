@@ -5389,7 +5389,6 @@ async function generateBoatMovements() {
         cage, frame, action: 'facility_exit_to_frame',
         note: `Cage ${cage.name}: Facility → ${frame.name}${pairNote}`,
         deadline: cage.departureDate,
-        isFacilityExit: true,
         suggestedRMD,
       });
       // Add a follow-on frame-to-rmd step so the cage is tracked into RMD storage
@@ -5621,7 +5620,7 @@ async function generateBoatMovements() {
       moves.push({ type: '📅', desc: fmt(step.date), category: 'date-header' });
       lastDate = step.date;
     }
-    if (step.isFacilityExit) {
+    if (step.isFacilityExit && !step.action) {
       moves.push({ type: '📤 Facility exit deadline', desc: step.note, category: 'facility-exit' });
     } else if (step.isFixStep) {
       moves.push({ type: `🔩 Move ${moveNum++}`, desc: step.note, category: 'move' });
@@ -5702,7 +5701,7 @@ async function commitBoatPlan() {
   const newMovements = [];
 
   scheduledSteps.forEach(step => {
-    if (step.isFacilityExit) {
+    if (step.isFacilityExit && !step.action) {
       newMovements.push({
         id: uid(), date: step.date,
         type: 'Facility Exit Deadline',
@@ -5748,7 +5747,6 @@ async function commitBoatPlan() {
         frameId: step.frame?.id || null,
         rmdNumber: step.rmdSlot?.number || null,
         rmdSide: step.rmdSlot?.side || null,
-        rmdSlot: 'cage1',
         completed: false,
       });
     } else if (step.action === 'facility_exit_to_frame') {
