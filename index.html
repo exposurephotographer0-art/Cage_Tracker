@@ -5205,16 +5205,24 @@ async function generateBoatMovements() {
   function isReturning(fid) { return !!frameSim[fid]?.returningOn; }
 
   // ── Frame finder (boat cages — frames must still be available on boat date) ─
+  // Prefers facility frames not involved in facility-exit moves; falls back to
+  // exit-reuse frames (available after the exit drop-off) and returning frames.
   function findBestFrame(cage, reservedIds) {
     const needsW = needsWaler(cage);
     const all = Object.values(frameSim)
       .map(s => s.frame)
       .filter(f => !f.fixedForShipping && !reservedIds.has(f.id) && cage.width <= f.width && simCageCount(f.id) < 2)
       .sort((a, b) => {
+        // Tier 1: facility frames not used for exit (best — immediately available)
+        // Tier 2: facility frames reused after exit drop-off
+        // Tier 3: returning frames (need to come off boat first)
         const aRet = frameSim[a.id]?.returningOn || '';
         const bRet = frameSim[b.id]?.returningOn || '';
-        if (!aRet && bRet) return -1;
-        if (aRet && !bRet) return 1;
+        const aExit = exitReservedFrameIds.has(a.id) ? 1 : 0;
+        const bExit = exitReservedFrameIds.has(b.id) ? 1 : 0;
+        const aTier = aRet ? 2 : aExit;
+        const bTier = bRet ? 2 : bExit;
+        if (aTier !== bTier) return aTier - bTier;
         if (aRet !== bRet) return aRet.localeCompare(bRet);
         return a.width - b.width;
       });
@@ -5242,13 +5250,27 @@ async function generateBoatMovements() {
 
   function findExitFrame(cage) {
     const needsW = needsWaler(cage);
-    const frames = STATE.frames
-      .filter(f => f.location === 'facility' && !f.fixedForShipping && cage.width <= f.width)
-      .sort((a, b) => a.width - b.width); // narrowest fit first
+    // Include facility frames AND returning frames whose returnDate is on/before
+    // the cage's departure deadline (so the frame is physically available in time)
+    const allCandidates = STATE.frames
+      .filter(f => !f.fixedForShipping && cage.width <= f.width && (
+        f.location === 'facility' ||
+        ((f.location === 'client' || f.location === 'boat') && f.returnDate && f.returnDate <= cage.departureDate)
+      ))
+      .sort((a, b) => {
+        // Prefer facility frames over returning frames (returning frames reserved for boat if possible)
+        const aFac = a.location === 'facility' ? 0 : 1;
+        const bFac = b.location === 'facility' ? 0 : 1;
+        if (aFac !== bFac) return aFac - bFac;
+        return a.width - b.width; // narrowest fit
+      });
 
-    // Pass 1: partially occupied frame where this cage fits alongside existing cage
-    for (const f of frames) {
-      const occ = exitFrameSim[f.id] || [];
+    // exitFrameSim may not have entries for returning frames yet — treat them as empty
+    function exitOcc(fid) { return exitFrameSim[fid] || []; }
+
+    // Pass 1: partially occupied frame where this cage fits alongside existing cage, waler respected
+    for (const f of allCandidates) {
+      const occ = exitOcc(f.id);
       if (occ.length !== 1) continue;
       if (needsW && !f.hasWaler) continue;
       const partner = getCage(occ[0]);
@@ -5256,24 +5278,23 @@ async function generateBoatMovements() {
       return f;
     }
     // Pass 2: empty frame, waler respected
-    for (const f of frames) {
-      const occ = exitFrameSim[f.id] || [];
+    for (const f of allCandidates) {
+      const occ = exitOcc(f.id);
       if (occ.length !== 0) continue;
       if (needsW && !f.hasWaler) continue;
       return f;
     }
     // Pass 3: relax waler — partial fill
-    for (const f of frames) {
-      const occ = exitFrameSim[f.id] || [];
+    for (const f of allCandidates) {
+      const occ = exitOcc(f.id);
       if (occ.length !== 1) continue;
       const partner = getCage(occ[0]);
       if (partner && !canFitTwo(partner, cage, f.width)) continue;
       return f;
     }
     // Pass 4: relax waler — empty
-    for (const f of frames) {
-      const occ = exitFrameSim[f.id] || [];
-      if (occ.length !== 0) continue;
+    for (const f of allCandidates) {
+      if (exitOcc(f.id).length !== 0) continue;
       return f;
     }
     return null;
@@ -5315,15 +5336,23 @@ async function generateBoatMovements() {
   //    in frameSim (at RMD, empty) so findBestFrame can reuse them for boat
   //    cages. The sequence will be: Facility→Frame→RMD (exit cage drops off),
   //    then Frame→Boat (boat cage loads). ─────────────────────────────────────
+  // Also: returning frames claimed by facility-exit assignments must be reserved
+  // so findBestFrame won't double-assign them to boat cages before they're free.
+  const exitReservedFrameIds = new Set();
   assignments.filter(a => a.action === 'facility_exit_to_frame' && a.frame).forEach(a => {
     const fid = a.frame.id;
+    exitReservedFrameIds.add(fid);
     if (!frameSim[fid]) {
-      // Frame wasn't in frameSim yet (only in exitFrameSim) — add it as empty
-      frameSim[fid] = { frame: a.frame, cages: [] };
+      // Frame wasn't in frameSim yet (e.g. a returning frame used for exit) — add it as empty
+      frameSim[fid] = { frame: a.frame, cages: [], returningOn: a.frame.returnDate || null };
     } else {
-      // Frame is already tracked — remove the exit cage from its sim occupancy
-      // (it will be at RMD after the drop-off, so the frame is free again)
+      // Frame is already tracked — clear the exit cage from its sim occupancy
+      // (it will be at RMD after drop-off, so the frame is free again)
       frameSim[fid].cages = frameSim[fid].cages.filter(id => id !== a.cage.id);
+    }
+    // exitFrameSim also needs updating so pairing logic stays consistent
+    if (exitFrameSim[fid]) {
+      exitFrameSim[fid] = exitFrameSim[fid].filter(id => id !== a.cage.id);
     }
   });
 
@@ -5366,8 +5395,7 @@ async function generateBoatMovements() {
       }
     } else {
       // Facility cage going on the boat → find a boat frame
-      // Frames freed up by facility-exit steps are now visible in frameSim
-      const exitFrameIds = new Set(assignments.filter(a => a.action === 'facility_exit_to_frame' && a.frame).map(a => a.frame.id));
+      // (exitReservedFrameIds frames are available after their exit drop-off)
       const frame = findBestFrame(cage, reservedFrameIds);
       if (frame) {
         reservedFrameIds.add(frame.id);
@@ -5375,8 +5403,8 @@ async function generateBoatMovements() {
         if (needsWaler(cage) && !frame.hasWaler) warnings.push(`⚠ Cage ${cage.name} needs waler but ${frame.name} has none`);
         const retNote = frameSim[frame.id]?.returningOn ? ` [frame returns ${fmt(frameSim[frame.id].returningOn)}]` : '';
         if (retNote) warnings.push(`ℹ Cage ${cage.name} assigned to ${frame.name} which returns ${fmt(frameSim[frame.id].returningOn)}`);
-        const reuseNote = exitFrameIds.has(frame.id) ? ` [reusing ${frame.name} after facility exit drop-off]` : '';
-        assignments.push({ cage, frame, action: 'facility_to_frame', note: `Facility → ${frame.name}${retNote}${reuseNote}`, isReturningFrame: !!frameSim[frame.id]?.returningOn, isReusingExitFrame: exitFrameIds.has(frame.id) });
+        const reuseNote = exitReservedFrameIds.has(frame.id) ? ` [${frame.name} reused after exit drop-off]` : '';
+        assignments.push({ cage, frame, action: 'facility_to_frame', note: `Facility → ${frame.name}${retNote}${reuseNote}`, isReturningFrame: !!frameSim[frame.id]?.returningOn, isReusingExitFrame: exitReservedFrameIds.has(frame.id) });
       } else {
         assignments.push({ cage, frame: null, action: 'no_frame', note: `No suitable frame for ${cage.name}` });
         warnings.push(`⚠ No suitable frame for cage ${cage.name} (width ${cage.width}m${needsWaler(cage)?' + waler':''})`);
@@ -5437,49 +5465,44 @@ async function generateBoatMovements() {
     return da.localeCompare(db);
   });
 
-  // Find latest working day on or before the deadline that still has capacity
+  // Find latest working day on or before the deadline (no capacity cap — just find the day)
   function latestDayByDeadline(deadlineStr) {
     const eligible = workDays.filter(d => d <= deadlineStr);
     if (eligible.length === 0) return workDays[0];
-    for (let i = eligible.length - 1; i >= 0; i--) {
-      if ((existingCounts[eligible[i]] || 0) < DAILY_LIMIT) return eligible[i];
-    }
     return eligible[eligible.length - 1];
   }
 
-  // Schedule deadline steps
+  // Schedule deadline steps — placed on latest available day before deadline
   for (const step of deadlineSteps) {
     const deadlineStr = step.deadline || step.cage.departureDate;
     const day = latestDayByDeadline(deadlineStr);
     existingCounts[day] = (existingCounts[day] || 0) + 1;
     scheduledSteps.push({ ...step, date: day });
     if (day > deadlineStr) {
-      warnings.push(`⚠ Cage ${step.cage.name} must leave by ${fmt(deadlineStr)} but no slot available — scheduled ${fmt(day)}`);
+      warnings.push(`⚠ Cage ${step.cage.name} must leave by ${fmt(deadlineStr)} but no suitable day found — scheduled ${fmt(day)}`);
     }
   }
 
-  // Schedule floating steps from earliest available day
+  // Schedule floating steps from earliest available day (no cap — spread evenly, warn if heavy)
   let dayIdx = 0;
-  let usedToday = existingCounts[workDays[0]] || 0;
   for (const step of floatingSteps) {
-    while (dayIdx < workDays.length - 1 && usedToday >= DAILY_LIMIT) {
-      dayIdx++;
-      usedToday = existingCounts[workDays[dayIdx]] || 0;
-    }
     const assignedDay = workDays[Math.min(dayIdx, workDays.length - 1)];
     existingCounts[assignedDay] = (existingCounts[assignedDay] || 0) + 1;
     scheduledSteps.push({ ...step, date: assignedDay });
-    usedToday++;
+    dayIdx = (dayIdx + 1) % workDays.length; // round-robin across all days
   }
 
   // Sort chronologically for display
   scheduledSteps.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
-  const moveSlotsNeeded = allSteps.length;
-  const slotsAvailable = (workDays.length - 1) * DAILY_LIMIT; // exclude boat date from "normal" days
-  if (moveSlotsNeeded > slotsAvailable) {
-    warnings.push(`⚠ ${moveSlotsNeeded} moves needed but only ~${slotsAvailable} slots available (${workDays.length - 1} days × ${DAILY_LIMIT}). Some days may exceed the limit.`);
-  }
+  // ── Warn if any day exceeds the daily limit (informational only) ───────────
+  const countsByDay = {};
+  scheduledSteps.forEach(s => { if (s.date) countsByDay[s.date] = (countsByDay[s.date] || 0) + 1; });
+  Object.entries(countsByDay).forEach(([day, count]) => {
+    if (count > DAILY_LIMIT) {
+      warnings.push(`ℹ ${fmt(day)}: ${count} moves planned (recommended max is ${DAILY_LIMIT})`);
+    }
+  });
 
   // ── Step 5: Build display list ────────────────────────────────────────────
   const moves = [];
