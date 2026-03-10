@@ -6284,263 +6284,132 @@ async function mvEditDelete(id) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DAY-BY-DAY MOVEMENTS VIEW
-// Shows one day at a time. For day N, all movements from days < N are treated
-// as "already done" so the layout reflects the state at the START of that day.
+// Reuses the full map renderer but filtered to one day's moves.
+// Prior-day pending moves are simulated so cage positions reflect the start
+// of the selected day.
 // ─────────────────────────────────────────────────────────────────────────────
 function renderMovementsDayView() {
   const allPending = STATE.plannedMovements.filter(m => !m.completed);
 
-  // Build sorted list of unique movement dates
-  const dateSet = new Set(allPending.map(m => m.date).filter(Boolean));
-  const today = todayStr();
-  // Also include today even if no movements (so user can see "clear" state)
-  dateSet.add(today);
-  const dates = [...dateSet].sort();
+  // Sorted unique dates that have movements
+  const dates = [...new Set(allPending.map(m => m.date).filter(Boolean))].sort();
+  if (dates.length === 0) {
+    return `<div class="card" style="text-align:center;padding:40px">
+      <div style="font-size:32px;margin-bottom:10px">✅</div>
+      <div style="font-weight:600">No pending movements</div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="mvDayView=false;render()">↔ Back to Map</button>
+    </div>`;
+  }
 
-  // Pick active day: default to today if it has movements, else first day with movements
+  // Default to today, or first date with moves
+  const today = todayStr();
   if (!mvDayDate || !dates.includes(mvDayDate)) {
-    const firstWithMoves = dates.find(d => allPending.some(m => m.date === d)) || dates[0];
-    mvDayDate = (dates.includes(today) && allPending.some(m => m.date === today)) ? today : firstWithMoves;
+    mvDayDate = dates.includes(today) ? today : dates[0];
   }
 
   const dayIdx  = dates.indexOf(mvDayDate);
   const prevDay = dayIdx > 0 ? dates[dayIdx - 1] : null;
   const nextDay = dayIdx < dates.length - 1 ? dates[dayIdx + 1] : null;
 
-  // Movements FOR today
-  const todayMoves = allPending.filter(m => m.date === mvDayDate);
-  // Movements that were BEFORE today (treated as completed for layout purposes)
-  const priorMoves = allPending.filter(m => m.date && m.date < mvDayDate);
+  // Movements FOR this day
+  const dayMoves = allPending.filter(m => m.date === mvDayDate);
+  // Prior pending moves (simulate as if completed)
+  const priorMoves = allPending.filter(m => m.date && m.date < mvDayDate)
+    .sort((a, b) => (a.date||'').localeCompare(b.date||''));
 
-  // ── Simulate cage/frame/rmd state at the START of this day ──────────────────
-  // Build a virtual "where is everything" by applying prior pending moves on top
-  // of real current state. We track overrides in a Map: cageId → {location, detail}
-  const cageLoc = new Map(); // cageId → { location, locationDetail, frameId }
-  // initialise from real state
-  STATE.cages.forEach(c => cageLoc.set(c.id, { location: c.location, locationDetail: c.locationDetail || '' }));
-  // Apply prior-day moves in date order
-  const sortedPrior = [...priorMoves].sort((a,b) => (a.date||'').localeCompare(b.date||''));
-  sortedPrior.forEach(m => {
-    const c = getCage(m.cageId); if (!c) return;
-    if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'facility-to-frame') {
-      const f = getFrame(m.frameId);
-      cageLoc.set(m.cageId, { location: 'frame', locationDetail: f ? f.name : '', frameId: m.frameId });
+  // ── Simulate cage locations at START of this day ─────────────────────────────
+  // Build override maps so buildRmdCard/buildFrameCard use simulated positions
+  // cageLocSim: cageId → { location, locationDetail, frameId }
+  const cageLocSim = new Map();
+  STATE.cages.forEach(c => cageLocSim.set(c.id, {
+    location: c.location, locationDetail: c.locationDetail || '', frameId:
+      c.location === 'frame' ? (STATE.frames.find(f => f.cages.includes(c.id))?.id || null) : null
+  }));
+  // Also seed RMD locationDetail for cages in RMD
+  STATE.cages.forEach(c => {
+    if (c.location === 'rmd') cageLocSim.set(c.id, { location:'rmd', locationDetail: c.locationDetail||'', frameId:null });
+  });
+
+  // Apply prior moves to get start-of-day state
+  priorMoves.forEach(m => {
+    if (!cageLocSim.has(m.cageId)) return;
+    if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'facility-to-frame' || m.typeKey === 'frame-to-frame') {
+      cageLocSim.set(m.cageId, { location:'frame', locationDetail: getFrame(m.frameId)?.name||'', frameId: m.frameId||null });
     } else if (m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') {
       const slot = m.rmdNumber != null ? `RMD-${m.rmdNumber}${m.rmdSide||''}` : (m.rmdSlot||'RMD');
-      cageLoc.set(m.cageId, { location: 'rmd', locationDetail: slot, frameId: null });
-    } else if (m.typeKey === 'frame-to-frame') {
-      const f = getFrame(m.frameId);
-      cageLoc.set(m.cageId, { location: 'frame', locationDetail: f ? f.name : '', frameId: m.frameId });
+      cageLocSim.set(m.cageId, { location:'rmd', locationDetail: slot, frameId:null });
     }
   });
 
-  // ── Build a virtual frame occupancy for the START of this day ───────────────
-  // frameOcc: frameId → [cageId, ...]
-  const frameOcc = {};
-  STATE.frames.filter(f => f.location === 'facility').forEach(f => { frameOcc[f.id] = []; });
-  cageLoc.forEach((loc, cid) => {
-    if (loc.location === 'frame' && loc.frameId && frameOcc[loc.frameId] !== undefined) {
-      frameOcc[loc.frameId].push(cid);
+  // Build simulated frame occupancy: frameId → [cageId]
+  const simFrameCages = {};
+  STATE.frames.filter(f=>f.location==='facility').forEach(f => { simFrameCages[f.id]=[]; });
+  cageLocSim.forEach((loc, cid) => {
+    if (loc.location==='frame' && loc.frameId && simFrameCages[loc.frameId]!==undefined)
+      simFrameCages[loc.frameId].push(cid);
+  });
+
+  // Build simulated RMD occupancy: rmdNum → { A:{cage1,cage2,...}, B:{...} }
+  // We overlay real RMD state then apply prior moves
+  const simRmdState = {};
+  STATE.rmdSlots.forEach(r => {
+    simRmdState[r.number] = {
+      A: { cage1: r.A.cage1||null, cage2: r.A.cage2||null, cage3: r.A.cage3||null, cage4: r.A.cage4||null },
+      B: { cage1: r.B.cage1||null, cage2: r.B.cage2||null, cage3: r.B.cage3||null, cage4: r.B.cage4||null },
+    };
+  });
+  // Apply prior moves: remove cages that moved out of RMD, add cages that moved in
+  priorMoves.forEach(m => {
+    // Remove from RMD if moved out
+    if (m.typeKey === 'rmd-to-frame') {
+      STATE.rmdSlots.forEach(r => {
+        ['A','B'].forEach(side => {
+          ['cage1','cage2','cage3','cage4'].forEach(slot => {
+            if (simRmdState[r.number]?.[side]?.[slot] === m.cageId) simRmdState[r.number][side][slot] = null;
+          });
+        });
+      });
+    }
+    // Add to RMD if moved in
+    if ((m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') && m.rmdNumber != null) {
+      const rn = m.rmdNumber, side = m.rmdSide || 'A';
+      if (!simRmdState[rn]) simRmdState[rn] = {A:{cage1:null,cage2:null,cage3:null,cage4:null},B:{cage1:null,cage2:null,cage3:null,cage4:null}};
+      // Find first free slot
+      const slots = ['cage1','cage2','cage3','cage4'];
+      const free = slots.find(s => !simRmdState[rn][side][s]);
+      if (free) simRmdState[rn][side][free] = m.cageId;
     }
   });
 
-  // ── Build virtual RMD occupancy for START of this day ───────────────────────
-  // rmdOcc: rmdLabel (e.g. "1A") → [cageId, ...]
-  const rmdOcc = {};
-  cageLoc.forEach((loc, cid) => {
-    if (loc.location === 'rmd' && loc.locationDetail) {
-      if (!rmdOcc[loc.locationDetail]) rmdOcc[loc.locationDetail] = [];
-      rmdOcc[loc.locationDetail].push(cid);
-    }
-  });
-
-  // ── Colour helpers ───────────────────────────────────────────────────────────
-  const TYPE_COLORS = {
-    'rmd-to-frame':           '#27a060',
-    'frame-to-rmd':           '#7040c0',
-    'frame-to-frame':         '#e05c1a',
-    'facility-to-frame':      '#2563b0',
-    'facility-to-rmd':        '#0d9488',
-    'frame-fix-shipping':     '#c08520',
-    'frame-return-from-client':'#0e7490',
-  };
-  const TYPE_LABELS = {
-    'rmd-to-frame':           'RMD → Frame',
-    'frame-to-rmd':           'Frame → RMD',
-    'frame-to-frame':         'Frame → Frame',
-    'facility-to-frame':      'Facility → Frame',
-    'facility-to-rmd':        'Facility → RMD',
-    'frame-fix-shipping':     'Fix for Shipping',
-    'frame-return-from-client':'Frame Return',
-  };
-
-  const _mvShipDays = getShipmentDays();
-
-  // ── Day navigation ───────────────────────────────────────────────────────────
-  const isToday = mvDayDate === today;
-  const dayLabel = isToday ? `📅 Today — ${fmt(mvDayDate)}` : `📅 ${fmt(mvDayDate)}`;
-  const pendingCountBefore = priorMoves.length;
-
-  // Day tabs row
+  // Day tab strip
   const dayTabsHTML = dates.map(d => {
     const cnt = allPending.filter(m => m.date === d).length;
     const isActive = d === mvDayDate;
     const isTod = d === today;
+    const label = isTod ? `Today` : fmtShort(d);
     return `<button onclick="mvDayDate='${d}';render()" style="
-      padding:6px 12px;border-radius:20px;font-size:11px;font-weight:${isActive?700:500};
-      border:2px solid ${isActive?'var(--accent)':'var(--border)'};
+      padding:5px 12px;border-radius:20px;font-size:11px;font-weight:${isActive?700:500};
+      border:2px solid ${isActive?'var(--accent)':isTod?'var(--blue)':'var(--border)'};
       background:${isActive?'var(--accent)':'var(--bg-elevated)'};
-      color:${isActive?'#fff':'var(--text-secondary)'};cursor:pointer;white-space:nowrap;
-      ${isTod&&!isActive?'border-color:var(--blue);color:var(--blue);':''}
-    ">${isTod?'Today':''}${isTod&&!isActive?' · ':''}<span style="font-family:var(--font-mono)">${isTod?'':fmt(d)}</span>
-    ${cnt>0?`<span style="margin-left:5px;background:${isActive?'rgba(255,255,255,0.3)':'rgba(192,133,32,0.15)'};color:${isActive?'#fff':'var(--accent)'};border-radius:10px;padding:0 5px;font-size:10px">${cnt}</span>`:''}
-    </button>`;
+      color:${isActive?'#fff':isTod?'var(--blue)':'var(--text-secondary)'};
+      cursor:pointer;white-space:nowrap;transition:all .15s
+    ">${label}${cnt>0?` <span style="font-size:10px;opacity:.8">${cnt}</span>`:''}</button>`;
   }).join('');
 
-  // ── Movement cards for today ─────────────────────────────────────────────────
-  const movesHTML = todayMoves.length === 0
-    ? `<div style="text-align:center;padding:40px;color:var(--text-muted);font-style:italic;font-size:13px">
-        No movements scheduled for this day.<br>
-        <span style="font-size:11px">Use the Planner tab to schedule movements.</span>
-       </div>`
-    : todayMoves.map((m, idx) => {
-        const cage = getCage(m.cageId);
-        const frame = getFrame(m.frameId);
-        const col = TYPE_COLORS[m.typeKey] || 'var(--accent)';
-        const typeLabel = TYPE_LABELS[m.typeKey] || m.typeKey;
-        const shade = cage ? shipmentShadeClass(cage, _mvShipDays) : null;
-
-        let fromHTML = '', toHTML = '';
-        if (m.typeKey === 'rmd-to-frame') {
-          fromHTML = `<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11px"><div style="font:600 10px var(--font-mono);color:var(--text-muted);margin-bottom:2px">FROM</div><div style="font:700 12px var(--font-mono)">RMD-${m.rmdNumber!=null?m.rmdNumber+(m.rmdSide||''):(m.rmdSlot||'?')}</div></div>`;
-          toHTML   = `<div style="background:var(--bg-elevated);border:1px solid #27a060;border-radius:6px;padding:6px 10px;font-size:11px"><div style="font:600 10px var(--font-mono);color:var(--text-muted);margin-bottom:2px">TO</div><div style="font:700 12px var(--font-mono)">${frame?frame.name:'?'}</div></div>`;
-        } else if (m.typeKey === 'frame-to-rmd') {
-          fromHTML = `<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11px"><div style="font:600 10px var(--font-mono);color:var(--text-muted);margin-bottom:2px">FROM</div><div style="font:700 12px var(--font-mono)">${frame?frame.name:'?'}</div></div>`;
-          toHTML   = `<div style="background:var(--bg-elevated);border:1px solid #7040c0;border-radius:6px;padding:6px 10px;font-size:11px"><div style="font:600 10px var(--font-mono);color:var(--text-muted);margin-bottom:2px">TO</div><div style="font:700 12px var(--font-mono)">RMD-${m.rmdNumber!=null?m.rmdNumber+(m.rmdSide||''):(m.rmdSlot||'?')}</div></div>`;
-        } else if (m.typeKey === 'facility-to-frame') {
-          fromHTML = `<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11px"><div style="font:600 10px var(--font-mono);color:var(--text-muted);margin-bottom:2px">FROM</div><div style="font:700 12px var(--font-mono)">Facility</div></div>`;
-          toHTML   = `<div style="background:var(--bg-elevated);border:1px solid #2563b0;border-radius:6px;padding:6px 10px;font-size:11px"><div style="font:600 10px var(--font-mono);color:var(--text-muted);margin-bottom:2px">TO</div><div style="font:700 12px var(--font-mono)">${frame?frame.name:'?'}</div></div>`;
-        } else if (m.typeKey === 'facility-to-rmd') {
-          fromHTML = `<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11px"><div style="font:600 10px var(--font-mono);color:var(--text-muted);margin-bottom:2px">FROM</div><div style="font:700 12px var(--font-mono)">Facility</div></div>`;
-          toHTML   = `<div style="background:var(--bg-elevated);border:1px solid #0d9488;border-radius:6px;padding:6px 10px;font-size:11px"><div style="font:600 10px var(--font-mono);color:var(--text-muted);margin-bottom:2px">TO</div><div style="font:700 12px var(--font-mono)">RMD-${m.rmdNumber!=null?m.rmdNumber+(m.rmdSide||''):(m.rmdSlot||'?')}</div></div>`;
-        } else if (m.typeKey === 'frame-to-frame') {
-          const srcFrame = getFrame(m.srcFrameId);
-          fromHTML = `<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11px"><div style="font:600 10px var(--font-mono);color:var(--text-muted);margin-bottom:2px">FROM</div><div style="font:700 12px var(--font-mono)">${srcFrame?srcFrame.name:'?'}</div></div>`;
-          toHTML   = `<div style="background:var(--bg-elevated);border:1px solid #e05c1a;border-radius:6px;padding:6px 10px;font-size:11px"><div style="font:600 10px var(--font-mono);color:var(--text-muted);margin-bottom:2px">TO</div><div style="font:700 12px var(--font-mono)">${frame?frame.name:'?'}</div></div>`;
-        } else {
-          fromHTML = `<div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:6px 10px;font-size:11px"><div style="font:600 10px var(--font-mono);color:var(--text-muted);margin-bottom:2px">TYPE</div><div style="font:700 12px var(--font-mono)">${typeLabel}</div></div>`;
-        }
-
-        const urgencyBadge = shade === 'next'
-          ? `<span style="font-size:10px;padding:1px 6px;background:#3b1d6e;color:#e0ccff;border-radius:10px;margin-left:6px">🚢 Next Ship</span>`
-          : shade === 'second'
-          ? `<span style="font-size:10px;padding:1px 6px;background:#c8b8e8;color:#4a2a7a;border-radius:10px;margin-left:6px">🚢 2nd Ship</span>` : '';
-
-        return `<div style="background:var(--bg-card);border:2px solid ${col};border-radius:10px;padding:12px 14px;margin-bottom:10px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-            <div style="width:28px;height:28px;border-radius:50%;background:${col};color:#fff;font:700 12px var(--font-mono);display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx+1}</div>
-            <div>
-              <span style="font:700 14px var(--font-mono);color:var(--text-primary)">${cage ? esc(cage.name) : '—'}</span>
-              ${urgencyBadge}
-            </div>
-            <span style="font-size:11px;padding:2px 8px;background:${col}22;color:${col};border-radius:10px;font-weight:600;margin-left:auto">${typeLabel}</span>
-            ${m.shift==='night'?`<span style="font-size:11px;color:#7040c0">🌙 Night</span>`:`<span style="font-size:11px;color:#c08520">☀ Day</span>`}
-          </div>
-          ${cage ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-            <span style="font-size:10px;padding:1px 6px;background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;border-radius:4px;font-family:var(--font-mono)">W ${cage.width}m</span>
-            <span style="font-size:10px;padding:1px 6px;background:#f0fdf4;color:#166534;border:1px solid #86efac;border-radius:4px;font-family:var(--font-mono)">H ${cage.height}m</span>
-            <span style="font-size:10px;padding:1px 6px;background:#fdf4ff;color:#7e22ce;border:1px solid #e9d5ff;border-radius:4px;font-family:var(--font-mono)">L ${cage.length}m</span>
-            <span style="font-size:10px;padding:1px 6px;background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;border-radius:4px;font-family:var(--font-mono)">${cage.weight}t</span>
-          </div>` : ''}
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-            ${fromHTML}
-            <div style="font-size:20px;font-weight:900;color:${col}">→</div>
-            ${toHTML}
-          </div>
-          ${m.notes ? `<div style="margin-top:8px;font-size:11px;color:var(--text-muted);border-top:1px solid var(--border-light);padding-top:6px">${esc(m.notes)}</div>` : ''}
-          <div style="margin-top:10px;display:flex;gap:6px;justify-content:flex-end">
-            <button class="btn btn-primary btn-sm" onclick="completeMove('${m.id}')">✓ Mark Done</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteMovement('${m.id}')">✕</button>
-          </div>
-        </div>`;
-      }).join('');
-
-  // ── Snapshot: where are cages at start of this day ──────────────────────────
-  const framesAtStart = STATE.frames.filter(f => f.location === 'facility');
-  const frameSnapshotHTML = framesAtStart.map(f => {
-    const occupants = (frameOcc[f.id] || []).map(cid => getCage(cid)).filter(Boolean);
-    const movingIn  = todayMoves.filter(m => m.frameId === f.id && (m.typeKey==='rmd-to-frame'||m.typeKey==='facility-to-frame'||m.typeKey==='frame-to-frame'));
-    const movingOut = todayMoves.filter(m => m.typeKey==='frame-to-rmd' && (() => { const c=getCage(m.cageId); return c && (cageLoc.get(c.id)?.frameId===f.id||m.frameId===f.id); })());
-    const hasActivity = movingIn.length > 0 || movingOut.length > 0;
-    const border = hasActivity ? 'border:2px solid var(--accent)' : 'border:1px solid var(--border)';
-    const cageItems = occupants.map(c => {
-      const out = todayMoves.some(m => m.cageId===c.id && (m.typeKey==='frame-to-rmd'||m.typeKey==='frame-to-frame'));
-      const col = out ? '#f5a742' : '#27a060';
-      return `<div style="font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid ${col}22;background:${col}11;margin-bottom:2px;display:flex;align-items:center;gap:4px">
-        ${out?`<span style="color:#c08520;font-weight:800">→</span>`:`<span style="color:#27a060;font-weight:800">✓</span>`}
-        <span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
-        <span style="color:var(--text-muted);font-size:9px">${c.width}m</span>
-      </div>`;
-    }).join('');
-    const inItems = movingIn.map(m => { const c=getCage(m.cageId); return c?`<div style="font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid #2563b055;background:#2563b011;margin-bottom:2px"><span style="color:#2563b0;font-weight:800">←</span> <span style="font:600 10px var(--font-mono)">${esc(c.name)}</span></div>`:''; }).join('');
-    return `<div style="background:var(--bg-card);${border};border-radius:8px;padding:9px 10px;min-width:90px">
-      <div style="font:700 12px var(--font-mono);color:var(--text-primary)">${esc(f.name)}</div>
-      <div style="font-size:9px;color:var(--text-muted);margin-bottom:4px">${f.width}m${f.hasWaler?' 🔩':''}</div>
-      ${cageItems||'<div style="font-size:9px;color:var(--text-muted);font-style:italic">empty</div>'}
-      ${inItems}
-    </div>`;
-  }).join('');
-
-  return `
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">
-      <h2 class="section-title" style="margin:0">📅 Day-by-Day Movements</h2>
-      <button class="btn btn-secondary btn-sm" onclick="mvDayView=false;render()" style="margin-left:auto">↔ All Movements Map</button>
-    </div>
-
-    <!-- Day tabs -->
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid var(--border)">
-      ${dayTabsHTML}
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start">
-
-      <!-- Left: today's movement cards -->
-      <div>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
-          <h3 style="margin:0;font-size:15px;font-weight:700">${dayLabel}</h3>
-          ${todayMoves.length > 0 ? `<span style="font-size:12px;background:var(--accent)22;color:var(--accent);border-radius:10px;padding:2px 10px;font-weight:600">${todayMoves.length} movement${todayMoves.length!==1?'s':''}</span>` : ''}
-          ${pendingCountBefore > 0 ? `<span style="font-size:11px;color:var(--text-muted)">(${pendingCountBefore} move${pendingCountBefore!==1?'s':''} applied from earlier days)</span>` : ''}
-        </div>
-        ${movesHTML}
-        <div style="display:flex;gap:8px;margin-top:16px">
-          ${prevDay ? `<button class="btn btn-secondary" onclick="mvDayDate='${prevDay}';render()">◄ ${fmt(prevDay)}</button>` : '<span></span>'}
-          <span style="flex:1"></span>
-          ${nextDay ? `<button class="btn btn-primary" onclick="mvDayDate='${nextDay}';render()">${fmt(nextDay)} ►</button>` : ''}
-        </div>
-      </div>
-
-      <!-- Right: frame snapshot at start of this day -->
-      <div>
-        <div class="card" style="position:sticky;top:20px">
-          <div class="card-title" style="margin-bottom:10px">🏗 Frame State — Start of ${isToday?'Today':fmt(mvDayDate)}</div>
-          <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">Positions after all prior days' moves are applied. <span style="color:#c08520;font-weight:600">→ outgoing today</span> · <span style="color:#2563b0;font-weight:600">← arriving today</span></div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px">
-            ${frameSnapshotHTML || '<div style="font-size:12px;color:var(--text-muted);font-style:italic">No facility frames</div>'}
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
+  // Now render the full map, passing our day-context overrides
+  return renderMovementsMap({ dayMoves, simFrameCages, simRmdState, dayIdx, dates, prevDay, nextDay, dayTabsHTML });
 }
 
-function renderMovementsMap() {
-  // Dispatch to day-by-day view if toggled
-  if (mvDayView) return renderMovementsDayView();
+function renderMovementsMap(dayCtx) {
+  // dayCtx is passed when called from renderMovementsDayView
+  const isDayView = !!dayCtx;
+  if (!isDayView && mvDayView) return renderMovementsDayView();
 
   const _mvShipDays = getShipmentDays();
-  const pendingMoves = STATE.plannedMovements.filter(m => !m.completed);
+  // In day view: use simulated day's moves; otherwise all pending
+  const pendingMoves = isDayView ? dayCtx.dayMoves : STATE.plannedMovements.filter(m => !m.completed);
 
-  if (pendingMoves.length === 0) {
+  if (!isDayView && pendingMoves.length === 0) {
     return `
       <h2 class="section-title" style="margin-bottom:4px">↔ Movements Map</h2>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:20px">Visual map of all planned (not yet actioned) cage movements.</div>
@@ -6552,7 +6421,8 @@ function renderMovementsMap() {
       </div>`;
   }
 
-  const filtered = mvFilter === 'all' ? pendingMoves : pendingMoves.filter(m => m.typeKey === mvFilter);
+  // In day view: show all moves for that day (no type filter — day view is already scoped)
+  const filtered = isDayView ? pendingMoves : (mvFilter === 'all' ? pendingMoves : pendingMoves.filter(m => m.typeKey === mvFilter));
   const ct = {};
   pendingMoves.forEach(m => { ct[m.typeKey] = (ct[m.typeKey]||0)+1; });
 
@@ -6619,6 +6489,10 @@ function renderMovementsMap() {
   function buildRmdCard(rmdNum) {
     const r = getRMDByNum(rmdNum);
     if (!r) return '';
+    // In day view use simulated RMD state; otherwise real state
+    const rmdData = isDayView && dayCtx.simRmdState[rmdNum]
+      ? { A: dayCtx.simRmdState[rmdNum].A, B: dayCtx.simRmdState[rmdNum].B }
+      : { A: r.A, B: r.B };
     const isActive = activeRmds.has(String(rmdNum));
     const movesForRmd = filtered.filter(m => String(resolveRmdSlot(m)).replace(/[ABab]$/,'') === String(rmdNum));
     const sides = ['A','B'];
@@ -6629,7 +6503,7 @@ function renderMovementsMap() {
       slotsHTML += `<div style="font:700 8px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin:5px 0 3px">Side ${side}</div>`;
       let sideHasContent = false;
       slotKeys.forEach(sk => {
-        const cid = r[side][sk];
+        const cid = rmdData[side][sk];
         const cage = cid ? getCage(cid) : null;
         if (cage) {
           sideHasContent = true;
@@ -6661,7 +6535,7 @@ function renderMovementsMap() {
     });
 
     // Show cages planned to move INTO this RMD slot (frame-to-rmd) that aren't already in an RMD slot shown above
-    const existingCageIds = new Set(['cage1','cage2','cage3','cage4'].flatMap(sk => ['A','B'].map(side => r[side][sk])).filter(Boolean));
+    const existingCageIds = new Set(['cage1','cage2','cage3','cage4'].flatMap(sk => ['A','B'].map(side => rmdData[side][sk])).filter(Boolean));
     const incomingCages = movesForRmd.filter(m => (m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') && m.cageId && !existingCageIds.has(m.cageId));
     if (incomingCages.length > 0) {
       // Group incoming cages by which side (A/B) they're going to
@@ -6706,7 +6580,9 @@ function renderMovementsMap() {
   function buildFrameCard(f) {
     const isActive = activeFrames.has(f.id);
     const movesForFrame = filtered.filter(m => resolveFrameId(m) === f.id);
-    const fCages = f.cages.map(cid=>getCage(cid)).filter(Boolean);
+    // In day view use simulated cage occupancy; otherwise real frame.cages
+    const frameCageIds = isDayView ? (dayCtx.simFrameCages[f.id] || []) : f.cages;
+    const fCages = frameCageIds.map(cid=>getCage(cid)).filter(Boolean);
     const outIds  = movesForFrame.filter(m=>m.typeKey==='frame-to-rmd').map(m=>m.cageId);
     const inIds   = movesForFrame.filter(m=>m.typeKey==='rmd-to-frame'||m.typeKey==='facility-to-frame').map(m=>m.cageId);
     // facility-exit cages: planned Facility→Frame then Frame→RMD — show them as incoming+outgoing
@@ -6887,17 +6763,39 @@ function renderMovementsMap() {
 
 
   return `
+    ${isDayView ? `
+    <!-- Day view header -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+      <h2 class="section-title" style="margin:0">📅 Day-by-Day Movements</h2>
+      <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
+        ${dayCtx.prevDay ? `<button class="btn btn-secondary btn-sm" onclick="mvDayDate='${dayCtx.prevDay}';render()">◄ ${fmtShort(dayCtx.prevDay)}</button>` : ''}
+        <span style="font:600 13px var(--font-mono);color:var(--text-primary)">${mvDayDate === todayStr() ? 'Today' : fmt(mvDayDate)}</span>
+        ${dayCtx.nextDay ? `<button class="btn btn-primary btn-sm" onclick="mvDayDate='${dayCtx.nextDay}';render()">${fmtShort(dayCtx.nextDay)} ►</button>` : ''}
+        <button class="btn btn-secondary btn-sm" onclick="mvDayView=false;render()">↔ All Movements</button>
+      </div>
+    </div>
+    <!-- Day tabs -->
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid var(--border);overflow-x:auto">
+      ${dayCtx.dayTabsHTML}
+    </div>
+    ${pendingMoves.length === 0 ? `<div class="card" style="text-align:center;padding:32px;color:var(--text-muted);font-style:italic">No movements scheduled for ${mvDayDate === todayStr() ? 'today' : fmt(mvDayDate)}.</div>` : ''}
+    ` : `
+    <!-- Normal map header -->
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;flex-wrap:wrap">
       <h2 class="section-title" style="margin:0">↔ Movements Map</h2>
       <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="mvDayDate=null;mvDayView=true;render()">📅 Day-by-Day View</button>
     </div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Arrows show all planned, not-yet-actioned movements between RMD storage and frames. Use <strong>Day-by-Day View</strong> to step through one day at a time.</div>
+    `}
 
-    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+    ${!isDayView ? `<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
       ${filterBtns}
       <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="mvRedraw()">↺ Redraw</button>
       <div id="zoom-bar-movements">${zoomBarHTML('movements')}</div>
-    </div>
+    </div>` : `<div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;justify-content:flex-end">
+      <button class="btn btn-secondary btn-sm" onclick="mvRedraw()">↺ Redraw</button>
+      <div id="zoom-bar-movements">${zoomBarHTML('movements')}</div>
+    </div>`}
 
     <div style="display:flex;gap:6px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#27a060;border-radius:2px;display:inline-block"></span>RMD → Frame</span>
@@ -6905,7 +6803,6 @@ function renderMovementsMap() {
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#e05c1a;border-radius:2px;display:inline-block"></span>Frame → Frame</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#2563b0;border-radius:2px;display:inline-block;border-top:3px dashed #2563b0"></span>Facility → Frame</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#0e7490;border-radius:2px;display:inline-block;border-top:3px dashed #0e7490"></span>Boat → Frame</span>
-      <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#b45309;border-radius:2px;display:inline-block;border-top:3px dashed #b45309"></span>Cage → Boat Frame</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:14px;height:14px;background:#3b1d6e;border-radius:3px;display:inline-block"></span>Next shipment</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:14px;height:14px;background:#c8b8e8;border-radius:3px;display:inline-block"></span>2nd shipment</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:14px;height:14px;background:#fff8c5;border:1px solid #e8d850;border-radius:3px;display:inline-block"></span>Ship preference</span>
