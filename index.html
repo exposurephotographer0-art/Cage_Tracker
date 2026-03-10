@@ -5139,6 +5139,7 @@ let bpBoatDate = todayStr();
 let bpSelectedCages = new Set();
 let bpGeneratedMovements = null;
 let bpTripId = null;
+let bpLastCommit = null; // { ids: [...], label: string } — set after commitBoatPlan for undo
 
 function bpSetTrip(tripId) {
   bpTripId = tripId || null;
@@ -5192,6 +5193,34 @@ async function generateBoatMovements() {
       if (frameSim[m.frameId]) frameSim[m.frameId].cages = frameSim[m.frameId].cages.filter(id => id !== m.cageId);
     }
   });
+
+  // ── RMD availability simulation ───────────────────────────────────────────
+  // Build a virtual view of RMD occupancy so we can suggest free slots for
+  // facility→RMD staging moves when no frame is immediately available.
+  // rmdSim[`${number}${side}`] = count of cages currently in that side
+  const rmdSim = {};
+  STATE.rmdSlots.forEach(r => {
+    ['A','B'].forEach(side => {
+      const key = `${r.number}${side}`;
+      const occ = [r[side].cage1, r[side].cage2, r[side].cage3, r[side].cage4].filter(Boolean).length;
+      rmdSim[key] = occ;
+    });
+  });
+  // Layer in planned facility→RMD movements
+  STATE.plannedMovements.filter(m => !m.completed && m.typeKey === 'facility-to-rmd' && m.rmdNumber && m.rmdSide).forEach(m => {
+    const key = `${m.rmdNumber}${m.rmdSide}`;
+    rmdSim[key] = (rmdSim[key] || 0) + 1;
+  });
+  // Find the first RMD side with a free slot (capacity 2 per side)
+  function findFreeRMDSlot() {
+    for (let n = 1; n <= 12; n++) {
+      for (const side of ['A','B']) {
+        const key = `${n}${side}`;
+        if ((rmdSim[key] || 0) < 2) return { number: n, side, key };
+      }
+    }
+    return null;
+  }
 
   function simCageCount(fid) { return (frameSim[fid]?.cages || []).length; }
   function simCages(fid) { return (frameSim[fid]?.cages || []).map(id => getCage(id)).filter(Boolean); }
@@ -5311,7 +5340,7 @@ async function generateBoatMovements() {
         warnings.push(`⚠ No suitable frame for cage ${cage.name} (width ${cage.width}m${needsWaler(cage)?' + waler':''})`);
       }
     } else {
-      // facility (or unknown) → direct to frame
+      // facility (or unknown) → try direct to frame first
       const frame = findBestFrame(cage, reservedFrameIds);
       if (frame) {
         reservedFrameIds.add(frame.id);
@@ -5321,8 +5350,20 @@ async function generateBoatMovements() {
         if (retNote) warnings.push(`ℹ Cage ${cage.name} assigned to ${frame.name} which is currently away — returns ${fmt(frameSim[frame.id].returningOn)}`);
         assignments.push({ cage, frame, action: 'facility_to_frame', note: `Facility → ${frame.name}${retNote}`, isReturningFrame: !!frameSim[frame.id]?.returningOn });
       } else {
-        assignments.push({ cage, frame: null, action: 'no_frame', note: `No suitable frame for ${cage.name}` });
-        warnings.push(`⚠ No suitable frame for cage ${cage.name} (width ${cage.width}m${needsWaler(cage)?' + waler':''})`);
+        // No frame available — try staging to RMD if the cage needs to leave the facility
+        const rmdSlot = findFreeRMDSlot();
+        if (rmdSlot && (cage.departureDate || cage.shippingPreference)) {
+          rmdSim[rmdSlot.key] = (rmdSim[rmdSlot.key] || 0) + 1;
+          assignments.push({
+            cage, frame: null, action: 'facility_to_rmd',
+            note: `Facility → RMD-${rmdSlot.number}${rmdSlot.side} (staging — no frame available yet)`,
+            rmdSlot,
+          });
+          warnings.push(`ℹ No frame available for ${cage.name} — staging to RMD-${rmdSlot.number}${rmdSlot.side} until a frame is free`);
+        } else {
+          assignments.push({ cage, frame: null, action: 'no_frame', note: `No suitable frame for ${cage.name}` });
+          warnings.push(`⚠ No suitable frame for cage ${cage.name} (width ${cage.width}m${needsWaler(cage)?' + waler':''})`);
+        }
       }
     }
   });
@@ -5430,6 +5471,12 @@ async function generateBoatMovements() {
       moves.push({ type: '📤 Facility exit deadline', desc: step.note, category: 'facility-exit' });
     } else if (step.isFixStep) {
       moves.push({ type: `🔩 Move ${moveNum++}`, desc: step.note, category: 'move' });
+    } else if (step.action === 'facility_to_rmd') {
+      moves.push({
+        type: `📦 Facility→RMD · Move ${moveNum++}`,
+        desc: `${step.cage.name}: ${step.note}`,
+        category: 'facility-rmd', cage: step.cage, rmdSlot: step.rmdSlot
+      });
     } else {
       const typeLabel = step.action === 'rmd_to_frame' ? '🏗 RMD→Frame'
         : step.action === 'reframe' ? '🔄 Reframe'
@@ -5489,11 +5536,10 @@ async function commitBoatPlan() {
 
   scheduledSteps.forEach(step => {
     if (step.isFacilityExit) {
-      // Informational deadline note — shows in planner as a reminder
       newMovements.push({
         id: uid(), date: step.date,
         type: 'Facility Exit Deadline',
-        typeKey: 'facility-to-frame', // closest type so it shows on the calendar
+        typeKey: 'facility-to-frame',
         description: step.note,
         shift: 'day', notes: `Boat plan — load date: ${fmt(bpBoatDate)}`,
         cageId: step.cage?.id || null,
@@ -5509,10 +5555,24 @@ async function commitBoatPlan() {
         cageId: null,
         frameId: step.frame?.id || null, completed: false,
       });
+    } else if (step.action === 'facility_to_rmd') {
+      // Facility → RMD staging move
+      newMovements.push({
+        id: uid(), date: step.date,
+        type: 'Facility → RMD (staging)',
+        typeKey: 'facility-to-rmd',
+        description: `${step.cage.name}: ${step.note}`,
+        shift: 'day', notes: `Boat plan — load date: ${fmt(bpBoatDate)}`,
+        cageId: step.cage.id,
+        frameId: null,
+        rmdNumber: step.rmdSlot?.number || null,
+        rmdSide: step.rmdSlot?.side || null,
+        rmdSlot: 'cage1',
+        completed: false,
+      });
     } else {
-      // Actual lift movement
       const typeKey = step.action === 'rmd_to_frame' ? 'rmd-to-frame'
-        : step.action === 'reframe' ? 'frame-to-rmd' // reframe = take out of old frame first; second step added below
+        : step.action === 'reframe' ? 'frame-to-rmd'
         : 'facility-to-frame';
       const typeLabel = step.action === 'rmd_to_frame' ? 'RMD → Frame'
         : step.action === 'reframe' ? 'Reframe'
@@ -5527,7 +5587,6 @@ async function commitBoatPlan() {
         cageId: step.cage.id,
         frameId: step.frame?.id || null, completed: false,
       });
-      // For reframe: also add an explicit "move into new frame" step on same day
       if (step.action === 'reframe' && step.frame) {
         newMovements.push({
           id: uid(), date: step.date,
@@ -5543,17 +5602,35 @@ async function commitBoatPlan() {
   });
 
   STATE.plannedMovements.push(...newMovements);
+
+  // Store committed IDs for undo
   const days = new Set(scheduledSteps.map(s => s.date).filter(Boolean));
   const liftCount = newMovements.filter(m => m.typeKey !== 'frame-fix-shipping' && !m.type.includes('Deadline')).length;
-  alert(`Plan committed!
+  const rmdStagingCount = newMovements.filter(m => m.typeKey === 'facility-to-rmd').length;
+  bpLastCommit = {
+    ids: newMovements.map(m => m.id),
+    label: `${liftCount} movements across ${days.size} day${days.size!==1?'s':''}`,
+    rmdStagingCount,
+    liftCount,
+    fixCount: newMovements.filter(m=>m.typeKey==='frame-fix-shipping').length,
+  };
 
-• ${liftCount} lift movements
-• ${newMovements.filter(m=>m.typeKey==='frame-fix-shipping').length} fix-for-shipping steps
-• Spread across ${days.size} working day${days.size!==1?'s':''} before ${fmt(bpBoatDate)}`);
   bpSelectedCages.clear();
   bpGeneratedMovements = null;
   render();
   await Promise.all(newMovements.map(m => addMovementToAPI(m)));
+}
+
+async function undoBoatPlan() {
+  if (!bpLastCommit) return;
+  const { ids, label } = bpLastCommit;
+  if (!confirm(`Undo boat plan? This will remove ${ids.length} movement${ids.length!==1?'s':''} (${label}) that were just added to the planner.`)) return;
+  // Remove from STATE
+  STATE.plannedMovements = STATE.plannedMovements.filter(m => !ids.includes(m.id));
+  bpLastCommit = null;
+  render();
+  // Delete from API in background
+  await Promise.all(ids.map(id => deleteMovementFromAPI(id)));
 }
 
 function renderBoatPlanner() {
@@ -5664,10 +5741,11 @@ function renderBoatPlanner() {
         : m.category === 'warning' ? 'var(--orange)'
         : m.category === 'facility-exit' ? 'var(--purple)'
         : m.category === 'returning-frame' ? '#0e7490'
+        : m.category === 'facility-rmd' ? 'var(--purple)'
         : 'var(--accent)';
       return `<li><div class="bp-movement-desc"><span class="bp-movement-type" style="color:${typeColor}">${esc(m.type)}</span> — ${esc(m.desc)}</div></li>`;
     }).join('');
-    const hasMoves = moves.some(m => m.category === 'move' || m.category === 'returning-frame');
+    const hasMoves = moves.some(m => m.category === 'move' || m.category === 'returning-frame' || m.category === 'facility-rmd');
 
     // AI insight panel
     const aiHTML = aiLoading
@@ -5734,6 +5812,12 @@ function renderBoatPlanner() {
           </div>
           <div class="bp-cage-grid">${cageCardsHTML}</div>
         </div>
+        ${bpLastCommit ? `
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#e6f5ec;border:1px solid #b0dcc0;border-radius:8px;margin-bottom:12px">
+            <span style="font-size:16px">✅</span>
+            <div style="flex:1;font-size:13px;color:var(--green)"><strong>Plan added to planner</strong> — ${esc(bpLastCommit.label)}${bpLastCommit.rmdStagingCount > 0 ? ` (incl. ${bpLastCommit.rmdStagingCount} RMD staging move${bpLastCommit.rmdStagingCount!==1?'s':''})` : ''}</div>
+            <button class="btn btn-danger btn-sm" onclick="undoBoatPlan()">↩ Undo</button>
+          </div>` : ''}
         ${movementsHTML}
       </div>
       <div>
