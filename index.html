@@ -5299,9 +5299,10 @@ async function generateBoatMovements() {
   function findExitFrame(cage) {
     const needsW = needsWaler(cage);
     // Include facility frames AND returning frames whose returnDate is on/before
-    // the cage's departure deadline (so the frame is physically available in time)
+    // the cage's departure deadline (so the frame is physically available in time).
+    // EXCLUDE frames already reserved for boat cages (reservedFrameIds).
     const allCandidates = STATE.frames
-      .filter(f => !f.fixedForShipping && cage.width <= f.width && (
+      .filter(f => !f.fixedForShipping && !reservedFrameIds.has(f.id) && cage.width <= f.width && (
         f.location === 'facility' ||
         ((f.location === 'client' || f.location === 'boat') && f.returnDate && f.returnDate <= cage.departureDate)
       ))
@@ -5350,8 +5351,33 @@ async function generateBoatMovements() {
 
   const reservedFrameIds = new Set();
 
-  // ── Step 1a: Plan facility-exit cages (Facility → Frame, by departureDate) ──
-  // Sort soonest deadline first so tightest deadlines get frame priority
+  // ── Pre-pass: Reserve frames for boat cages BEFORE planning facility-exit cages ──
+  // This ensures facility-exit cages don't consume frames that boat cages need.
+  // We do a dry-run of Step 1b (frame finding only, no push to assignments yet)
+  // just to populate reservedFrameIds, then Step 1a uses what's left.
+  boatCages.forEach(cage => {
+    if (cage.location === 'frame') {
+      const currentFrame = STATE.frames.find(f => f.cages.includes(cage.id));
+      if (currentFrame) {
+        const issues = [];
+        if (cage.width > currentFrame.width) issues.push('too narrow');
+        if (needsWaler(cage) && !currentFrame.hasWaler) issues.push('no waler');
+        if (issues.length === 0) {
+          reservedFrameIds.add(currentFrame.id);
+        } else {
+          const better = findBestFrame(cage, reservedFrameIds);
+          if (better) reservedFrameIds.add(better.id);
+        }
+      }
+    } else {
+      const frame = findBestFrame(cage, reservedFrameIds);
+      if (frame) reservedFrameIds.add(frame.id);
+    }
+  });
+
+  // ── Step 1a: Plan facility-exit cages (Facility → Frame → RMD, by departureDate) ──
+  // Uses only frames NOT reserved for boat cages (reservedFrameIds populated above).
+  // Sort soonest deadline first so tightest deadlines get frame priority.
   const sortedExitCages = [...facilityExitCages].sort((a, b) => a.departureDate.localeCompare(b.departureDate));
 
   // Find a suggested free (or partially occupied) RMD slot for an exit cage,
@@ -5512,6 +5538,10 @@ async function generateBoatMovements() {
   });
 
   // ── Step 1b: Classify boat cages ─────────────────────────────────────────
+  // reservedFrameIds was pre-populated above so Step 1a knew which frames to avoid.
+  // Now reset it so Step 1b can do the real assignments from scratch — it will
+  // repopulate reservedFrameIds as it assigns frames, matching the pre-pass results.
+  reservedFrameIds.clear();
   boatCages.forEach(cage => {
     if (cage.location === 'frame') {
       const currentFrame = STATE.frames.find(f => f.cages.includes(cage.id));
@@ -6746,9 +6776,11 @@ function renderMovementsMap(dayCtx) {
   });
 
   // Inject virtual "cage-to-boat-frame" entries: cages planned into frames currently away
-  // These show a dashed arrow from the cage in RMD/facility to the frame card in the boat box
+  // These show a dashed arrow from the cage in RMD to the frame card in the boat box.
+  // NOTE: facility-to-frame moves already draw their own blue dashed arrow to the frame card,
+  // so we only inject this for rmd-to-frame moves to avoid double arrows.
   filtered.forEach(m => {
-    if (m.typeKey !== 'facility-to-frame' && m.typeKey !== 'rmd-to-frame') return;
+    if (m.typeKey !== 'rmd-to-frame') return;
     const frame = getFrame(m.frameId);
     if (!frame) return;
     if (frame.location === 'facility') return; // only away frames
