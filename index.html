@@ -5355,102 +5355,94 @@ async function generateBoatMovements() {
   const exitReservedFrameIds = new Set();
   const reservedFrameIds = new Set();
 
-  // ── Pre-pass: Reserve frames for boat cages BEFORE planning facility-exit cages ──
-  // This ensures facility-exit cages don't consume frames that boat cages need.
-  // We do a dry-run of Step 1b (frame finding only, no push to assignments yet)
-  // just to populate reservedFrameIds, then Step 1a uses what's left.
-  boatCages.forEach(cage => {
-    if (cage.location === 'frame') {
-      const currentFrame = STATE.frames.find(f => f.cages.includes(cage.id));
-      if (currentFrame) {
-        const issues = [];
-        if (cage.width > currentFrame.width) issues.push('too narrow');
-        if (needsWaler(cage) && !currentFrame.hasWaler) issues.push('no waler');
-        if (issues.length === 0) {
-          reservedFrameIds.add(currentFrame.id);
-        } else {
-          const better = findBestFrame(cage, reservedFrameIds);
-          if (better) reservedFrameIds.add(better.id);
-        }
-      }
-    } else {
-      const frame = findBestFrame(cage, reservedFrameIds);
-      if (frame) reservedFrameIds.add(frame.id);
-    }
-  });
+  // No pre-pass needed — facility-exit cages go directly to RMD (no frame transit).
+  // exitReservedFrameIds is kept for compatibility with findBestFrame sorting logic.
+  const exitReservedFrameIds = new Set();
+  const reservedFrameIds = new Set();
 
-  // ── Step 1a: Plan facility-exit cages (Facility → Frame → RMD, by departureDate) ──
-  // Uses only frames NOT reserved for boat cages (reservedFrameIds populated above).
-  // Sort soonest deadline first so tightest deadlines get frame priority.
+  // ── Step 1a: Plan facility-exit cages → direct Facility → RMD ────────────────
+  // Priority: cages leaving the facility are planned FIRST so they always get RMD
+  // space before boat-loading decisions consume anything.
+  //
+  // RMD availability: we treat any boat-selected cage currently IN RMD as
+  // "departing" (it will move to a frame for the boat), freeing that RMD slot.
+  //
+  // rmdExitSim tracks slots virtually claimed by exit cages this planning run.
   const sortedExitCages = [...facilityExitCages].sort((a, b) => a.departureDate.localeCompare(b.departureDate));
 
-  // Find a suggested free (or partially occupied) RMD slot for an exit cage,
-  // fully respecting height-pairing rules, medium-cage limits, and length constraints.
-  // rmdSimPlanned tracks the virtually-planned occupancy for this planning run:
-  //   { "NNX": { cage1: cageOrNull, cage2: cageOrNull, cage3: cageOrNull, cage4: cageOrNull } }
-  const rmdSimPlanned = {}; // built up as we assign exit cages
+  // Build the set of RMD cages that will depart for the boat (freeing their slots).
+  // These are boat-selected cages currently sitting in RMD.
+  const rmdBoatDeparting = new Set(
+    boatCages.filter(c => c.location === 'rmd').map(c => c.id)
+  );
 
-  function findFreeRMDSlotForExit(cage) {
-    // Each RMD side has exactly two slots:
-    //   cage1 = inside, cage2 = outside
-    // Valid pairings (inside, outside):
-    //   Short  + Short  = OK
-    //   Medium + Medium = OK
-    //   Tall   + Short  = OK  (Tall MUST be inside)
-    // A Tall cage can never go in the outside slot.
+  // rmdExitSim: key = "NNX" (e.g. "1A"), value = {cage1, cage2} — simulated occupancy
+  const rmdExitSim = {};
+
+  function findRMDSlotForExit(cage) {
     const cageH = hCat(cage.height);
+    const cageLen = cage.length || 0;
 
-    // Build a virtual view of each RMD side (real state + planned placements this run).
-    // Cages already planned to leave RMD (boat plan rmd_to_frame steps) are treated as free.
-    const rmdDeparting = new Set();
-    assignments.forEach(a => {
-      if (a.action === 'rmd_to_frame' && a.cage) rmdDeparting.add(a.cage.id);
-    });
+    // RMD sides have 4 slots: cage1+cage3 = inside group, cage2+cage4 = outside group.
+    // Tall cages may ONLY go in inside slots (cage1/cage3).
+    // Combined length of both inside slots must not exceed 13m (same for outside).
+    const insideSlots  = ['cage1', 'cage3'];
+    const outsideSlots = ['cage2', 'cage4'];
+    // pair: cage1↔cage2, cage3↔cage4 (cross-group pairing check)
+    function pairSlot(s) { return s==='cage1'?'cage2':s==='cage2'?'cage1':s==='cage3'?'cage4':'cage3'; }
+    function isInsideSlot(s) { return s==='cage1'||s==='cage3'; }
 
     function getSimSide(rNum, side) {
       const r = STATE.rmdSlots.find(x => x.number === rNum);
-      if (!r) return { cage1: null, cage2: null };
+      if (!r) return {};
       const key = `${rNum}${side}`;
-      const planned = rmdSimPlanned[key] || {};
-      function resolve(slot) {
-        if (planned.hasOwnProperty(slot)) return planned[slot];
-        const cid = r[side][slot];
-        if (!cid) return null;
-        if (rmdDeparting.has(cid)) return null;
-        return getCage(cid);
+      const planned = rmdExitSim[key] || {};
+      const result = {};
+      for (const s of ['cage1','cage2','cage3','cage4']) {
+        if (planned.hasOwnProperty(s)) {
+          result[s] = planned[s]; // null = freed, cage object = occupied
+        } else {
+          const cid = r[side][s];
+          if (!cid) { result[s] = null; continue; }
+          if (rmdBoatDeparting.has(cid)) { result[s] = null; continue; } // departing for boat → free
+          result[s] = getCage(cid);
+        }
       }
-      return { cage1: resolve('cage1'), cage2: resolve('cage2') };
+      return result;
     }
 
-    // Can we place `cage` into `slot` (cage1=inside, cage2=outside) on this simSide?
-    function canPlaceInSlot(simSide, slot, cage) {
-      // Slot must be free
-      if (simSide[slot]) return false;
+    function canPlaceInSlot(sim, slot) {
+      if (sim[slot]) return false; // slot occupied
 
-      // Tall cages may ONLY go in the inside slot (cage1)
-      if (cageH === 'Tall' && slot === 'cage2') return false;
+      // Tall cages only in inside slots
+      if (cageH === 'Tall' && !isInsideSlot(slot)) return false;
 
-      // Check compatibility with the paired slot
-      const pairSlot  = slot === 'cage1' ? 'cage2' : 'cage1';
-      const pairCage  = simSide[pairSlot];
+      // Length check within same group (inside or outside)
+      const group = isInsideSlot(slot) ? insideSlots : outsideSlots;
+      const usedLen = group.filter(s => s !== slot).reduce((sum, s) => {
+        const c = sim[s]; return sum + (c ? (c.length || 0) : 0);
+      }, 0);
+      if (cageLen + usedLen > 13) return false;
+
+      // Cross-group pair compatibility (cage1↔cage2, cage3↔cage4)
+      const ps = pairSlot(slot);
+      const pairCage = sim[ps];
       if (pairCage) {
-        // Determine which is inside and which is outside for the pairing check
-        const insideCage  = slot === 'cage1' ? cage : pairCage;
-        const outsideCage = slot === 'cage1' ? pairCage : cage;
-        if (!canPairRMD(insideCage, outsideCage)) return false;
+        const inside  = isInsideSlot(slot) ? cage : pairCage;
+        const outside = isInsideSlot(slot) ? pairCage : cage;
+        if (!canPairRMD(inside, outside)) return false;
       }
 
       return true;
     }
 
-    // Gather all valid candidate placements across all RMD sides
     const candidates = [];
     for (const r of STATE.rmdSlots) {
       for (const side of SIDES) {
-        const simSide = getSimSide(r.number, side);
-        const filled = ['cage1','cage2'].filter(s => simSide[s]).length;
-        for (const slot of ['cage1','cage2']) {
-          if (canPlaceInSlot(simSide, slot, cage)) {
+        const sim = getSimSide(r.number, side);
+        const filled = ['cage1','cage2','cage3','cage4'].filter(s => sim[s]).length;
+        for (const slot of ['cage1','cage2','cage3','cage4']) {
+          if (canPlaceInSlot(sim, slot)) {
             candidates.push({ number: r.number, side, slot, filled });
           }
         }
@@ -5459,23 +5451,20 @@ async function generateBoatMovements() {
 
     if (candidates.length === 0) return null;
 
-    // Prefer: partially-filled sides first (pair cages up), then lowest RMD number, side A before B
+    // Prefer partially-filled sides first (pair up), then lowest RMD number, side A before B
     candidates.sort((a, b) => {
-      const aPartial = a.filled > 0 ? 0 : 1;
-      const bPartial = b.filled > 0 ? 0 : 1;
-      if (aPartial !== bPartial) return aPartial - bPartial;
+      if ((b.filled > 0) !== (a.filled > 0)) return (b.filled > 0) ? 1 : -1;
       if (a.number !== b.number) return a.number - b.number;
       return a.side.localeCompare(b.side);
     });
 
     const best = candidates[0];
     const key = `${best.number}${best.side}`;
-    if (!rmdSimPlanned[key]) {
-      const simSide = getSimSide(best.number, best.side);
-      rmdSimPlanned[key] = { cage1: simSide.cage1, cage2: simSide.cage2 };
+    if (!rmdExitSim[key]) {
+      const sim = getSimSide(best.number, best.side);
+      rmdExitSim[key] = { cage1: sim.cage1, cage2: sim.cage2, cage3: sim.cage3, cage4: sim.cage4 };
     }
-    rmdSimPlanned[key][best.slot] = cage;
-
+    rmdExitSim[key][best.slot] = cage; // mark slot as taken
     return { number: best.number, side: best.side, slot: best.slot };
   }
 
@@ -5487,65 +5476,20 @@ async function generateBoatMovements() {
     );
     if (alreadyPlanned) continue;
 
-    const frame = findExitFrame(cage);
-    if (frame) {
-      exitFrameSim[frame.id] = exitFrameSim[frame.id] || [];
-      exitFrameSim[frame.id].push(cage.id);
-      const partner = exitFrameSim[frame.id].length > 1 ? getCage(exitFrameSim[frame.id][0]) : null;
-      const pairNote = partner ? ` (paired with cage ${partner.name})` : '';
-      // Suggest an RMD slot for this cage to park in after exiting
-      const suggestedRMD = findFreeRMDSlotForExit(cage);
-      const rmdLabel = suggestedRMD ? `RMD-${suggestedRMD.number}${suggestedRMD.side} (${suggestedRMD.slot})` : 'RMD (no valid slot)';
+    const rmdSlot = findRMDSlotForExit(cage);
+    if (rmdSlot) {
       assignments.push({
-        cage, frame, action: 'facility_exit_to_frame',
-        note: `Cage ${cage.name}: Facility → ${frame.name}${pairNote}`,
+        cage, frame: null, action: 'facility_to_rmd',
+        note: `Cage ${cage.name}: Facility → RMD-${rmdSlot.number}${rmdSlot.side} (${rmdSlot.slot})`,
         deadline: cage.departureDate,
-        suggestedRMD,
+        rmdSlot,
       });
-      // Add a follow-on frame-to-rmd step so the cage is tracked into RMD storage
-      if (suggestedRMD) {
-        assignments.push({
-          cage, frame, action: 'facility_exit_frame_to_rmd',
-          note: `Cage ${cage.name}: ${frame.name} → ${rmdLabel} (park in RMD storage)`,
-          deadline: cage.departureDate,
-          rmdSlot: suggestedRMD,
-        });
-      }
-      if (needsWaler(cage) && !frame.hasWaler) warnings.push(`⚠ Cage ${cage.name} may need waler but ${frame.name} has none`);
     } else {
-      warnings.push(`⚠ No suitable frame for cage ${cage.name} to leave facility by ${fmt(cage.departureDate)} — check frame availability`);
+      warnings.push(`⚠ No RMD space for cage ${cage.name} (due ${fmt(cage.departureDate)}) — RMD may be full`);
     }
   }
 
-  // ── Step 1a post-processing: frames used for facility-exit become available
-  //    in frameSim (at RMD, empty) so findBestFrame can reuse them for boat
-  //    cages. The sequence will be: Facility→Frame→RMD (exit cage drops off),
-  //    then Frame→Boat (boat cage loads). ─────────────────────────────────────
-  // Also: returning frames claimed by facility-exit assignments must be reserved
-  // so findBestFrame won't double-assign them to boat cages before they're free.
-  // (exitReservedFrameIds is declared earlier so findBestFrame can reference it)
-  assignments.filter(a => a.action === 'facility_exit_to_frame' && a.frame).forEach(a => {
-    const fid = a.frame.id;
-    exitReservedFrameIds.add(fid);
-    if (!frameSim[fid]) {
-      // Frame wasn't in frameSim yet (e.g. a returning frame used for exit) — add it as empty
-      frameSim[fid] = { frame: a.frame, cages: [], returningOn: a.frame.returnDate || null };
-    } else {
-      // Frame is already tracked — clear the exit cage from its sim occupancy
-      // (it will be at RMD after drop-off, so the frame is free again)
-      frameSim[fid].cages = frameSim[fid].cages.filter(id => id !== a.cage.id);
-    }
-    // exitFrameSim also needs updating so pairing logic stays consistent
-    if (exitFrameSim[fid]) {
-      exitFrameSim[fid] = exitFrameSim[fid].filter(id => id !== a.cage.id);
-    }
-  });
-
   // ── Step 1b: Classify boat cages ─────────────────────────────────────────
-  // reservedFrameIds was pre-populated above so Step 1a knew which frames to avoid.
-  // Now reset it so Step 1b can do the real assignments from scratch — it will
-  // repopulate reservedFrameIds as it assigns frames, matching the pre-pass results.
-  reservedFrameIds.clear();
   boatCages.forEach(cage => {
     if (cage.location === 'frame') {
       const currentFrame = STATE.frames.find(f => f.cages.includes(cage.id));
