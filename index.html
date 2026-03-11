@@ -715,6 +715,18 @@ const RMD_LAYOUT = [
 function getRMDByNum(n) { return STATE.rmdSlots.find(r=>r.number===n); }
 function toISO(d) { return new Date(d).toISOString().split('T')[0]; }
 function todayStr() { return toISO(new Date()); }
+// Migrate legacy RMD side data: cage3/cage4 slots are removed.
+// cage3 (inside 2) → adopt into cage1 if cage1 is empty; otherwise drop.
+// cage4 (outside 2) → adopt into cage2 if cage2 is empty; otherwise drop.
+function migrateRmdSide(s) {
+  if (!s) return { cage1: null, cage2: null, overridden: false };
+  let c1 = s.cage1 || null;
+  let c2 = s.cage2 || null;
+  if (!c1 && s.cage3) c1 = s.cage3;   // absorb inside-2 into inside slot
+  if (!c2 && s.cage4) c2 = s.cage4;   // absorb outside-2 into outside slot
+  return { cage1: c1, cage2: c2, overridden: !!s.overridden };
+}
+
 function fmt(d) { if(!d) return ''; return new Date(d+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}); }
 function fmtShort(d) { if(!d) return ''; const dt=new Date(d+'T12:00:00'); return dt.toLocaleDateString('en-GB',{weekday:'short'})+' '+dt.getDate(); }
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
@@ -729,7 +741,7 @@ function initState() {
     })),
     rmdSlots: Array.from({length:RMD_COUNT},(_,i)=>{
       let o={number:i+1};
-      SIDES.forEach(s=>{ o[s]={cage1:null,cage2:null,cage3:null,cage4:null,overridden:false}; });
+      SIDES.forEach(s=>{ o[s]={cage1:null,cage2:null,overridden:false}; });
       return o;
     }),
     plannedMovements: [],
@@ -805,8 +817,8 @@ async function loadState() {
     frames: PRELOAD_STATE.frames || [],
     rmdSlots: (PRELOAD_STATE.rmdSlots || []).map(r => ({
       ...r,
-      A: { cage1: r.A?.cage1||null, cage2: r.A?.cage2||null, cage3: r.A?.cage3||null, cage4: r.A?.cage4||null, overridden: !!r.A?.overridden },
-      B: { cage1: r.B?.cage1||null, cage2: r.B?.cage2||null, cage3: r.B?.cage3||null, cage4: r.B?.cage4||null, overridden: !!r.B?.overridden },
+      A: migrateRmdSide(r.A),
+      B: migrateRmdSide(r.B),
     })),
     plannedMovements: PRELOAD_STATE.plannedMovements || [],
     shipments: PRELOAD_STATE.shipments || [],
@@ -837,8 +849,8 @@ async function loadState() {
       frames: data.frames,
       rmdSlots: data.rmdSlots.map(r => ({
         ...r,
-        A: { cage1: r.A?.cage1||null, cage2: r.A?.cage2||null, cage3: r.A?.cage3||null, cage4: r.A?.cage4||null, overridden: !!r.A?.overridden },
-        B: { cage1: r.B?.cage1||null, cage2: r.B?.cage2||null, cage3: r.B?.cage3||null, cage4: r.B?.cage4||null, overridden: !!r.B?.overridden },
+        A: migrateRmdSide(r.A),
+        B: migrateRmdSide(r.B),
       })),
       plannedMovements: data.plannedMovements,
       shipments: data.shipments,
@@ -1218,8 +1230,8 @@ function shipmentLegendHTML(shipDays) {
 function renderRMDHeatmap() {
   const total = STATE.rmdSlots.length;
   if (total === 0) return '';
-  const slotKeys = ['cage1','cage2','cage3','cage4'];
-  const maxSlots = 8; // 4 per side × 2 sides
+  const slotKeys = ['cage1','cage2'];
+  const maxSlots = 4; // 2 per side × 2 sides
 
   const cards = RMD_LAYOUT.flatMap(row => row.items).map(rmdNum => {
     const r = getRMDByNum(rmdNum);
@@ -1692,15 +1704,15 @@ function renderDashboard() {
     let items = row.items.map(item=>{
       const r = getRMDByNum(item);
       if (!r) return '';
-      const cnt = [r.A.cage1,r.A.cage2,r.A.cage3,r.A.cage4,r.B.cage1,r.B.cage2,r.B.cage3,r.B.cage4].filter(Boolean).length;
+      const cnt = [r.A.cage1,r.A.cage2,r.B.cage1,r.B.cage2].filter(Boolean).length;
       function renderSidePaired(side) {
         return `<div style="font:600 9px var(--font-mono);color:var(--blue);margin-bottom:2px">Inside</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px">
-            ${renderRMDSlot(side,'cage1',side+' In 1',r)}${renderRMDSlot(side,'cage3',side+' In 2',r)}
+          <div style="display:grid;grid-template-columns:1fr;gap:4px;margin-bottom:4px">
+            ${renderRMDSlot(side,'cage1',side+' Inside',r)}
           </div>
           <div style="font:600 9px var(--font-mono);color:var(--green);margin-bottom:2px">Outside</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
-            ${renderRMDSlot(side,'cage2',side+' Out 1',r)}${renderRMDSlot(side,'cage4',side+' Out 2',r)}
+          <div style="display:grid;grid-template-columns:1fr;gap:4px">
+            ${renderRMDSlot(side,'cage2',side+' Outside',r)}
           </div>`;
       }
       return `<div class="rmd-site-card" style="cursor:default">
@@ -2056,35 +2068,27 @@ function renderCages() {
       return `<option value="frame:${f.id}">→ ${esc(f.name)} (${f.width}m${f.hasWaler ? " 🔩" : ""})${note}</option>`;
     }).join('');
 
-    // RMD options: check height pairing rules
+    // RMD options: check height pairing rules. Each side has exactly 2 slots: cage1 (inside) and cage2 (outside).
     let rmdOptsList = [];
     STATE.rmdSlots.forEach(r=>{
       SIDES.forEach(side=>{
-        // inside slots: cage1, cage3 (group)
-        // outside slots: cage2, cage4 (group)
-        [['cage1','cage3'],['cage2','cage4']].forEach(groupSlots => {
-          const posLabel = groupSlots[0]==='cage1' ? 'inside' : 'outside';
-          groupSlots.forEach(slot => {
-            if(r[side][slot]) return; // slot occupied
-            // 13m length check
-            const usedLen = groupSlots.filter(s=>s!==slot).reduce((sum,s)=>{const c2=r[side][s]?getCage(r[side][s]):null;return sum+(c2?c2.length||0:0);},0);
-            if((c.length||0)+usedLen > 13) return; // cage too long for this group
-            const otherCid = r[side][groupSlots.find(s=>s!==slot)] || null;
-            const pairSlot = slot==='cage1'?'cage2':slot==='cage2'?'cage1':slot==='cage3'?'cage4':'cage3';
-            const pairCid = r[side][pairSlot];
-            if(pairCid) {
-              const other = getCage(pairCid);
-              if(other && canPairRMD(
-                  (slot==='cage1'||slot==='cage3') ? c : other,   // inside
-                  (slot==='cage1'||slot==='cage3') ? other : c    // outside
-                )) {
-                rmdOptsList.push(`<option value="rmd:${r.number}:${side}:${slot}">→ RMD-${r.number}${side} (${posLabel}${slot==='cage3'||slot==='cage4'?' #2':''}) [with ${other.name}]</option>`);
-              }
-            } else {
-              rmdOptsList.push(`<option value="rmd:${r.number}:${side}:${slot}">→ RMD-${r.number}${side} (${posLabel}${slot==='cage3'||slot==='cage4'?' #2':''})</option>`);
-            }
-          });
-        });
+        // Inside slot (cage1)
+        if(!r[side].cage1 && (c.length||0) <= 13) {
+          const outsideCage = r[side].cage2 ? getCage(r[side].cage2) : null;
+          if(!outsideCage || canPairRMD(c, outsideCage)) {
+            const note = outsideCage ? ` [with ${outsideCage.name}]` : '';
+            rmdOptsList.push(`<option value="rmd:${r.number}:${side}:cage1">→ RMD-${r.number}${side} (inside)${note}</option>`);
+          }
+        }
+        // Outside slot (cage2) — tall cages cannot go outside
+        const cageH = hCat(c.height);
+        if(!r[side].cage2 && cageH !== 'Tall' && (c.length||0) <= 13) {
+          const insideCage = r[side].cage1 ? getCage(r[side].cage1) : null;
+          if(!insideCage || canPairRMD(insideCage, c)) {
+            const note = insideCage ? ` [with ${insideCage.name}]` : '';
+            rmdOptsList.push(`<option value="rmd:${r.number}:${side}:cage2">→ RMD-${r.number}${side} (outside)${note}</option>`);
+          }
+        }
       });
     });
     let rmdOpts = rmdOptsList.sort((a,b)=>{
@@ -2466,21 +2470,20 @@ async function changeCageLocation(cid, target) {
     const rmdIdx = STATE.rmdSlots.findIndex(r=>r.number===rmdNum);
     if (rmdIdx === -1) return alert('RMD not found.');
     const r = STATE.rmdSlots[rmdIdx];
-    // Determine group slots for 13m check
-    const groupSlots = ['cage1','cage3'].includes(slot) ? ['cage1','cage3'] : ['cage2','cage4'];
-    const usedLen = groupSlots.filter(s=>s!==slot).reduce((sum,s)=>{const c2=r[side][s]?getCage(r[side][s]):null;return sum+(c2?c2.length||0:0);},0);
-    if((cage.length||0)+usedLen > 13) {
+    // 13m length check (single cage per slot)
+    if((cage.length||0) > 13) {
       cage.location = 'facility'; cage.locationDetail = '';
       render(); saveCage(cage);
-      return alert(`Cannot place: combined length (${((cage.length||0)+usedLen).toFixed(1)}m) exceeds 13m limit.`);
+      return alert(`Cannot place: cage length (${(cage.length||0).toFixed(1)}m) exceeds 13m RMD limit.`);
     }
-    const pairSlot = slot==='cage1'?'cage2':slot==='cage2'?'cage1':slot==='cage3'?'cage4':'cage3';
+    // Pairing check: cage1 (inside) pairs with cage2 (outside)
+    const pairSlot = slot==='cage1' ? 'cage2' : 'cage1';
     const pairCid = r[side][pairSlot];
     if (pairCid) {
       const other = getCage(pairCid);
       if (other && !canPairRMD(
-          (slot==='cage1'||slot==='cage3') ? cage : other,   // inside
-          (slot==='cage1'||slot==='cage3') ? other : cage    // outside
+          slot==='cage1' ? cage : other,   // inside
+          slot==='cage1' ? other : cage    // outside
         )) {
         if (!confirm(`Height pairing ${hCat(cage.height)} + ${hCat(other.height)} not standard. Override?`)) {
           cage.location = 'facility'; cage.locationDetail = '';
@@ -3027,31 +3030,29 @@ function renderRMD() {
   }
 
   let rmdHTML = STATE.rmdSlots.map((r,idx)=>{
-    const cnt = [r.A.cage1,r.A.cage2,r.A.cage3,r.A.cage4,r.B.cage1,r.B.cage2,r.B.cage3,r.B.cage4].filter(Boolean).length;
+    const cnt = [r.A.cage1,r.A.cage2,r.B.cage1,r.B.cage2].filter(Boolean).length;
     let sidesHTML = SIDES.map(side=>{
       const sObj = r[side];
-      const insideLen = getSideGroupLength(sObj,'cage1','cage3');
-      const outsideLen = getSideGroupLength(sObj,'cage2','cage4');
+      const insideLen = getSideGroupLength(sObj,'cage1');
+      const outsideLen = getSideGroupLength(sObj,'cage2');
       const iBar = `<span style="font-size:9px;color:${insideLen>RMD_MAX_LENGTH?'var(--red)':'var(--text-muted)'};font-family:var(--font-mono);margin-left:4px">${insideLen.toFixed(1)}/${RMD_MAX_LENGTH}m</span>`;
       const oBar = `<span style="font-size:9px;color:${outsideLen>RMD_MAX_LENGTH?'var(--red)':'var(--text-muted)'};font-family:var(--font-mono);margin-left:4px">${outsideLen.toFixed(1)}/${RMD_MAX_LENGTH}m</span>`;
       return `<div style="margin-bottom:10px">
         <div style="font:700 10px var(--font-mono);color:var(--text-muted);margin-bottom:5px">SIDE ${side}</div>
         <div style="font:600 9px var(--font-mono);color:var(--blue);margin-bottom:3px;padding:2px 4px;background:rgba(37,99,176,0.06);border-radius:3px">INSIDE ${iBar}</div>
         <div style="display:flex;gap:6px;margin-bottom:6px">
-          <div style="flex:1;min-width:0">${renderSlotEl(idx,r,side,'cage1','IN 1',['cage1','cage3'])}</div>
-          <div style="flex:1;min-width:0">${renderSlotEl(idx,r,side,'cage3','IN 2',['cage1','cage3'])}</div>
+          <div style="flex:1;min-width:0">${renderSlotEl(idx,r,side,'cage1','Inside',['cage1'])}</div>
         </div>
         <div style="font:600 9px var(--font-mono);color:var(--green);margin-bottom:3px;padding:2px 4px;background:rgba(26,138,74,0.06);border-radius:3px">OUTSIDE ${oBar}</div>
         <div style="display:flex;gap:6px">
-          <div style="flex:1;min-width:0">${renderSlotEl(idx,r,side,'cage2','OUT 1',['cage2','cage4'])}</div>
-          <div style="flex:1;min-width:0">${renderSlotEl(idx,r,side,'cage4','OUT 2',['cage2','cage4'])}</div>
+          <div style="flex:1;min-width:0">${renderSlotEl(idx,r,side,'cage2','Outside',['cage2'])}</div>
         </div>
       </div>`;
     }).join('');
     return `<div class="card">
       <div class="flex-between" style="margin-bottom:10px">
         <span style="font:700 16px var(--font-mono);color:var(--accent)">RMD-${r.number}</span>
-        <span style="font-size:11px;color:var(--text-muted)">${cnt}/8 occupied</span>
+        <span style="font-size:11px;color:var(--text-muted)">${cnt}/4 occupied</span>
       </div>
       ${sidesHTML}
       ${r.A.overridden||r.B.overridden ? '<span class="badge badge-yellow">⚠ Override Active</span>' : ''}
@@ -3073,9 +3074,9 @@ function renderRMD() {
               const idx2 = STATE.rmdSlots.findIndex(rr=>rr.number===item);
               const r2 = STATE.rmdSlots[idx2];
               if(!r2) return '';
-              const cnt2 = [r2.A.cage1,r2.A.cage2,r2.A.cage3,r2.A.cage4,r2.B.cage1,r2.B.cage2,r2.B.cage3,r2.B.cage4].filter(Boolean).length;
+              const cnt2 = [r2.A.cage1,r2.A.cage2,r2.B.cage1,r2.B.cage2].filter(Boolean).length;
 
-              function renderCompact(side, slot, posLabel, groupSlots) {
+              function renderCompact(side, slot, posLabel) {
                 const sObj2 = r2[side];
                 const cid2 = sObj2[slot];
                 const cage2 = cid2 ? getCage(cid2) : null;
@@ -3085,35 +3086,30 @@ function renderRMD() {
                   const _nc = shipmentShadeNameColor(_s) || shipPrefNameColor(cage2);
                   return '<div class="rmd-slot" style="'+_b+'"><span class="rmd-slot-label">'+posLabel+'</span><div class="rmd-slot-content"><span class="rmd-cage-info"><span class="rmd-cage-name" style="'+_nc+'">'+esc(cage2.name)+'</span><span class="rmd-cage-detail" style="'+shipmentShadeDetailColor(_s)+'">'+cage2.width+'m·'+hCat(cage2.height)+'·'+lCat(cage2.length)+'·'+cage2.weight+'t</span></span><button class="remove-btn" onclick="removeFromRMD('+idx2+',\''+side+'\',\''+slot+'\')">&#215;</button></div></div>';
                 } else {
-                  const used2 = groupSlots.filter(s=>s!==slot).reduce((sum,s)=>{const c2=sObj2[s]?getCage(sObj2[s]):null;return sum+(c2?c2.length||0:0);},0);
-                  const rem2 = (RMD_MAX_LENGTH-used2).toFixed(1);
-                  const opts2 = avail.filter(c2=>(c2.length||0)+used2<=RMD_MAX_LENGTH).map(c2=>`<option value="${c2.id}">${esc(c2.name)} (${c2.length}m)</option>`).join('');
-                  const gs2 = groupSlots.join(',');
-                  return '<div class="rmd-slot"><span class="rmd-slot-label">'+posLabel+'</span><select class="rmd-slot" style="flex:1;font-size:11px;padding:4px 8px" onchange="assignToRMD('+idx2+',\''+side+'\',\''+slot+'\',this.value,\''+gs2+'\');this.value=\'\'"><option value="">≤'+rem2+'m</option>'+opts2+'</select></div>';
+                  const rem2 = RMD_MAX_LENGTH.toFixed(1);
+                  const opts2 = avail.filter(c2=>(c2.length||0)<=RMD_MAX_LENGTH).map(c2=>`<option value="${c2.id}">${esc(c2.name)} (${c2.length}m)</option>`).join('');
+                  return '<div class="rmd-slot"><span class="rmd-slot-label">'+posLabel+'</span><select class="rmd-slot" style="flex:1;font-size:11px;padding:4px 8px" onchange="assignToRMD('+idx2+',\''+side+'\',\''+slot+'\',this.value,\''+slot+'\');this.value=\'\'"><option value="">≤'+rem2+'m</option>'+opts2+'</select></div>';
                 }
               }
 
-              const insA = getSideGroupLength(r2.A,'cage1','cage3');
-              const outA = getSideGroupLength(r2.A,'cage2','cage4');
-              const insB = getSideGroupLength(r2.B,'cage1','cage3');
-              const outB = getSideGroupLength(r2.B,'cage2','cage4');
-              function pairRow(s1, s2) {
-                return '<div style="display:flex;gap:6px;margin-bottom:4px"><div style="flex:1;min-width:0">'+s1+'</div><div style="flex:1;min-width:0">'+s2+'</div></div>';
-              }
+              const insA = getSideGroupLength(r2.A,'cage1');
+              const outA = getSideGroupLength(r2.A,'cage2');
+              const insB = getSideGroupLength(r2.B,'cage1');
+              const outB = getSideGroupLength(r2.B,'cage2');
               const sideAhtml = '<div style="margin-bottom:8px"><div style="font:700 10px var(--font-mono);color:var(--text-muted);margin-bottom:4px">SIDE A</div>'
                 + '<div style="font:600 8px var(--font-mono);color:var(--blue);margin-bottom:3px">INSIDE ('+insA.toFixed(1)+'m)</div>'
-                + pairRow(renderCompact('A','cage1','IN1',['cage1','cage3']), renderCompact('A','cage3','IN2',['cage1','cage3']))
+                + '<div style="margin-bottom:4px">'+renderCompact('A','cage1','IN')+'</div>'
                 + '<div style="font:600 8px var(--font-mono);color:var(--green);margin-bottom:3px">OUTSIDE ('+outA.toFixed(1)+'m)</div>'
-                + pairRow(renderCompact('A','cage2','OUT1',['cage2','cage4']), renderCompact('A','cage4','OUT2',['cage2','cage4']))
+                + renderCompact('A','cage2','OUT')
                 + '</div>';
               const sideBhtml = '<div><div style="font:700 10px var(--font-mono);color:var(--text-muted);margin-bottom:4px">SIDE B</div>'
                 + '<div style="font:600 8px var(--font-mono);color:var(--blue);margin-bottom:3px">INSIDE ('+insB.toFixed(1)+'m)</div>'
-                + pairRow(renderCompact('B','cage1','IN1',['cage1','cage3']), renderCompact('B','cage3','IN2',['cage1','cage3']))
+                + '<div style="margin-bottom:4px">'+renderCompact('B','cage1','IN')+'</div>'
                 + '<div style="font:600 8px var(--font-mono);color:var(--green);margin-bottom:3px">OUTSIDE ('+outB.toFixed(1)+'m)</div>'
-                + pairRow(renderCompact('B','cage2','OUT1',['cage2','cage4']), renderCompact('B','cage4','OUT2',['cage2','cage4']))
+                + renderCompact('B','cage2','OUT')
                 + '</div>';
 
-              return '<div class="rmd-site-card"><div class="card"><div class="flex-between" style="margin-bottom:8px"><span style="font:700 16px var(--font-mono);color:var(--accent)">RMD-'+r2.number+'</span><span style="font-size:11px;color:var(--text-muted)">'+cnt2+'/8</span></div>'+sideAhtml+sideBhtml+(r2.A.overridden||r2.B.overridden?'<span class="badge badge-yellow">⚠ Override</span>':'')+'</div></div>';
+              return '<div class="rmd-site-card"><div class="card"><div class="flex-between" style="margin-bottom:8px"><span style="font:700 16px var(--font-mono);color:var(--accent)">RMD-'+r2.number+'</span><span style="font-size:11px;color:var(--text-muted)">'+cnt2+'/4</span></div>'+sideAhtml+sideBhtml+(r2.A.overridden||r2.B.overridden?'<span class="badge badge-yellow">⚠ Override</span>':'')+'</div></div>';
             }).join('');
             return '<div class="rmd-site-row row-'+row.row+'">'+items+'</div>';
           }).join('')}
@@ -3130,21 +3126,19 @@ async function assignToRMD(idx,side,slot,cid,groupSlotsStr) {
   if(!cage) return;
   // Check 13m length constraint for the group
   const RMD_MAX_LENGTH = 13;
-  const groupSlots = groupSlotsStr ? groupSlotsStr.split(',') : (['cage1','cage2'].includes(slot) ? ['cage1','cage2'] : ['cage3','cage4']);
-  const otherGroupSlots = groupSlots.filter(s=>s!==slot);
-  const usedLen = otherGroupSlots.reduce((sum,s)=>{ const c=r[side][s]?getCage(r[side][s]):null; return sum+(c?c.length||0:0); },0);
-  if((cage.length||0)+usedLen > RMD_MAX_LENGTH) {
-    alert(`Cannot assign: combined length (${((cage.length||0)+usedLen).toFixed(1)}m) would exceed ${RMD_MAX_LENGTH}m limit for this row.`);
+  // 13m length check (single cage per slot)
+  if((cage.length||0) > RMD_MAX_LENGTH) {
+    alert(`Cannot assign: cage length (${(cage.length||0).toFixed(1)}m) exceeds ${RMD_MAX_LENGTH}m RMD limit.`);
     return;
   }
-  // Pairing check against opposite position in same side (cage1 pairs with cage2, cage3 pairs with cage4)
-  const pairSlot = slot==='cage1'?'cage2':slot==='cage2'?'cage1':slot==='cage3'?'cage4':'cage3';
+  // Pairing check: cage1 (inside) pairs with cage2 (outside)
+  const pairSlot = slot==='cage1' ? 'cage2' : 'cage1';
   const pairCid = r[side][pairSlot];
   if (pairCid) {
     const other = getCage(pairCid);
     if (other && !canPairRMD(
-        (slot==='cage1'||slot==='cage3') ? cage : other,   // inside
-        (slot==='cage1'||slot==='cage3') ? other : cage    // outside
+        slot==='cage1' ? cage : other,   // inside
+        slot==='cage1' ? other : cage    // outside
       )) {
       if (!confirm(`Height pairing ${hCat(cage.height)} + ${hCat(other.height)} not standard. Override?`)) return;
       r[side].overridden = true;
@@ -3333,7 +3327,7 @@ function buildPlanFormHTML() {
     sortedRmd.forEach(r => {
       [...SIDES].sort().forEach(side => {
         const sideKey = r.number + side;
-        const occupiedCids = [r[side].cage1, r[side].cage2, r[side].cage3, r[side].cage4].filter(Boolean);
+        const occupiedCids = [r[side].cage1, r[side].cage2].filter(Boolean);
         const occupiedCount = occupiedCids.length;
         const plannedCount = plannedToRmd[sideKey] || 0;
         const effectiveOccupied = occupiedCount + plannedCount;
@@ -3494,14 +3488,10 @@ function renderPlanner() {
   const _plannerShipDays = getShipmentDays();
   let rmdSummary = STATE.rmdSlots.map(r => {
     const slots4 = [
-      {side:'A', slot:'cage2', lbl:'A Outside 1'},
-      {side:'A', slot:'cage4', lbl:'A Outside 2'},
-      {side:'A', slot:'cage1', lbl:'A Inside 1'},
-      {side:'A', slot:'cage3', lbl:'A Inside 2'},
-      {side:'B', slot:'cage1', lbl:'B Inside 1'},
-      {side:'B', slot:'cage3', lbl:'B Inside 2'},
-      {side:'B', slot:'cage2', lbl:'B Outside 1'},
-      {side:'B', slot:'cage4', lbl:'B Outside 2'},
+      {side:'A', slot:'cage1', lbl:'A Inside'},
+      {side:'A', slot:'cage2', lbl:'A Outside'},
+      {side:'B', slot:'cage1', lbl:'B Inside'},
+      {side:'B', slot:'cage2', lbl:'B Outside'},
     ];
     const occupied = slots4.map(s => {
       const cid = r[s.side][s.slot];
@@ -3823,7 +3813,7 @@ async function completeMove(id) {
     const rmdIdx = STATE.rmdSlots.findIndex(r => r.number === rmdNum);
     if (rmdIdx !== -1) {
       const r = STATE.rmdSlots[rmdIdx];
-      const slot = !r[side].cage1 ? 'cage1' : !r[side].cage2 ? 'cage2' : !r[side].cage3 ? 'cage3' : !r[side].cage4 ? 'cage4' : null;
+      const slot = !r[side].cage1 ? 'cage1' : !r[side].cage2 ? 'cage2' : null;
       if (!slot) { alert(`Cannot complete: RMD-${rmdNum}${side} is full.`); return; }
       clearCageFromCurrentLocation(cage.id);
       r[side][slot] = cage.id;
@@ -5408,8 +5398,6 @@ async function generateBoatMovements() {
       rmdSim[key] = {
         cage1: r[side].cage1 || null,
         cage2: r[side].cage2 || null,
-        cage3: r[side].cage3 || null,
-        cage4: r[side].cage4 || null,
       };
     }
   });
@@ -5420,7 +5408,7 @@ async function generateBoatMovements() {
     .filter(m => !m.completed && m.typeKey === 'frame-to-rmd' && m.rmdNumber != null && m.rmdSide && m.cageId)
     .forEach(m => {
       const key = `${m.rmdNumber}${m.rmdSide}`;
-      if (!rmdSim[key]) rmdSim[key] = { cage1: null, cage2: null, cage3: null, cage4: null };
+      if (!rmdSim[key]) rmdSim[key] = { cage1: null, cage2: null };
       const slot = m.rmdSlot || 'cage1';
       if (!rmdSim[key][slot]) rmdSim[key][slot] = m.cageId;
     });
@@ -5429,7 +5417,7 @@ async function generateBoatMovements() {
     .filter(m => !m.completed && m.typeKey === 'facility-to-rmd' && m.rmdNumber != null && m.rmdSide && m.cageId)
     .forEach(m => {
       const key = `${m.rmdNumber}${m.rmdSide}`;
-      if (!rmdSim[key]) rmdSim[key] = { cage1: null, cage2: null, cage3: null, cage4: null };
+      if (!rmdSim[key]) rmdSim[key] = { cage1: null, cage2: null };
       const slot = m.rmdSlot || 'cage1';
       if (!rmdSim[key][slot]) rmdSim[key][slot] = m.cageId;
     });
@@ -5441,8 +5429,6 @@ async function generateBoatMovements() {
       const s = rmdSim[key];
       if (s.cage1 === cid) s.cage1 = null;
       if (s.cage2 === cid) s.cage2 = null;
-      if (s.cage3 === cid) s.cage3 = null;
-      if (s.cage4 === cid) s.cage4 = null;
     }
   });
 
@@ -5559,10 +5545,8 @@ async function generateBoatMovements() {
     for (const r of STATE.rmdSlots) {
       for (const side of SIDES) {
         const key = `${r.number}${side}`;
-        const s = rmdSim[key] || { cage1: null, cage2: null, cage3: null, cage4: null };
-        // Count all occupied slots (cage3/cage4 may exist from legacy data)
-        const filled = [s.cage1, s.cage2, s.cage3, s.cage4].filter(Boolean).length;
-        if (filled >= 2) continue; // max 2 cages per side
+        const s = rmdSim[key] || { cage1: null, cage2: null };
+        if (s.cage1 && s.cage2) continue; // both slots taken
 
         // Try inside slot (cage1 only — first cage must go inside)
         // Only available if cage1 is empty.
@@ -5839,8 +5823,6 @@ async function generateBoatMovements() {
             const s = rmdSim[key];
             if (s.cage1 === cage.id) s.cage1 = null;
             else if (s.cage2 === cage.id) s.cage2 = null;
-            else if (s.cage3 === cage.id) s.cage3 = null;
-            else if (s.cage4 === cage.id) s.cage4 = null;
           }
         }
         scheduledSteps.push({
@@ -6806,8 +6788,8 @@ function renderMovementsDayView() {
   const simRmdState = {};
   STATE.rmdSlots.forEach(r => {
     simRmdState[r.number] = {
-      A: { cage1: r.A.cage1||null, cage2: r.A.cage2||null, cage3: r.A.cage3||null, cage4: r.A.cage4||null },
-      B: { cage1: r.B.cage1||null, cage2: r.B.cage2||null, cage3: r.B.cage3||null, cage4: r.B.cage4||null },
+      A: { cage1: r.A.cage1||null, cage2: r.A.cage2||null },
+      B: { cage1: r.B.cage1||null, cage2: r.B.cage2||null },
     };
   });
   // Apply prior moves: remove cages that moved out of RMD, add cages that moved in
@@ -6816,7 +6798,7 @@ function renderMovementsDayView() {
     if (m.typeKey === 'rmd-to-frame') {
       STATE.rmdSlots.forEach(r => {
         ['A','B'].forEach(side => {
-          ['cage1','cage2','cage3','cage4'].forEach(slot => {
+          ['cage1','cage2'].forEach(slot => {
             if (simRmdState[r.number]?.[side]?.[slot] === m.cageId) simRmdState[r.number][side][slot] = null;
           });
         });
@@ -6825,9 +6807,9 @@ function renderMovementsDayView() {
     // Add to RMD if moved in
     if ((m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') && m.rmdNumber != null) {
       const rn = m.rmdNumber, side = m.rmdSide || 'A';
-      if (!simRmdState[rn]) simRmdState[rn] = {A:{cage1:null,cage2:null,cage3:null,cage4:null},B:{cage1:null,cage2:null,cage3:null,cage4:null}};
+      if (!simRmdState[rn]) simRmdState[rn] = {A:{cage1:null,cage2:null},B:{cage1:null,cage2:null}};
       // Find first free slot
-      const slots = ['cage1','cage2','cage3','cage4'];
+      const slots = ['cage1','cage2'];
       const free = slots.find(s => !simRmdState[rn][side][s]);
       if (free) simRmdState[rn][side][free] = m.cageId;
     }
@@ -6948,8 +6930,8 @@ function renderMovementsMap(dayCtx) {
     const isActive = activeRmds.has(String(rmdNum));
     const movesForRmd = filtered.filter(m => String(resolveRmdSlot(m)).replace(/[ABab]$/,'') === String(rmdNum));
     const sides = ['A','B'];
-    const slotKeys = ['cage1','cage2','cage3','cage4'];
-    const slotLabels = {cage1:'In 1', cage2:'Out 1', cage3:'In 2', cage4:'Out 2'};
+    const slotKeys = ['cage1','cage2'];
+    const slotLabels = {cage1:'Inside', cage2:'Outside'};
     let slotsHTML = '';
     sides.forEach(side => {
       slotsHTML += `<div style="font:700 8px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin:5px 0 3px">Side ${side}</div>`;
@@ -6987,7 +6969,7 @@ function renderMovementsMap(dayCtx) {
     });
 
     // Show cages planned to move INTO this RMD slot (frame-to-rmd) that aren't already in an RMD slot shown above
-    const existingCageIds = new Set(['cage1','cage2','cage3','cage4'].flatMap(sk => ['A','B'].map(side => rmdData[side][sk])).filter(Boolean));
+    const existingCageIds = new Set(['cage1','cage2'].flatMap(sk => ['A','B'].map(side => rmdData[side][sk])).filter(Boolean));
     const incomingCages = movesForRmd.filter(m => (m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') && m.cageId && !existingCageIds.has(m.cageId));
     if (incomingCages.length > 0) {
       // Group incoming cages by which side (A/B) they're going to
