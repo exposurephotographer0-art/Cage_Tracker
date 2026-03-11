@@ -5522,10 +5522,11 @@ async function generateBoatMovements() {
     // Apply guidance RMD override if specified
     const guidedRmd = guidanceRmdForCage[cage.name.toLowerCase()];
 
-    // Find a transit frame for this cage (exit from facility — double is allowed)
+    // Find a transit/storage frame for this cage.
+    // For frame-as-storage: 2 cages can share a frame (same double-cage rule as transit).
+    // findExitFrame already respects canFitTwo + waler rules and prefers partial fills.
     const transitFrame = findExitFrame(cage, cage.departureDate, new Set());
     if (!transitFrame) {
-      // ⚠ No frame available — production may stop
       if (!productionStoppageDay || cage.departureDate < productionStoppageDay) {
         productionStoppageDay = cage.departureDate;
       }
@@ -5533,23 +5534,11 @@ async function generateBoatMovements() {
       continue;
     }
 
-    // Schedule the facility→frame move on or before the departure deadline
     const frameReturnDate = frameSim[transitFrame.id]?.returningOn || null;
     const exitDay = latestDayByDeadline(cage.departureDate, frameReturnDate);
-    useMove(exitDay);
-    // Add cage to frame sim
-    frameSim[transitFrame.id].cages.push(cage.id);
-    exitReservedFrameIds.add(transitFrame.id);
 
-    scheduledSteps.push({
-      action: 'facility_exit_to_frame',
-      cage, frame: transitFrame,
-      date: exitDay,
-      deadline: cage.departureDate,
-      note: `${cage.name}: Facility → ${transitFrame.name} (${transitFrame.width}m${transitFrame.hasWaler ? ' 🔩' : ''}) — transit to RMD`,
-    });
-
-    // Now find an RMD slot to park this cage
+    // Determine RMD destination BEFORE recording any steps, so we emit the
+    // correct single step (Facility→Frame→RMD or Facility→Frame-storage).
     let rmdSlot = null;
     if (guidedRmd) {
       const rmdSlotObj = STATE.rmdSlots.find(r => r.number === guidedRmd.number);
@@ -5566,28 +5555,35 @@ async function generateBoatMovements() {
     }
 
     if (rmdSlot) {
+      // ── Path A: Facility → Frame (transit), then Frame → RMD ──────────
+      // Two separate moves: lift cage into frame, then crane cage from frame into RMD slot.
+      useMove(exitDay);
+      frameSim[transitFrame.id].cages.push(cage.id);
+
+      // Record the Facility → Frame (exit) step
+      scheduledSteps.push({
+        action: 'facility_exit_to_frame',
+        cage, frame: transitFrame,
+        date: exitDay,
+        deadline: cage.departureDate,
+        note: `${cage.name}: Facility → ${transitFrame.name} (${transitFrame.width}m${transitFrame.hasWaler ? ' 🔩' : ''}) — transit to RMD-${rmdSlot.number}${rmdSlot.side}`,
+      });
+
       // Update RMD sim
       const rmdKey = `${rmdSlot.number}${rmdSlot.side}`;
       if (!rmdSim[rmdKey]) rmdSim[rmdKey] = { cage1: null, cage2: null };
       rmdSim[rmdKey][rmdSlot.slot] = cage.id;
 
-      // Frame→RMD move scheduled on same day or next available (after exit move)
-      const rmdDay = exitDay; // same day: crane lifts cage from frame into RMD slot
-      // (We count it as 1 combined operation since the crane does both in sequence)
-      // Actually it IS a second move — use next capacity slot on same day if possible, else next day
+      // Frame → RMD move: same day if capacity remains, else next available day
       const rmdMoveDay = (() => {
-        // Check if there's capacity left on exitDay after the exit move
-        // (existingCounts[exitDay] was just incremented by useMove above)
-        // We'll schedule Frame→RMD as a separate move
         if (capacityOnDay(exitDay) > 0) { useMove(exitDay); return exitDay; }
         const next = workDays.find(d => d >= exitDay && capacityOnDay(d) > 0);
         if (next) { useMove(next); return next; }
-        useMove(exitDay); return exitDay; // last resort
+        useMove(exitDay); return exitDay;
       })();
 
-      // Free the frame slot in sim (cage moved from frame to RMD)
+      // Free the transit frame (cage is now in RMD, frame available again)
       frameSim[transitFrame.id].cages = frameSim[transitFrame.id].cages.filter(id => id !== cage.id);
-      exitReservedFrameIds.delete(transitFrame.id); // frame is now free again
 
       scheduledSteps.push({
         action: 'facility_exit_frame_to_rmd',
@@ -5597,18 +5593,30 @@ async function generateBoatMovements() {
         rmdSlot,
         note: `${cage.name}: ${transitFrame.name} → RMD-${rmdSlot.number}${rmdSlot.side} (${rmdSlot.slot})`,
       });
+
     } else {
-      // RMD full — cage stays in frame (frame-as-storage)
-      // Don't free the frame — it remains occupied storing the cage
-      warnings.push(`ℹ RMD full — cage ${cage.name} will remain in ${transitFrame.name} as temporary storage until RMD space becomes available.`);
+      // ── Path B: RMD full — single move: Facility → Frame (stored there) ──
+      // Up to 2 cages can share the same frame for storage (canFitTwo rules apply).
+      // findExitFrame already found a frame that can accommodate this cage
+      // (potentially pairing with another cage already assigned to that frame).
+      // We emit ONE step only — the cage goes from facility straight into frame storage.
+      useMove(exitDay);
+      frameSim[transitFrame.id].cages.push(cage.id);
+      // Frame remains occupied — do NOT free it
+
+      const pairedWith = frameSim[transitFrame.id].cages.filter(id => id !== cage.id);
+      const pairNote = pairedWith.length > 0
+        ? ` (paired with cage ${getCage(pairedWith[0])?.name || pairedWith[0]})`
+        : '';
+      warnings.push(`ℹ RMD full — cage ${cage.name} stored in ${transitFrame.name}${pairNote}. Frame held until RMD space available.`);
+
       scheduledSteps.push({
         action: 'facility_exit_frame_storage',
         cage, frame: transitFrame,
         date: exitDay,
         deadline: cage.departureDate,
-        note: `${cage.name}: stays in ${transitFrame.name} (RMD full — frame used as temporary storage)`,
+        note: `${cage.name}: Facility → ${transitFrame.name} (${transitFrame.width}m) — stored, RMD full${pairNote}`,
       });
-      // frame remains occupied — don't free it
     }
   }
 
