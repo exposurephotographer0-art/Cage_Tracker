@@ -690,12 +690,14 @@ function locLabel(c) {
 //   Short  + Short  = OK
 //   Medium + Medium = OK
 //   Tall   + Short  = OK (Tall MUST be on the inside)
+//   Medium + Short  = OK (Medium MUST be on the inside)
 // All other combinations are rejected.
 function canPairRMD(c1, c2) {
   const a = hCat(c1.height), b = hCat(c2.height);
   return (a === 'Short'  && b === 'Short')  ||
          (a === 'Medium' && b === 'Medium') ||
-         (a === 'Tall'   && b === 'Short');
+         (a === 'Tall'   && b === 'Short')  ||
+         (a === 'Medium' && b === 'Short');
 }
 function canFitTwo(c1,c2,fw) {
   const sp = (STATE.settings && STATE.settings.doubleSpareWidth) || DOUBLE_SPARE;
@@ -3063,7 +3065,7 @@ function renderRMD() {
     <div id="zoom-outer-rmd" class="zoom-outer">
       <div id="zoom-wrap-rmd" class="zoom-wrap">
         <h2 class="section-title">RMD Storage Bays</h2>
-        <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Each side has 1 inside and 1 outside space. Valid pairings: Short+Short, Medium+Medium, or Tall (inside) + Short (outside).</div>
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px">Each side has 1 inside and 1 outside space. Valid pairings: Short+Short, Medium+Medium, Tall (inside) + Short (outside), or Medium (inside) + Short (outside). To remove the inside cage, the outside cage must come out first.</div>
         ${shipmentLegendHTML(_rmdTabShipDays)}
         <div class="rmd-site-layout">
           ${RMD_LAYOUT.map(row=>{
@@ -8022,6 +8024,28 @@ function renderSettings() {
       <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Cages are classified as <strong>Short</strong>, <strong>Medium</strong>, or <strong>Tall</strong> based on their height. These thresholds control the classification and affect RMD pairing rules.</p>
       ${field('heightShortMax', 'Short / Medium threshold (m)', s.heightShortMax || 2.7, 0.05, 'Cages with height below this value are classified as Short. Default: 2.7m')}
       ${field('heightMedMax', 'Medium / Tall threshold (m)', s.heightMedMax || 4.7, 0.05, 'Cages with height at or below this value are classified as Medium; above it are Tall. Default: 4.7m')}
+    </div>
+
+    <div class="card" style="max-width:620px">
+      <div class="card-title">&#128697; RMD Pairing Rules</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Each RMD area holds a maximum of <strong>2 cages per side</strong>. The first cage placed goes on the <strong>inside</strong>; the second goes on the <strong>outside</strong>. To remove the inside cage, the outside cage must be removed first.</p>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:6px">Valid height pairings (inside → outside):</p>
+      <table style="font-size:12px;border-collapse:collapse;width:100%">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th style="text-align:left;padding:4px 8px;color:var(--text-muted);font-weight:600">Inside cage</th>
+            <th style="text-align:left;padding:4px 8px;color:var(--text-muted);font-weight:600">Outside cage</th>
+            <th style="text-align:left;padding:4px 8px;color:var(--text-muted);font-weight:600">Allowed?</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border-light,#eee)"><td style="padding:4px 8px"><span class="badge badge-green">Short</span></td><td style="padding:4px 8px"><span class="badge badge-green">Short</span></td><td style="padding:4px 8px;color:var(--green)">&#10003; Yes</td></tr>
+          <tr style="border-bottom:1px solid var(--border-light,#eee)"><td style="padding:4px 8px"><span class="badge badge-yellow">Medium</span></td><td style="padding:4px 8px"><span class="badge badge-yellow">Medium</span></td><td style="padding:4px 8px;color:var(--green)">&#10003; Yes</td></tr>
+          <tr style="border-bottom:1px solid var(--border-light,#eee)"><td style="padding:4px 8px"><span class="badge badge-red">Tall</span></td><td style="padding:4px 8px"><span class="badge badge-green">Short</span></td><td style="padding:4px 8px;color:var(--green)">&#10003; Yes — Tall must be inside</td></tr>
+          <tr style="border-bottom:1px solid var(--border-light,#eee)"><td style="padding:4px 8px"><span class="badge badge-yellow">Medium</span></td><td style="padding:4px 8px"><span class="badge badge-green">Short</span></td><td style="padding:4px 8px;color:var(--green)">&#10003; Yes — Medium must be inside</td></tr>
+          <tr><td style="padding:4px 8px" colspan="3" style="color:var(--text-muted);font-size:11px">All other combinations (e.g. Tall outside, Short inside) are not permitted.</td></tr>
+        </tbody>
+      </table>
     </div>
 
     <div class="card" style="max-width:620px">
