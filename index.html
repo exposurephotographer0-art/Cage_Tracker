@@ -5404,6 +5404,7 @@ async function generateBoatMovements() {
 
   // Replay pending planned frame-to-rmd movements into rmdSim
   // (same problem as frameSim — STATE only reflects completed moves)
+  // IMPORTANT: also free the transit frame — the frame returns to facility after depositing the cage.
   STATE.plannedMovements
     .filter(m => !m.completed && m.typeKey === 'frame-to-rmd' && m.rmdNumber != null && m.rmdSide && m.cageId)
     .forEach(m => {
@@ -5411,6 +5412,10 @@ async function generateBoatMovements() {
       if (!rmdSim[key]) rmdSim[key] = { cage1: null, cage2: null };
       const slot = m.rmdSlot || 'cage1';
       if (!rmdSim[key][slot]) rmdSim[key][slot] = m.cageId;
+      // Free the transit frame — cage is now in RMD, frame returns to facility
+      if (m.frameId && frameSim[m.frameId]) {
+        frameSim[m.frameId].cages = frameSim[m.frameId].cages.filter(id => id !== m.cageId);
+      }
     });
   // Also replay facility-to-rmd planned movements
   STATE.plannedMovements
@@ -5420,6 +5425,10 @@ async function generateBoatMovements() {
       if (!rmdSim[key]) rmdSim[key] = { cage1: null, cage2: null };
       const slot = m.rmdSlot || 'cage1';
       if (!rmdSim[key][slot]) rmdSim[key][slot] = m.cageId;
+      // Free any transit frame if present
+      if (m.frameId && frameSim[m.frameId]) {
+        frameSim[m.frameId].cages = frameSim[m.frameId].cages.filter(id => id !== m.cageId);
+      }
     });
 
   // Mark RMD boat-departing cages (will vacate their slots when we plan their exit)
@@ -5561,10 +5570,10 @@ async function generateBoatMovements() {
         }
 
         // Try outside slot (cage2 only — second cage must go outside)
-        // Tall cages cannot go outside under any circumstances.
-        if (!isTall && !s.cage2) {
-          const insideCage = s.cage1 ? getCage(s.cage1) : null;
-          // Can go outside only if inside is empty OR the pair is compatible
+        // Tall cages cannot go outside. cage1 must already be filled before cage2 is valid.
+        if (!isTall && s.cage1 && !s.cage2) {
+          const insideCage = getCage(s.cage1);
+          // Can go outside only if the pair is compatible
           if (!insideCage || canPairRMD(insideCage, cage)) {
             candidates.push({ number: r.number, side, slot: 'cage2', filled });
           }
@@ -5659,6 +5668,7 @@ async function generateBoatMovements() {
       scheduledSteps.push({
         action: 'facility_exit_to_frame',
         cage, frame: transitFrame,
+        rmdSlot,
         date: exitDay,
         deadline: cage.departureDate,
         note: `${cage.name}: Facility → ${transitFrame.name} (${transitFrame.width}m${transitFrame.hasWaler ? ' 🔩' : ''}) — transit to RMD-${rmdSlot.number}${rmdSlot.side}`,
@@ -5686,7 +5696,7 @@ async function generateBoatMovements() {
         date: rmdMoveDay,
         deadline: cage.departureDate,
         rmdSlot,
-        note: `${cage.name}: ${transitFrame.name} → RMD-${rmdSlot.number}${rmdSlot.side} (${rmdSlot.slot})`,
+        note: `${cage.name}: Into RMD-${rmdSlot.number}${rmdSlot.side} (${rmdSlot.slot}) via ${transitFrame.name}`,
       });
 
     } else {
@@ -6055,7 +6065,7 @@ function openBoatPlanPreview() {
   // ── Colour + label helpers ─────────────────────────────────────────────────
   const ACTION_META = {
     facility_exit_to_frame:     { col:'#2563b0', icon:'🏭', label:'Facility → Frame (transit)'   },
-    facility_exit_frame_to_rmd: { col:'#7040c0', icon:'📦', label:'Frame → RMD (drop-off)'        },
+    facility_exit_frame_to_rmd: { col:'#7040c0', icon:'📦', label:'Cage into RMD (via frame)'     },
     facility_exit_frame_storage:{ col:'#0d9488', icon:'🏭', label:'Facility → Frame (storage)'    },
     facility_to_rmd:            { col:'#0d9488', icon:'🏭', label:'Facility → RMD'                },
     rmd_to_frame:               { col:'#27a060', icon:'📦', label:'RMD → Frame (boat)'            },
@@ -6104,8 +6114,8 @@ function openBoatPlanPreview() {
       // Build destination column
       let dest = '—';
       if (step.isFixStep) dest = frameName;
-      else if (actionKey === 'facility_exit_to_frame') dest = `${frameName} → RMD-${step.rmdSlot ? step.rmdSlot.number + step.rmdSlot.side : '?'}`;
-      else if (actionKey === 'facility_exit_frame_to_rmd') dest = `${frameName} → RMD-${step.rmdSlot ? step.rmdSlot.number + step.rmdSlot.side : '?'}`;
+      else if (actionKey === 'facility_exit_to_frame') dest = step.rmdSlot ? `${frameName} (→ RMD-${step.rmdSlot.number}${step.rmdSlot.side})` : frameName;
+      else if (actionKey === 'facility_exit_frame_to_rmd') dest = step.rmdSlot ? `RMD-${step.rmdSlot.number}${step.rmdSlot.side} (${step.rmdSlot.slot})` : '—';
       else if (actionKey === 'facility_exit_frame_storage') dest = frameName + (step.pairedWith ? ` (paired w/ ${step.pairedWith})` : '');
       else if (actionKey === 'facility_to_rmd') dest = rmdLabel;
       else if (actionKey === 'rmd_to_frame' || actionKey === 'facility_to_frame') dest = frameName;
@@ -6258,7 +6268,7 @@ async function commitBoatPlan() {
       });
     } else {
       const typeKey = step.action === 'rmd_to_frame' ? 'rmd-to-frame'
-        : step.action === 'reframe' ? 'frame-to-rmd'
+        : step.action === 'reframe' ? 'frame-to-frame'
         : 'facility-to-frame';
       const typeLabel = step.action === 'rmd_to_frame' ? 'RMD → Frame'
         : step.action === 'reframe' ? 'Reframe'
