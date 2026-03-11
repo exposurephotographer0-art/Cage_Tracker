@@ -5431,15 +5431,13 @@ async function generateBoatMovements() {
       }
     });
 
-  // Mark RMD boat-departing cages (will vacate their slots when we plan their exit)
+  // Track RMD boat-departing cages — used by Phase 2 access-order checks.
+  // Do NOT pre-vacate their slots here: those cages are still physically in RMD
+  // until Phase 2 actually schedules them out. Pre-vacating caused Phase 1 to
+  // assign incoming facility exit cages into slots that were still occupied,
+  // producing plans with 3 cages in a 2-cage side. Slots are freed individually
+  // in Phase 2 when each rmd_to_frame move is scheduled (lines below).
   const rmdBoatDeparting = new Set(boatCages.filter(c => c.location === 'rmd').map(c => c.id));
-  rmdBoatDeparting.forEach(cid => {
-    for (const key of Object.keys(rmdSim)) {
-      const s = rmdSim[key];
-      if (s.cage1 === cid) s.cage1 = null;
-      if (s.cage2 === cid) s.cage2 = null;
-    }
-  });
 
   // Helper: available capacity on a day
   function movesUsedOnDay(date) { return existingCounts[date] || 0; }
