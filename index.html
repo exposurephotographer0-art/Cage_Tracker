@@ -5381,34 +5381,56 @@ async function generateBoatMovements() {
 
   // ── REPLAY EXISTING PLANNED MOVEMENTS INTO frameSim ──────────────────
   // STATE.frames only reflects completed moves. Pending planned movements that
-  // assign cages to frames are NOT yet in STATE.frames.cages, so without this
-  // replay the planner is blind to already-committed frame assignments and will
-  // double-book frames.
+  // assign cages to frames must be replayed here so the planner sees
+  // already-committed frame assignments and doesn't double-book.
   STATE.plannedMovements
     .filter(m => !m.completed && m.frameId)
     .forEach(m => {
       const fs = frameSim[m.frameId];
       if (!fs) return;
       if (m.typeKey === 'facility-to-frame' || m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-to-frame') {
-        // Cage will be in this frame — treat it as occupied
         if (m.cageId && !fs.cages.includes(m.cageId) && !boatCageIds.has(m.cageId)) {
           fs.cages.push(m.cageId);
         }
       }
       if (m.typeKey === 'frame-fix-shipping') {
-        // Frame is committed for boat shipping — mark it so findBoatFrame won't double-assign
         fs.fixedForShipping = true;
       }
     });
 
-  // RMD sim: initialise from current STATE
+  // RMD sim: initialise from current STATE — all 4 slots per side
   const rmdSim = {};
   STATE.rmdSlots.forEach(r => {
     for (const side of SIDES) {
       const key = `${r.number}${side}`;
-      rmdSim[key] = { cage1: r[side].cage1 || null, cage2: r[side].cage2 || null };
+      rmdSim[key] = {
+        cage1: r[side].cage1 || null,
+        cage2: r[side].cage2 || null,
+        cage3: r[side].cage3 || null,
+        cage4: r[side].cage4 || null,
+      };
     }
   });
+
+  // Replay pending planned frame-to-rmd movements into rmdSim
+  // (same problem as frameSim — STATE only reflects completed moves)
+  STATE.plannedMovements
+    .filter(m => !m.completed && m.typeKey === 'frame-to-rmd' && m.rmdNumber != null && m.rmdSide && m.cageId)
+    .forEach(m => {
+      const key = `${m.rmdNumber}${m.rmdSide}`;
+      if (!rmdSim[key]) rmdSim[key] = { cage1: null, cage2: null, cage3: null, cage4: null };
+      const slot = m.rmdSlot || 'cage1';
+      if (!rmdSim[key][slot]) rmdSim[key][slot] = m.cageId;
+    });
+  // Also replay facility-to-rmd planned movements
+  STATE.plannedMovements
+    .filter(m => !m.completed && m.typeKey === 'facility-to-rmd' && m.rmdNumber != null && m.rmdSide && m.cageId)
+    .forEach(m => {
+      const key = `${m.rmdNumber}${m.rmdSide}`;
+      if (!rmdSim[key]) rmdSim[key] = { cage1: null, cage2: null, cage3: null, cage4: null };
+      const slot = m.rmdSlot || 'cage1';
+      if (!rmdSim[key][slot]) rmdSim[key][slot] = m.cageId;
+    });
 
   // Mark RMD boat-departing cages (will vacate their slots when we plan their exit)
   const rmdBoatDeparting = new Set(boatCages.filter(c => c.location === 'rmd').map(c => c.id));
@@ -5417,6 +5439,8 @@ async function generateBoatMovements() {
       const s = rmdSim[key];
       if (s.cage1 === cid) s.cage1 = null;
       if (s.cage2 === cid) s.cage2 = null;
+      if (s.cage3 === cid) s.cage3 = null;
+      if (s.cage4 === cid) s.cage4 = null;
     }
   });
 
@@ -5519,6 +5543,10 @@ async function generateBoatMovements() {
   }
 
   // Helper: find an RMD slot for a cage
+  // Slots: cage1/cage3 = inside positions, cage2/cage4 = outside positions.
+  // Rule: outside cages must come out before inside cages, so:
+  //   - we can fill an inside slot only if the paired outside slot is empty (or the new cage will be alone)
+  //   - tall cages cannot go outside
   function findRMDSlot(cage) {
     const cageH  = hCat(cage.height);
     const isTall = (cageH === 'Tall');
@@ -5527,21 +5555,34 @@ async function generateBoatMovements() {
     for (const r of STATE.rmdSlots) {
       for (const side of SIDES) {
         const key = `${r.number}${side}`;
-        const s = rmdSim[key] || { cage1: null, cage2: null };
-        const c1 = s.cage1 ? getCage(s.cage1) : null;
-        const c2 = s.cage2 ? getCage(s.cage2) : null;
-        const filled = (s.cage1 ? 1 : 0) + (s.cage2 ? 1 : 0);
+        const s = rmdSim[key] || { cage1: null, cage2: null, cage3: null, cage4: null };
+        // Count all occupied slots
+        const filled = [s.cage1, s.cage2, s.cage3, s.cage4].filter(Boolean).length;
+        if (filled >= 2) continue; // max 2 cages per side
 
-        // Try cage1 (inside slot)
-        if (!s.cage1) {
-          if (!c2 || canPairRMD(cage, c2)) {
-            candidates.push({ number: r.number, side, slot: 'cage1', filled });
+        // Inside slots: cage1 (primary), cage3 (secondary — only if cage1 already used)
+        // Outside slots: cage2 (primary), cage4 (secondary — only if cage2 already used)
+        // A cage can only go inside if no outside cage is blocking it.
+        // A cage can only go outside if it's not tall.
+
+        // Try inside slot (cage1 first, then cage3)
+        const insideSlot = !s.cage1 ? 'cage1' : (!s.cage3 ? 'cage3' : null);
+        if (insideSlot) {
+          const outsideCage = s.cage2 ? getCage(s.cage2) : (s.cage4 ? getCage(s.cage4) : null);
+          // Can go inside only if outside is empty (no one blocking exit) OR outside cage is compatible
+          if (!outsideCage || canPairRMD(cage, outsideCage)) {
+            candidates.push({ number: r.number, side, slot: insideSlot, filled });
           }
         }
-        // Try cage2 (outside slot) — tall cages cannot go outside
-        if (!s.cage2 && !isTall) {
-          if (!c1 || canPairRMD(c1, cage)) {
-            candidates.push({ number: r.number, side, slot: 'cage2', filled });
+
+        // Try outside slot (cage2 first, then cage4) — tall cages cannot go outside
+        if (!isTall) {
+          const outsideSlot = !s.cage2 ? 'cage2' : (!s.cage4 ? 'cage4' : null);
+          if (outsideSlot) {
+            const insideCage = s.cage1 ? getCage(s.cage1) : (s.cage3 ? getCage(s.cage3) : null);
+            if (!insideCage || canPairRMD(insideCage, cage)) {
+              candidates.push({ number: r.number, side, slot: outsideSlot, filled });
+            }
           }
         }
       }
@@ -5549,7 +5590,7 @@ async function generateBoatMovements() {
 
     if (candidates.length === 0) return null;
 
-    // Prefer partial fills first (pack together), then lowest RMD number
+    // Prefer partial fills first (pack together), then lowest RMD number, then side
     candidates.sort((a, b) => {
       const ap = a.filled > 0 ? 0 : 1;
       const bp = b.filled > 0 ? 0 : 1;
@@ -5712,18 +5753,14 @@ async function generateBoatMovements() {
       const issues = [];
       if (cage.width > currentFrame.width) issues.push(`frame ${currentFrame.name} too narrow`);
       if (needsWaler(cage) && !currentFrame.hasWaler) issues.push(`no waler on ${currentFrame.name}`);
-      // Check if frame has multiple cages (boat rule: 1 only).
-      // Use frameSim which includes planned-but-not-yet-completed assignments.
+      // Check for multiple cages — use frameSim which includes pending planned assignments
       const simCagesInFrame = (frameSim[currentFrame.id]?.cages || []).filter(cid => cid !== cage.id);
       if (simCagesInFrame.length > 0) issues.push(`${currentFrame.name} has multiple cages — must reframe to single cage`);
 
       if (issues.length === 0) {
         boatReservedFrameIds.add(currentFrame.id);
-        // Update frameSim so subsequent findBoatFrame calls treat this frame as taken
         if (frameSim[currentFrame.id]) {
-          if (!frameSim[currentFrame.id].cages.includes(cage.id)) {
-            frameSim[currentFrame.id].cages.push(cage.id);
-          }
+          if (!frameSim[currentFrame.id].cages.includes(cage.id)) frameSim[currentFrame.id].cages.push(cage.id);
           frameSim[currentFrame.id].fixedForShipping = true;
         }
         scheduledSteps.push({ action: 'already_framed', cage, frame: currentFrame, date: boatDate, note: `Already in ${currentFrame.name} ✓` });
@@ -5797,16 +5834,15 @@ async function generateBoatMovements() {
         const earliest = frameSim[frame.id]?.returningOn || null;
         const day = latestDayByDeadline(boatDate, earliest);
         useMove(day);
-        // Free RMD slot in sim
+        // Free RMD slot in sim — check all 4 slot positions
         if (rmdMatch2) {
           const key = `${parseInt(rmdMatch2[1],10)}${rmdMatch2[2].toUpperCase()}`;
           if (rmdSim[key]) {
-            const rRow2 = STATE.rmdSlots.find(x => x.number === parseInt(rmdMatch2[1],10));
-            if (rRow2) {
-              const sd = rRow2[rmdMatch2[2].toUpperCase()];
-              if (sd.cage1 === cage.id) rmdSim[key].cage1 = null;
-              else if (sd.cage2 === cage.id) rmdSim[key].cage2 = null;
-            }
+            const s = rmdSim[key];
+            if (s.cage1 === cage.id) s.cage1 = null;
+            else if (s.cage2 === cage.id) s.cage2 = null;
+            else if (s.cage3 === cage.id) s.cage3 = null;
+            else if (s.cage4 === cage.id) s.cage4 = null;
           }
         }
         scheduledSteps.push({
