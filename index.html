@@ -632,6 +632,11 @@ const H_SHORT = 2.7, H_MED = 4.7;
 // RMD transport: 2 cages allowed if combined widths + 0.2m ≤ frame width, each ≤ 14t
 // Shipping to client: only 1 cage per frame (enforced separately in findBestFrame)
 const DOUBLE_SPARE = 0.2, DOUBLE_WT = 14;
+// Frame tier thresholds for boat loading: cage.width + frameSpare determines which frame tier
+const FRAME_SPARE = 0.2;     // clearance added to cage width when selecting frame tier
+const FRAME_TIER_SMALL = 1.1; // cage.width+FRAME_SPARE < FRAME_TIER_SMALL  → must use 1.1m frame
+const FRAME_TIER_MED   = 1.5; // cage.width+FRAME_SPARE < FRAME_TIER_MED    → must use 1.5m frame
+                               // cage.width+FRAME_SPARE >= FRAME_TIER_MED   → use 2.3m or 2.5m frame
 
 const TABS = [
   {id:'dashboard', label:'Dashboard', icon:'◉'},
@@ -812,6 +817,9 @@ async function loadState() {
         walerLengthThreshold: PRELOAD_STATE.settings?.walerLengthThreshold || 6.5,
         doubleSpareWidth: PRELOAD_STATE.settings?.doubleSpareWidth || DOUBLE_SPARE,
         doubleMaxWeight: PRELOAD_STATE.settings?.doubleMaxWeight || DOUBLE_WT,
+        frameSpare:     PRELOAD_STATE.settings?.frameSpare     !== undefined ? parseFloat(PRELOAD_STATE.settings.frameSpare)     : FRAME_SPARE,
+        frameTierSmall: PRELOAD_STATE.settings?.frameTierSmall !== undefined ? parseFloat(PRELOAD_STATE.settings.frameTierSmall) : FRAME_TIER_SMALL,
+        frameTierMed:   PRELOAD_STATE.settings?.frameTierMed   !== undefined ? parseFloat(PRELOAD_STATE.settings.frameTierMed)   : FRAME_TIER_MED,
       },
   };
 
@@ -841,6 +849,9 @@ async function loadState() {
         walerLengthThreshold: parseFloat(data.settings?.walerLengthThreshold) || 6.5,
         doubleSpareWidth: parseFloat(data.settings?.doubleSpareWidth) || DOUBLE_SPARE,
         doubleMaxWeight: parseFloat(data.settings?.doubleMaxWeight) || DOUBLE_WT,
+        frameSpare:     data.settings?.frameSpare     !== undefined ? parseFloat(data.settings.frameSpare)     : FRAME_SPARE,
+        frameTierSmall: data.settings?.frameTierSmall !== undefined ? parseFloat(data.settings.frameTierSmall) : FRAME_TIER_SMALL,
+        frameTierMed:   data.settings?.frameTierMed   !== undefined ? parseFloat(data.settings.frameTierMed)   : FRAME_TIER_MED,
       }
     };
     console.log('[CageTracker] State synced from API:', STATE.cages.length, 'cages');
@@ -5434,20 +5445,53 @@ async function generateBoatMovements() {
   }
 
   // Helper: find a frame for boat loading (1 cage only, must be empty)
+  // Helper: find a frame for boat loading (1 cage only, tiered width selection)
+  // Rules: cage.width + spare → determines which frame tier is required:
+  //   < frameTierSmall → must use a frameTierSmall-width frame
+  //   < frameTierMed   → must use a frameTierMed-width frame
+  //   >= frameTierMed  → must use a 2.3m or 2.5m frame
+  // Waler: if cage needs waler, frame must have waler. If cage doesn't need waler, any frame is ok.
   function findBoatFrame(cage, date, reservedIds = new Set()) {
+    const s      = STATE.settings || {};
+    const spare  = s.frameSpare     !== undefined ? s.frameSpare     : FRAME_SPARE;
+    const tSmall = s.frameTierSmall !== undefined ? s.frameTierSmall : FRAME_TIER_SMALL;
+    const tMed   = s.frameTierMed   !== undefined ? s.frameTierMed   : FRAME_TIER_MED;
     const needsW = needsWaler(cage);
+
+    const effective = cage.width + spare; // effective width requirement
+
+    // Determine required frame tier
+    let requiredWidths;
+    if (effective < tSmall) {
+      requiredWidths = [tSmall];                     // must use 1.1m frame
+    } else if (effective < tMed) {
+      requiredWidths = [tMed];                       // must use 1.5m frame
+    } else {
+      requiredWidths = [2.3, 2.5];                   // must use 2.3m or 2.5m frame
+    }
+
+    // Filter: empty, correct tier width, and candidate must be at facility or returning
     const candidates = getAvailableFacilityFrames(date, reservedIds)
-      .filter(s => cage.width <= s.frame.width && s.cages.length === 0)
+      .filter(s => s.cages.length === 0 && requiredWidths.includes(s.frame.width))
       .sort((a, b) => {
-        // Prefer facility frames over returning ones; narrowest fit
+        // Prefer already-at-facility over returning; then by width ascending
         const aRet = a.returningOn ? 1 : 0;
         const bRet = b.returningOn ? 1 : 0;
         if (aRet !== bRet) return aRet - bRet;
         return a.frame.width - b.frame.width;
       });
 
-    for (const s of candidates) { if (needsW && !s.frame.hasWaler) continue; return s.frame; }
-    for (const s of candidates) { return s.frame; }
+    // Pass 1: respect waler requirement
+    for (const c of candidates) {
+      if (needsW && !c.frame.hasWaler) continue;
+      return c.frame;
+    }
+    // Pass 2: cage doesn't need waler — waler frames are still valid, so this is same as pass 1
+    // (already covered). But if needsW was false and we skipped frames with no waler due to
+    // some other logic, re-scan without waler restriction:
+    if (!needsW) {
+      for (const c of candidates) { return c.frame; }
+    }
     return null;
   }
 
@@ -5951,203 +5995,137 @@ function openBoatPlanPreview() {
   if (!bpGeneratedMovements) return;
   const { scheduledSteps, warnings } = bpGeneratedMovements;
 
-  // ── Convert scheduledSteps → fake planned movement objects ─────────────────
-  // Uses identical logic to commitBoatPlan so the map sees exactly what would
-  // be added to the planner.
-  const fakeMoves = [];
-  let _uid = 0;
-  const fid = () => 'prev-' + (_uid++);
+  // Remove any existing preview
+  const existing = document.getElementById('bp-preview-overlay');
+  if (existing) existing.remove();
 
-  scheduledSteps.forEach(step => {
-    if (step.isFacilityExit && !step.action) {
-      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'facility-to-frame',
-        description: step.note, cageId: step.cage?.id || null, frameId: null, completed: false });
-    } else if (step.isFixStep) {
-      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'frame-fix-shipping',
-        description: step.note, cageId: null, frameId: step.frame?.id || null, completed: false });
-    } else if (step.action === 'facility_to_rmd') {
-      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'facility-to-rmd',
-        description: `${step.cage.name}: ${step.note}`,
-        cageId: step.cage.id, frameId: null,
-        rmdNumber: step.rmdSlot?.number || null,
-        rmdSide:   step.rmdSlot?.side   || null,
-        rmdSlot:   step.rmdSlot?.slot   || 'cage1',
-        completed: false });
-    } else if (step.action === 'facility_exit_frame_to_rmd') {
-      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'frame-to-rmd',
-        description: step.note, cageId: step.cage.id, frameId: step.frame?.id || null,
-        rmdNumber: step.rmdSlot?.number || null,
-        rmdSide:   step.rmdSlot?.side   || null,
-        rmdSlot:   step.rmdSlot?.slot   || null,
-        completed: false });
-    } else if (step.action === 'facility_exit_to_frame' || step.action === 'facility_exit_frame_storage') {
-      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'facility-to-frame',
-        description: `${step.cage.name}: ${step.note}`,
-        cageId: step.cage.id, frameId: step.frame?.id || null, completed: false });
-    } else if (step.action === 'rmd_to_frame') {
-      // For rmd_to_frame: the cage's locationDetail already encodes the RMD slot,
-      // and rmdNumber/rmdSide are needed by resolveRmdSlot/mvRedraw.
-      const detail = step.cage?.locationDetail || '';
-      const dm = detail.match(/(\d+)\s*([ABab])$/);
-      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'rmd-to-frame',
-        description: `${step.cage.name}: ${step.note}`,
-        cageId: step.cage.id, frameId: step.frame?.id || null,
-        rmdNumber: dm ? parseInt(dm[1], 10) : null,
-        rmdSide:   dm ? dm[2].toUpperCase()  : null,
-        completed: false });
-    } else if (step.action === 'reframe') {
-      // Reframe = frame-to-rmd (park) + rmd-to-frame (load into new frame)
-      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'frame-to-rmd',
-        description: `${step.cage.name}: ${step.note}`,
-        cageId: step.cage.id, frameId: step.frame?.id || null, completed: false });
-      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'rmd-to-frame',
-        description: `${step.cage.name}: ${step.note}`,
-        cageId: step.cage.id, frameId: step.frame?.id || null, completed: false });
-    } else {
-      // facility_to_frame / already_framed / no_frame
-      if (step.action === 'no_frame' || step.action === 'already_framed') return;
-      fakeMoves.push({ id: fid(), date: step.date, typeKey: 'facility-to-frame',
-        description: `${step.cage.name}: ${step.note}`,
-        cageId: step.cage?.id || null, frameId: step.frame?.id || null, completed: false });
-    }
-  });
-
-  const dates = [...new Set(fakeMoves.map(m => m.date).filter(Boolean))].sort();
-  if (!dates.length) { alert('No scheduled movements to preview.'); return; }
-
-  // ── Warning strip ──────────────────────────────────────────────────────────
-  const warnHTML = warnings.filter(w => w.startsWith('⚠')).map(w =>
-    `<div style="padding:6px 10px;background:#fef0e6;border:1px solid #e8c8a0;border-radius:5px;font-size:12px;color:var(--orange);margin-bottom:5px">${esc(w)}</div>`
-  ).join('');
-
-  // ── Render a day's map by temporarily hijacking the movements-tab state ────
-  // We save/restore STATE.plannedMovements and mvDayDate so nothing leaks.
-  function renderDayMap(date) {
-    const savedMovements = STATE.plannedMovements;
-    const savedDayDate   = mvDayDate;
-    const savedDayView   = mvDayView;
-
-    STATE.plannedMovements = fakeMoves;
-    mvDayDate = date;
-    mvDayView = true;
-
-    let html;
-    try { html = renderMovementsDayView(); }
-    finally {
-      STATE.plannedMovements = savedMovements;
-      mvDayDate  = savedDayDate;
-      mvDayView  = savedDayView;
-    }
-    return html;
-  }
-
-  // ── Build / refresh the overlay ────────────────────────────────────────────
-  function mountOverlay(activeDate) {
-    bpPreviewDate = activeDate;
-
-    const existing = document.getElementById('bp-preview-overlay');
-    if (existing) existing.remove();
-
-    const overlay = document.createElement('div');
-    overlay.id = 'bp-preview-overlay';
-    overlay.style.cssText = [
-      'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1100',
-      'display:flex;align-items:flex-start;justify-content:center',
-      'padding:16px;overflow-y:auto'
-    ].join(';');
-    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
-
-    const mapHTML = renderDayMap(activeDate);
-
-    overlay.innerHTML = `
-      <div style="background:var(--bg-base);border-radius:12px;width:100%;max-width:1240px;
-                  display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.35);min-height:0">
-
-        <!-- Fixed header -->
-        <div style="display:flex;align-items:center;gap:12px;padding:14px 20px;
-                    border-bottom:1px solid var(--border);flex-shrink:0;border-radius:12px 12px 0 0;
-                    background:var(--bg-base);position:sticky;top:0;z-index:10">
-          <span style="font-size:18px">📅</span>
-          <div style="flex:1;min-width:0">
-            <div style="font:700 15px var(--font-display)">Plan Preview — ${esc(bpBoatDate ? fmt(bpBoatDate) : '')}</div>
-            <div style="font-size:11px;color:var(--text-muted)">${fakeMoves.length} movements · ${dates.length} day${dates.length !== 1 ? 's' : ''} — review before committing</div>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="document.getElementById('bp-preview-overlay').remove();commitBoatPlan()">✅ Add to Planner</button>
-          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('bp-preview-overlay').remove()">✕ Close</button>
-        </div>
-
-        ${warnHTML ? `<div style="padding:10px 20px 0;flex-shrink:0">${warnHTML}</div>` : ''}
-
-        <!-- Map body — gets re-rendered on day change -->
-        <div id="bp-preview-map-body" style="padding:16px 20px;overflow-y:auto">
-          ${mapHTML}
-        </div>
-      </div>`;
-
-    document.body.appendChild(overlay);
-
-    // Trigger arrow drawing after DOM paint
-    setTimeout(() => mvRedraw(), 80);
-  }
-
-  // ── Intercept day-navigation clicks from inside the rendered map ───────────
-  // renderMovementsDayView emits buttons like: onclick="mvDayDate='2026-03-15';render()"
-  // We patch those at mount time by replacing render() calls in preview context.
-  // Simpler approach: override window.render temporarily? No — use event delegation.
-  // Instead we wrap the overlay body in a click-interceptor that catches day buttons.
-  //
-  // Actually the cleanest approach: after mounting, rewrite the day-tab button onclicks
-  // to call our own navigation instead of render().
-  function patchDayButtons() {
-    const body = document.getElementById('bp-preview-map-body');
-    if (!body) return;
-    // Find all buttons whose onclick contains mvDayDate= (day tab buttons from renderMovementsDayView)
-    body.querySelectorAll('button').forEach(btn => {
-      const oc = btn.getAttribute('onclick') || '';
-      const m = oc.match(/mvDayDate='([^']+)'/);
-      if (m) {
-        btn.setAttribute('onclick', `bpPreviewGoDay('${m[1]}')`);
-      }
-    });
-    // Also fix prev/next navigation buttons
-    body.querySelectorAll('button').forEach(btn => {
-      const oc = btn.getAttribute('onclick') || '';
-      const m2 = oc.match(/mvDayDate='([^']+)';\s*render\(\)/);
-      if (m2) {
-        btn.setAttribute('onclick', `bpPreviewGoDay('${m2[1]}')`);
-      }
-    });
-    // Fix "All Movements" back button — just close preview instead
-    body.querySelectorAll('button').forEach(btn => {
-      const oc = btn.getAttribute('onclick') || '';
-      if (oc.includes('mvDayView=false') || oc.includes('↔ Back') || oc.includes('All Movements')) {
-        btn.setAttribute('onclick', `document.getElementById('bp-preview-overlay').remove()`);
-      }
-    });
-  }
-
-  // Global day-nav for preview
-  window.bpPreviewGoDay = function(date) {
-    const body = document.getElementById('bp-preview-map-body');
-    if (!body) return;
-    bpPreviewDate = date;
-    const saved  = STATE.plannedMovements;
-    const savedD = mvDayDate;
-    const savedV = mvDayView;
-    STATE.plannedMovements = fakeMoves;
-    mvDayDate = date;
-    mvDayView = true;
-    try { body.innerHTML = renderMovementsDayView(); }
-    finally { STATE.plannedMovements = saved; mvDayDate = savedD; mvDayView = savedV; }
-    patchDayButtons();
-    setTimeout(() => mvRedraw(), 80);
+  // ── Colour + label helpers ─────────────────────────────────────────────────
+  const ACTION_META = {
+    facility_exit_to_frame:     { col:'#2563b0', icon:'🏭', label:'Facility → Frame (transit)'   },
+    facility_exit_frame_to_rmd: { col:'#7040c0', icon:'📦', label:'Frame → RMD (drop-off)'        },
+    facility_exit_frame_storage:{ col:'#0d9488', icon:'🏭', label:'Facility → Frame (storage)'    },
+    facility_to_rmd:            { col:'#0d9488', icon:'🏭', label:'Facility → RMD'                },
+    rmd_to_frame:               { col:'#27a060', icon:'📦', label:'RMD → Frame (boat)'            },
+    facility_to_frame:          { col:'#2563b0', icon:'🏭', label:'Facility → Frame (boat)'       },
+    reframe:                    { col:'#e05c1a', icon:'🔄', label:'Reframe'                       },
+    already_framed:             { col:'#888',    icon:'✅', label:'Already in frame'               },
+    no_frame:                   { col:'#c0392b', icon:'⚠️', label:'No frame found'                },
+    fix:                        { col:'#c08520', icon:'🔩', label:'Fix frame for shipping'         },
   };
 
-  mountOverlay(dates[0]);
-  // Patch buttons after DOM is inserted
-  setTimeout(() => patchDayButtons(), 10);
-}
+  // Group steps by date
+  const byDate = {};
+  scheduledSteps.forEach(step => {
+    const d = step.date || '(no date)';
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(step);
+  });
+  const dates = Object.keys(byDate).sort();
 
+  if (!dates.length) { alert('No scheduled steps to preview.'); return; }
+
+  // ── Warning strip ──────────────────────────────────────────────────────────
+  const warnHTML = warnings.length
+    ? warnings.map(w => {
+        const isErr = w.startsWith('🚨');
+        return `<div style="padding:7px 12px;background:${isErr?'#fef2f2':'#fef0e6'};border:1px solid ${isErr?'#fca5a5':'#e8c8a0'};border-radius:6px;font-size:12px;color:${isErr?'#c0392b':'var(--orange)'};margin-bottom:6px">${esc(w)}</div>`;
+      }).join('')
+    : '';
+
+  // ── Build day sections ─────────────────────────────────────────────────────
+  let totalMoves = 0;
+  const daySectionsHTML = dates.map(d => {
+    const steps = byDate[d];
+    const movesOnDay = steps.filter(s => s.action !== 'already_framed' && s.action !== 'no_frame' && !s.isInfoOnly).length;
+    totalMoves += movesOnDay;
+
+    const rowsHTML = steps.map((step, i) => {
+      const actionKey = step.isFixStep ? 'fix' : (step.action || (step.isFacilityExit ? 'facility_exit_to_frame' : 'facility_to_frame'));
+      const meta = ACTION_META[actionKey] || { col:'var(--accent)', icon:'↔', label: actionKey };
+      const cageName = step.cage?.name || step.frame?.name || '?';
+      const frameName = step.frame?.name || '—';
+      const rmdLabel = step.rmdSlot ? `RMD-${step.rmdSlot.number}${step.rmdSlot.side}` : '—';
+      const isWarning = actionKey === 'no_frame';
+      const rowBg = isWarning ? 'background:#fef2f2;' : (i % 2 === 0 ? '' : 'background:var(--bg-elevated);');
+
+      // Build destination column
+      let dest = '—';
+      if (step.isFixStep) dest = frameName;
+      else if (actionKey === 'facility_exit_to_frame') dest = `${frameName} → RMD-${step.rmdSlot ? step.rmdSlot.number + step.rmdSlot.side : '?'}`;
+      else if (actionKey === 'facility_exit_frame_to_rmd') dest = `${frameName} → RMD-${step.rmdSlot ? step.rmdSlot.number + step.rmdSlot.side : '?'}`;
+      else if (actionKey === 'facility_exit_frame_storage') dest = frameName + (step.pairedWith ? ` (paired w/ ${step.pairedWith})` : '');
+      else if (actionKey === 'facility_to_rmd') dest = rmdLabel;
+      else if (actionKey === 'rmd_to_frame' || actionKey === 'facility_to_frame') dest = frameName;
+      else if (actionKey === 'reframe') dest = frameName;
+      else if (actionKey === 'already_framed') dest = frameName;
+
+      return `<tr style="${rowBg}">
+        <td style="padding:6px 8px;font-size:11px;width:24px;text-align:center">${meta.icon}</td>
+        <td style="padding:6px 8px;font:700 12px var(--font-mono);color:${isWarning?'#c0392b':meta.col}">${esc(cageName)}</td>
+        <td style="padding:6px 8px;font-size:11px;color:var(--text-secondary)">${esc(meta.label)}</td>
+        <td style="padding:6px 8px;font-size:11px;color:var(--text-muted)">${esc(dest)}</td>
+        <td style="padding:6px 8px;font-size:10px;color:var(--text-muted);max-width:260px">${esc(step.note || '')}</td>
+      </tr>`;
+    }).join('');
+
+    const isBoatDay = d === bpBoatDate;
+    return `
+      <div style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+          <div style="font:700 13px var(--font-display);color:${isBoatDay?'var(--accent)':'var(--text-primary)'}">
+            ${isBoatDay ? '🚢 ' : '📅 '}${fmt(d)}${isBoatDay ? ' — Boat Date' : ''}
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);background:var(--bg-elevated);border-radius:10px;padding:2px 8px">${steps.length} step${steps.length!==1?'s':''}</div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+          <thead>
+            <tr style="background:var(--bg-elevated)">
+              <th style="padding:5px 8px;font-size:10px;color:var(--text-muted);text-align:left;width:24px"></th>
+              <th style="padding:5px 8px;font-size:10px;color:var(--text-muted);text-align:left">Cage/Frame</th>
+              <th style="padding:5px 8px;font-size:10px;color:var(--text-muted);text-align:left">Action</th>
+              <th style="padding:5px 8px;font-size:10px;color:var(--text-muted);text-align:left">Destination</th>
+              <th style="padding:5px 8px;font-size:10px;color:var(--text-muted);text-align:left">Note</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHTML}</tbody>
+        </table>
+      </div>`;
+  }).join('');
+
+  // ── Build overlay ──────────────────────────────────────────────────────────
+  const overlay = document.createElement('div');
+  overlay.id = 'bp-preview-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1100;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = `
+    <div style="background:var(--bg-base);border-radius:12px;width:100%;max-width:1100px;
+                box-shadow:0 20px 60px rgba(0,0,0,0.35);display:flex;flex-direction:column">
+
+      <!-- Header -->
+      <div style="display:flex;align-items:center;gap:12px;padding:16px 20px;
+                  border-bottom:1px solid var(--border);border-radius:12px 12px 0 0;
+                  background:var(--bg-base);position:sticky;top:0;z-index:10;flex-shrink:0">
+        <span style="font-size:22px">📋</span>
+        <div style="flex:1;min-width:0">
+          <div style="font:700 16px var(--font-display)">Plan Preview — 🚢 ${esc(bpBoatDate ? fmt(bpBoatDate) : '')}</div>
+          <div style="font-size:11px;color:var(--text-muted)">${scheduledSteps.length} steps across ${dates.length} day${dates.length!==1?'s':''}</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('bp-preview-overlay').remove();commitBoatPlan()">✅ Add to Planner</button>
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('bp-preview-overlay').remove()">✕ Close</button>
+      </div>
+
+      <!-- Warnings -->
+      ${warnHTML ? `<div style="padding:12px 20px 0;flex-shrink:0">${warnHTML}</div>` : ''}
+
+      <!-- Scrollable content -->
+      <div style="padding:16px 20px;overflow-y:auto;flex:1">
+        ${daySectionsHTML}
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+}
 async function commitBoatPlan() {
   if (!bpGeneratedMovements) return;
   const {scheduledSteps} = bpGeneratedMovements;
@@ -7987,6 +7965,20 @@ function renderSettings() {
       ${field('doubleMaxWeight', 'Max weight per cage for doubling (t)', s.doubleMaxWeight || 14, 0.5, 'Each cage must be at or below this weight to be eligible for double-cage transport. Default: 14t')}
     </div>
 
+    <div class="card" style="max-width:620px">
+      <div class="card-title">&#9875; Boat Loading — Frame Width Tiers</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+        When loading cages onto boat frames, the required frame width tier is determined by:<br>
+        <strong>cage width + spare &lt; Tier 1</strong> → must use Tier 1 (narrow) frame<br>
+        <strong>cage width + spare &lt; Tier 2</strong> → must use Tier 2 (medium) frame<br>
+        <strong>cage width + spare ≥ Tier 2</strong> → must use a 2.3m or 2.5m (wide) frame<br>
+        If the cage requires a waler, only frames with a waler will be assigned. Cages that do not need a waler can still go in a waler frame as long as the width tier is met.
+      </p>
+      ${field('frameSpare', 'Spare width clearance (m)', s.frameSpare !== undefined ? s.frameSpare : 0.2, 0.05, 'Clearance added to cage width before checking frame tier. Default: 0.2m')}
+      ${field('frameTierSmall', 'Tier 1 frame width (m)', s.frameTierSmall || 1.1, 0.05, 'Cage width + spare below this value → must use a Tier 1 (narrow) frame. Default: 1.1m')}
+      ${field('frameTierMed', 'Tier 2 frame width (m)', s.frameTierMed || 1.5, 0.05, 'Cage width + spare below this value → must use a Tier 2 (medium) frame; above → use wide frame (2.3m or 2.5m). Default: 1.5m')}
+    </div>
+
     ${!ro ? `
     <div style="max-width:620px;display:flex;gap:10px;align-items:center">
       <button class="btn btn-primary" onclick="applySettings()">&#128190; Save Settings</button>
@@ -8007,9 +7999,16 @@ async function applySettings() {
     walerLengthThreshold: Math.max(0.1, get('walerLengthThreshold') || 6.5),
     doubleSpareWidth: Math.max(0, get('doubleSpareWidth') !== null ? get('doubleSpareWidth') : 0.2),
     doubleMaxWeight:  Math.max(0, get('doubleMaxWeight') || 14),
+    frameSpare:     Math.max(0, get('frameSpare')     !== null ? get('frameSpare')     : 0.2),
+    frameTierSmall: Math.max(0.1, get('frameTierSmall') || 1.1),
+    frameTierMed:   Math.max(0.1, get('frameTierMed')   || 1.5),
   };
   if (newSettings.heightShortMax >= newSettings.heightMedMax) {
     showError('Short/Medium threshold must be less than Medium/Tall threshold.');
+    return;
+  }
+  if (newSettings.frameTierSmall >= newSettings.frameTierMed) {
+    showError('Frame Tier 1 width must be less than Frame Tier 2 width.');
     return;
   }
   STATE.settings = newSettings;
