@@ -5548,6 +5548,8 @@ async function generateBoatMovements() {
         const s = rmdSim[key] || { cage1: null, cage2: null };
         if (s.cage1 && s.cage2) continue; // both slots taken
 
+        const filled = (s.cage1 ? 1 : 0) + (s.cage2 ? 1 : 0);
+
         // Try inside slot (cage1 only — first cage must go inside)
         // Only available if cage1 is empty.
         if (!s.cage1) {
