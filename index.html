@@ -645,6 +645,7 @@ const TABS = [
   {id:'shipping', label:'Shipping', icon:'⛴'},
   {id:'report', label:'Report', icon:'⎙'},
   {id:'audit', label:'Audit Log', icon:'📋'},
+  {id:'settings', label:'Settings', icon:'⚙'},
 ];
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
@@ -662,8 +663,12 @@ function recordLocationChange(cage, newLocation, newDetail) {
   // Keep last 50 history entries
   if (cage.locationHistory.length > 50) cage.locationHistory = cage.locationHistory.slice(-50);
 }
-function hCat(h) { return h < H_SHORT ? 'Short' : h <= H_MED ? 'Medium' : 'Tall'; }
-function lCat(l) { return l < 6.5 ? 'Stumpy' : 'Long'; }
+function hCat(h) {
+  const hs = (STATE.settings && STATE.settings.heightShortMax) || H_SHORT;
+  const hm = (STATE.settings && STATE.settings.heightMedMax) || H_MED;
+  return h < hs ? 'Short' : h <= hm ? 'Medium' : 'Tall';
+}
+function lCat(l) { const t = (STATE.settings && STATE.settings.walerLengthThreshold) || 6.5; return l < t ? 'Stumpy' : 'Long'; }
 function hBadge(h) { const c = hCat(h); return c === 'Short' ? 'green' : c === 'Medium' ? 'yellow' : 'red'; }
 function cageLabel(c) { return `${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
 function cageLabelRaw(c) { return `${c.name} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
@@ -688,9 +693,11 @@ function canPairRMD(c1, c2) {
          (a === 'Tall'   && b === 'Short');
 }
 function canFitTwo(c1,c2,fw) {
-  return c1.width+c2.width+DOUBLE_SPARE<=fw && c1.weight<=DOUBLE_WT && c2.weight<=DOUBLE_WT;
+  const sp = (STATE.settings && STATE.settings.doubleSpareWidth) || DOUBLE_SPARE;
+  const wt = (STATE.settings && STATE.settings.doubleMaxWeight) || DOUBLE_WT;
+  return c1.width+c2.width+sp<=fw && c1.weight<=wt && c2.weight<=wt;
 }
-function needsWaler(cage) { return cage && cage.length < 6.5; }
+function needsWaler(cage) { const t = (STATE.settings && STATE.settings.walerLengthThreshold) || 6.5; return cage && cage.length < t; }
 
 // RMD spatial layout matching site: top=[12,11,10,gap,9] mid=[8,7] bot=[6,5,4,3,gap,2,1]
 const RMD_LAYOUT = [
@@ -721,7 +728,14 @@ function initState() {
     plannedMovements: [],
     shipments: [],
     boatTrips: [],
-    settings: { movementsPerDay: MAX_MOVES }
+    settings: {
+      movementsPerDay: MAX_MOVES,
+      heightShortMax: H_SHORT,
+      heightMedMax: H_MED,
+      walerLengthThreshold: 6.5,
+      doubleSpareWidth: DOUBLE_SPARE,
+      doubleMaxWeight: DOUBLE_WT,
+    }
   };
 }
 
@@ -791,7 +805,14 @@ async function loadState() {
     shipments: PRELOAD_STATE.shipments || [],
     boatTrips: PRELOAD_STATE.boatTrips || [],
     auditEvents: PRELOAD_STATE.auditEvents || [],
-    settings: PRELOAD_STATE.settings || { movementsPerDay: MAX_MOVES },
+    settings: {
+        movementsPerDay: PRELOAD_STATE.settings?.movementsPerDay || MAX_MOVES,
+        heightShortMax: PRELOAD_STATE.settings?.heightShortMax || H_SHORT,
+        heightMedMax: PRELOAD_STATE.settings?.heightMedMax || H_MED,
+        walerLengthThreshold: PRELOAD_STATE.settings?.walerLengthThreshold || 6.5,
+        doubleSpareWidth: PRELOAD_STATE.settings?.doubleSpareWidth || DOUBLE_SPARE,
+        doubleMaxWeight: PRELOAD_STATE.settings?.doubleMaxWeight || DOUBLE_WT,
+      },
   };
 
   // Render immediately from local data — don't wait for API
@@ -813,7 +834,14 @@ async function loadState() {
       shipments: data.shipments,
       boatTrips: data.boatTrips || [],
       auditEvents: data.auditEvents || [],
-      settings: { movementsPerDay: parseInt(data.settings?.movementsPerDay) || MAX_MOVES }
+      settings: {
+        movementsPerDay: parseInt(data.settings?.movementsPerDay) || MAX_MOVES,
+        heightShortMax: parseFloat(data.settings?.heightShortMax) || H_SHORT,
+        heightMedMax: parseFloat(data.settings?.heightMedMax) || H_MED,
+        walerLengthThreshold: parseFloat(data.settings?.walerLengthThreshold) || 6.5,
+        doubleSpareWidth: parseFloat(data.settings?.doubleSpareWidth) || DOUBLE_SPARE,
+        doubleMaxWeight: parseFloat(data.settings?.doubleMaxWeight) || DOUBLE_WT,
+      }
     };
     console.log('[CageTracker] State synced from API:', STATE.cages.length, 'cages');
     render();
@@ -942,6 +970,10 @@ async function updateBoatTripInAPI(t) {
 async function deleteBoatTripFromAPI(id) {
   try { await api('/api/boattrips', 'DELETE', { id }); }
   catch(e) { showError('Failed to delete boat trip: ' + e.message); }
+}
+async function saveSettings(settings) {
+  try { await api('/api/settings', 'PUT', settings); }
+  catch(e) { showError('Failed to save settings: ' + e.message); }
 }
 
 function getCage(id) { return STATE.cages.find(c=>c.id===id); }
@@ -1105,6 +1137,7 @@ function renderTab(id) {
     case 'overview': return renderOverview();
     case 'report': return renderReport();
     case 'audit': return renderAuditLog();
+    case 'settings': return renderSettings();
     default: return '';
   }
 }
@@ -1443,7 +1476,7 @@ function computeWarnings() {
     // Cage needs waler but assigned frame has none
     if (c.location === 'frame' && needsWaler(c)) {
       const frame = STATE.frames.find(f => f.cages.includes(c.id));
-      if (frame && !frame.hasWaler) warnings.push({ level:'orange', icon:'⚠', title:`${c.name} needs waler — ${frame.name} has none`, detail:`Cage is ${c.length}m (<6.5m) and requires a waler for shipping`, cageId:c.id });
+      if (frame && !frame.hasWaler) warnings.push({ level:'orange', icon:'⚠', title:`${c.name} needs waler — ${frame.name} has none`, detail:`Cage is ${c.length}m (< ${STATE.settings.walerLengthThreshold||6.5}m) and requires a waler for shipping`, cageId:c.id });
     }
     // Frame fixed for shipping but cage has no trip assigned
     if (c.location === 'frame') {
@@ -2729,7 +2762,7 @@ function renderFrames() {
       const _bg = _shade ? shipmentShadeBg(_shade)+'border-radius:4px;padding:2px 6px;display:flex;justify-content:space-between;align-items:center;' : (c.shippingPreference ? shipPrefSlotBg(c)+'border-radius:4px;padding:2px 6px;display:flex;justify-content:space-between;align-items:center;' : '');
       const _nc = shipmentShadeNameColor(_shade) || shipPrefNameColor(c);
       return `<div class="frame-cage-item" style="${_bg}">
-        <span style="${_nc}">${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t${needsWaler(c) ? ' <span style="color:var(--yellow);font-size:10px" title="Cage < 6.5m needs waler for shipping">⚠ waler req.</span>' : ''}</span>
+        <span style="${_nc}">${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t${needsWaler(c) ? ' <span style="color:var(--yellow);font-size:10px" title="Cage below waler length threshold — needs waler for shipping">⚠ waler req.</span>' : ''}</span>
         ${f.location==='facility'&&!f.fixedForShipping ? `<button class="remove-btn" onclick="removeCageFromFrame('${f.id}','${c.id}')">×</button>` : ''}
       </div>`;
     }).join('');
@@ -2903,7 +2936,7 @@ function toggleShipping(fid) {
   if(!f.fixedForShipping) {
     const cage = getCage(f.cages[0]);
     if(cage && needsWaler(cage) && !f.hasWaler) {
-      return alert(`Cage "${cage.name}" is ${cage.length}m long (< 6.5m) and requires a waler on the frame for shipping. Please add a waler first.`);
+      return alert(`Cage "${cage.name}" is ${cage.length}m long (below ${STATE.settings.walerLengthThreshold||6.5}m threshold) and requires a waler on the frame for shipping. Please add a waler first.`);
     }
   }
   f.fixedForShipping = !f.fixedForShipping;
@@ -3790,7 +3823,7 @@ async function completeMove(id) {
     if (frame.cages.length === 1) {
       const c = getCage(frame.cages[0]);
       if (c && needsWaler(c) && !frame.hasWaler) {
-        alert(`Cannot complete: cage ${c.name} is ${c.length}m (< 6.5m) and requires a waler.`); return;
+        alert(`Cannot complete: cage ${c.name} is ${c.length}m (below ${STATE.settings.walerLengthThreshold||6.5}m threshold) and requires a waler.`); return;
       }
       frame.fixedForShipping = true;
     } else {
@@ -4538,9 +4571,9 @@ function renderOverview() {
       <div class="card">
         <div class="card-title">RMD Storage Bays</div>
         <div style="display:flex;gap:8px;margin-bottom:10px;font-size:10px">
-          <span class="overview-cage-chip short">Short &lt;${H_SHORT}m</span>
-          <span class="overview-cage-chip medium">Medium ≤${H_MED}m</span>
-          <span class="overview-cage-chip tall">Tall &gt;${H_MED}m</span>
+          <span class="overview-cage-chip short">Short &lt;${STATE.settings.heightShortMax||H_SHORT}m</span>
+          <span class="overview-cage-chip medium">Medium ≤${STATE.settings.heightMedMax||H_MED}m</span>
+          <span class="overview-cage-chip tall">Tall &gt;${STATE.settings.heightMedMax||H_MED}m</span>
         </div>
         <div class="rmd-site-layout">${rmdRows}</div>
       </div>
@@ -7835,6 +7868,85 @@ function startLockoutCountdown(seconds) {
 function clearLockoutCountdown() {
   if (_lockoutTimer) { clearTimeout(_lockoutTimer); _lockoutTimer = null; }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SETTINGS TAB
+// ═══════════════════════════════════════════════════════════════════════════════
+function renderSettings() {
+  const s = STATE.settings;
+  const ro = isReadOnly();
+  const field = (id, label, val, step, helpText) => `
+    <div style="margin-bottom:16px">
+      <label for="setting-${id}">${label}</label>
+      <input type="number" id="setting-${id}" value="${val}" step="${step}" min="0"
+        style="max-width:160px" ${ro ? 'disabled' : ''}>
+      ${helpText ? `<div style="font-size:11px;color:var(--text-muted);margin-top:4px">${helpText}</div>` : ''}
+    </div>`;
+
+  return `
+    <div class="section-title">&#9881; Settings</div>
+    ${ro ? `<div style="background:#fef0e6;border:1px solid #e8c8a0;border-radius:8px;padding:10px 14px;margin-bottom:18px;font-size:13px;color:var(--orange)">&#128065; Read-only access — settings cannot be changed</div>` : ''}
+
+    <div class="card" style="max-width:620px">
+      <div class="card-title">&#128197; Movement Rules</div>
+      ${field('movementsPerDay', 'Max movements per day', s.movementsPerDay || 4, 1, 'Warnings are shown when planned movements on any day exceed this limit.')}
+    </div>
+
+    <div class="card" style="max-width:620px">
+      <div class="card-title">&#128207; Cage Height Classification</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Cages are classified as <strong>Short</strong>, <strong>Medium</strong>, or <strong>Tall</strong> based on their height. These thresholds control the classification and affect RMD pairing rules.</p>
+      ${field('heightShortMax', 'Short / Medium threshold (m)', s.heightShortMax || 2.7, 0.05, 'Cages with height below this value are classified as Short. Default: 2.7m')}
+      ${field('heightMedMax', 'Medium / Tall threshold (m)', s.heightMedMax || 4.7, 0.05, 'Cages with height at or below this value are classified as Medium; above it are Tall. Default: 4.7m')}
+    </div>
+
+    <div class="card" style="max-width:620px">
+      <div class="card-title">&#128295; Waler Requirement</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Cages shorter than this length require a waler when being shipped on a transport frame.</p>
+      ${field('walerLengthThreshold', 'Waler required below length (m)', s.walerLengthThreshold || 6.5, 0.05, 'Cages with length below this value are flagged as needing a waler. Default: 6.5m')}
+    </div>
+
+    <div class="card" style="max-width:620px">
+      <div class="card-title">&#128666; RMD Double-Cage Transport Rules</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Two cages can share an RMD transport slot if their combined width (plus a spare margin) fits within the frame width, and neither cage exceeds the weight limit.</p>
+      ${field('doubleSpareWidth', 'Spare width margin (m)', s.doubleSpareWidth !== undefined ? s.doubleSpareWidth : 0.2, 0.05, 'Extra clearance added to combined cage widths when checking if two cages fit a frame. Default: 0.2m')}
+      ${field('doubleMaxWeight', 'Max weight per cage for doubling (t)', s.doubleMaxWeight || 14, 0.5, 'Each cage must be at or below this weight to be eligible for double-cage transport. Default: 14t')}
+    </div>
+
+    ${!ro ? `
+    <div style="max-width:620px;display:flex;gap:10px;align-items:center">
+      <button class="btn btn-primary" onclick="applySettings()">&#128190; Save Settings</button>
+      <span id="settings-saved-msg" style="font-size:12px;color:var(--green);display:none">&#10003; Saved!</span>
+    </div>` : ''}
+  `;
+}
+
+async function applySettings() {
+  const get = id => {
+    const el = document.getElementById('setting-' + id);
+    return el ? parseFloat(el.value) : null;
+  };
+  const newSettings = {
+    movementsPerDay: Math.max(1, Math.round(get('movementsPerDay') || 4)),
+    heightShortMax:  Math.max(0.1, get('heightShortMax') || 2.7),
+    heightMedMax:    Math.max(0.1, get('heightMedMax') || 4.7),
+    walerLengthThreshold: Math.max(0.1, get('walerLengthThreshold') || 6.5),
+    doubleSpareWidth: Math.max(0, get('doubleSpareWidth') !== null ? get('doubleSpareWidth') : 0.2),
+    doubleMaxWeight:  Math.max(0, get('doubleMaxWeight') || 14),
+  };
+  if (newSettings.heightShortMax >= newSettings.heightMedMax) {
+    showError('Short/Medium threshold must be less than Medium/Tall threshold.');
+    return;
+  }
+  STATE.settings = newSettings;
+  render();
+  // Show saved message after render (element will be recreated)
+  setTimeout(() => {
+    const msg = document.getElementById('settings-saved-msg');
+    if (msg) { msg.style.display = 'inline'; setTimeout(() => { if(msg) msg.style.display = 'none'; }, 3000); }
+  }, 50);
+  await saveSettings(newSettings);
+}
+
 
 function hidePinScreen() {
   document.getElementById('pin-overlay').style.display = 'none';
