@@ -5545,10 +5545,12 @@ async function generateBoatMovements() {
   }
 
   // Helper: find an RMD slot for a cage
-  // Slots: cage1/cage3 = inside positions, cage2/cage4 = outside positions.
-  // Rule: outside cages must come out before inside cages, so:
-  //   - we can fill an inside slot only if the paired outside slot is empty (or the new cage will be alone)
-  //   - tall cages cannot go outside
+  // Rules:
+  //   - Each RMD side holds exactly 2 cages: cage1 = inside, cage2 = outside.
+  //   - First cage placed goes inside (cage1); second cage goes outside (cage2).
+  //   - To remove the inside cage, the outside cage must come out first.
+  //   - Tall cages can ONLY go inside (cage1). If cage1 is already taken, a Tall cage has no valid slot.
+  //   - Valid pairings (inside → outside): Short+Short, Medium+Medium, Tall+Short, Medium+Short.
   function findRMDSlot(cage) {
     const cageH  = hCat(cage.height);
     const isTall = (cageH === 'Tall');
@@ -5558,33 +5560,27 @@ async function generateBoatMovements() {
       for (const side of SIDES) {
         const key = `${r.number}${side}`;
         const s = rmdSim[key] || { cage1: null, cage2: null, cage3: null, cage4: null };
-        // Count all occupied slots
+        // Count all occupied slots (cage3/cage4 may exist from legacy data)
         const filled = [s.cage1, s.cage2, s.cage3, s.cage4].filter(Boolean).length;
         if (filled >= 2) continue; // max 2 cages per side
 
-        // Inside slots: cage1 (primary), cage3 (secondary — only if cage1 already used)
-        // Outside slots: cage2 (primary), cage4 (secondary — only if cage2 already used)
-        // A cage can only go inside if no outside cage is blocking it.
-        // A cage can only go outside if it's not tall.
-
-        // Try inside slot (cage1 first, then cage3)
-        const insideSlot = !s.cage1 ? 'cage1' : (!s.cage3 ? 'cage3' : null);
-        if (insideSlot) {
-          const outsideCage = s.cage2 ? getCage(s.cage2) : (s.cage4 ? getCage(s.cage4) : null);
-          // Can go inside only if outside is empty (no one blocking exit) OR outside cage is compatible
+        // Try inside slot (cage1 only — first cage must go inside)
+        // Only available if cage1 is empty.
+        if (!s.cage1) {
+          const outsideCage = s.cage2 ? getCage(s.cage2) : null;
+          // Can go inside only if outside is empty OR the pair is compatible
           if (!outsideCage || canPairRMD(cage, outsideCage)) {
-            candidates.push({ number: r.number, side, slot: insideSlot, filled });
+            candidates.push({ number: r.number, side, slot: 'cage1', filled });
           }
         }
 
-        // Try outside slot (cage2 first, then cage4) — tall cages cannot go outside
-        if (!isTall) {
-          const outsideSlot = !s.cage2 ? 'cage2' : (!s.cage4 ? 'cage4' : null);
-          if (outsideSlot) {
-            const insideCage = s.cage1 ? getCage(s.cage1) : (s.cage3 ? getCage(s.cage3) : null);
-            if (!insideCage || canPairRMD(insideCage, cage)) {
-              candidates.push({ number: r.number, side, slot: outsideSlot, filled });
-            }
+        // Try outside slot (cage2 only — second cage must go outside)
+        // Tall cages cannot go outside under any circumstances.
+        if (!isTall && !s.cage2) {
+          const insideCage = s.cage1 ? getCage(s.cage1) : null;
+          // Can go outside only if inside is empty OR the pair is compatible
+          if (!insideCage || canPairRMD(insideCage, cage)) {
+            candidates.push({ number: r.number, side, slot: 'cage2', filled });
           }
         }
       }
