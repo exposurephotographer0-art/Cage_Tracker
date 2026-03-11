@@ -4064,13 +4064,15 @@ async function autoplanDepartures() {
 }
 
 async function blankCanvasPlanner() {
-  const count = STATE.plannedMovements.length;
-  if (count === 0) return alert('No planned movements to clear.');
-  if (!confirm(`Clear all ${count} planned movement${count!==1?'s':''}? This cannot be undone.`)) return;
-  STATE.plannedMovements = [];
+  const pending = STATE.plannedMovements.filter(m => !m.completed);
+  const count = pending.length;
+  if (count === 0) return alert('No pending planned movements to clear.');
+  if (!confirm(`Clear all ${count} pending planned movement${count!==1?'s':''}? Actioned movements will not be affected. This cannot be undone.`)) return;
+  const pendingIds = new Set(pending.map(m => m.id));
+  STATE.plannedMovements = STATE.plannedMovements.filter(m => m.completed);
   planWeekStart = (() => { const d=new Date(); d.setDate(d.getDate()-d.getDay()+1); return toISO(d); })();
   render();
-  await deleteAllMovementsFromAPI();
+  await Promise.all([...pendingIds].map(id => deleteMovementFromAPI(id)));
 }
 
 async function rescheduleMove(id, newDate) {
@@ -4466,7 +4468,7 @@ async function returnFrames(sid) {
   const returnedFrameNames = [];
   sh.frameIds.forEach(fid=>{
     const f=getFrame(fid);
-    if(f){ returnedFrameNames.push(f.name + (f.width ? ` [${f.width}m]` : '')); f.location='facility'; f.cages=[]; f.fixedForShipping=false; f.hasWaler=false; updatedFrames.push(f); }
+    if(f){ returnedFrameNames.push(f.name + (f.width ? ` [${f.width}m]` : '')); f.location='facility'; f.cages=[]; f.fixedForShipping=false; updatedFrames.push(f); }
   });
   addAuditEvent('↩ Frame Return', `${updatedFrames.length} frame(s) returned to facility`, returnedFrameNames.join(', '), sh.frameIds);
   render();
@@ -4486,7 +4488,6 @@ async function returnFromClient(fid) {
   addAuditEvent('↩ Frame Return', `${f.name}${f.width ? ` [${f.width}m]` : ''} returned from client`, cageNames.length ? `Cages unloaded: ${cageNames.join(', ')}` : 'No cages aboard', [fid]);
   f.cages = [];
   f.fixedForShipping = false;
-  f.hasWaler = false;
   f.location = 'boat';
   render();
   await saveFrame(f);
@@ -6669,8 +6670,8 @@ async function mvEditDelete(id) {
 function renderMovementsDayView() {
   const allPending = STATE.plannedMovements.filter(m => !m.completed);
 
-  // Sorted unique dates that have movements
-  const dates = [...new Set(allPending.map(m => m.date).filter(Boolean))].sort();
+  // Sorted unique dates across ALL movements (pending + completed) for navigation
+  const dates = [...new Set(STATE.plannedMovements.map(m => m.date).filter(Boolean))].sort();
   if (dates.length === 0) {
     return `<div class="card" style="text-align:center;padding:40px">
       <div style="font-size:32px;margin-bottom:10px">✅</div>
@@ -6679,18 +6680,19 @@ function renderMovementsDayView() {
     </div>`;
   }
 
-  // Default to today, or first date with moves
+  // Default to today or first pending date
   const today = todayStr();
+  const pendingDates = [...new Set(allPending.map(m => m.date).filter(Boolean))].sort();
   if (!mvDayDate || !dates.includes(mvDayDate)) {
-    mvDayDate = dates.includes(today) ? today : dates[0];
+    mvDayDate = pendingDates.includes(today) ? today : (pendingDates[0] || dates[0]);
   }
 
   const dayIdx  = dates.indexOf(mvDayDate);
   const prevDay = dayIdx > 0 ? dates[dayIdx - 1] : null;
   const nextDay = dayIdx < dates.length - 1 ? dates[dayIdx + 1] : null;
 
-  // Movements FOR this day
-  const dayMoves = allPending.filter(m => m.date === mvDayDate);
+  // Movements FOR this day (all: pending + completed)
+  const dayMoves = STATE.plannedMovements.filter(m => m.date === mvDayDate);
   // Prior pending moves (simulate as if completed)
   const priorMoves = allPending.filter(m => m.date && m.date < mvDayDate)
     .sort((a, b) => (a.date||'').localeCompare(b.date||''));
