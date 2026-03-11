@@ -5563,6 +5563,30 @@ async function generateBoatMovements() {
   // If RMD is full: cage stays in frame (frame-as-storage).
   // Frame used for transit is freed after drop-off for boat loading.
 
+  // ── PRE-RESERVE BOAT FRAMES ───────────────────────────────────────────
+  // Determine which frames boat cages will need (1 per boat cage) BEFORE
+  // Phase 1 runs, so exit/transit planning avoids consuming them.
+  // This is a "soft" pre-pass — Phase 1 will fall back to these frames only
+  // if no other frames are available (production takes priority over boat prep).
+  const preReservedBoatFrameIds = new Set();
+  {
+    const tempReserved = new Set();
+    for (const cage of boatCages) {
+      if (cage.location === 'frame') {
+        // Already in a frame — tentatively mark it
+        const f = STATE.frames.find(fr => fr.cages.includes(cage.id));
+        if (f) { preReservedBoatFrameIds.add(f.id); tempReserved.add(f.id); }
+      } else {
+        // RMD or facility — find the best boat frame ahead of time
+        const guidedFrameId = guidanceFrameForCage[cage.name.toLowerCase()];
+        const f = guidedFrameId
+          ? STATE.frames.find(fr => fr.id === guidedFrameId)
+          : findBoatFrame(cage, boatDate, tempReserved);
+        if (f) { preReservedBoatFrameIds.add(f.id); tempReserved.add(f.id); }
+      }
+    }
+  }
+
   const exitReservedFrameIds = new Set(); // frames committed to facility-exit transit
   let productionStoppageDay = null;
 
@@ -5572,8 +5596,13 @@ async function generateBoatMovements() {
 
     // Find a transit/storage frame for this cage.
     // For frame-as-storage: 2 cages can share a frame (same double-cage rule as transit).
-    // findExitFrame already respects canFitTwo + waler rules and prefers partial fills.
-    const transitFrame = findExitFrame(cage, cage.departureDate, new Set());
+    // findExitFrame respects canFitTwo + waler rules and prefers partial fills.
+    // Prefer frames NOT pre-reserved for boat loading; fall back to them only if needed.
+    let transitFrame = findExitFrame(cage, cage.departureDate, preReservedBoatFrameIds);
+    if (!transitFrame) {
+      // Fallback: allow boat-reserved frames (production takes priority)
+      transitFrame = findExitFrame(cage, cage.departureDate, new Set());
+    }
     if (!transitFrame) {
       if (!productionStoppageDay || cage.departureDate < productionStoppageDay) {
         productionStoppageDay = cage.departureDate;
@@ -5691,10 +5720,19 @@ async function generateBoatMovements() {
       if (cage.width > currentFrame.width) issues.push(`frame ${currentFrame.name} too narrow`);
       if (needsWaler(cage) && !currentFrame.hasWaler) issues.push(`no waler on ${currentFrame.name}`);
       // Check if frame has multiple cages (boat rule: 1 only)
-      if (currentFrame.cages.length > 1) issues.push(`${currentFrame.name} has multiple cages — must reframe to single cage`);
+      // Use frameSim to catch cages added during Phase 1 planning (not just real STATE)
+      const simCagesInFrame = (frameSim[currentFrame.id]?.cages || []).filter(cid => cid !== cage.id);
+      if (simCagesInFrame.length > 0 || currentFrame.cages.filter(cid => !boatCageIds.has(cid)).length > 1) issues.push(`${currentFrame.name} has multiple cages — must reframe to single cage`);
 
       if (issues.length === 0) {
         boatReservedFrameIds.add(currentFrame.id);
+        // Mark in frameSim so subsequent findBoatFrame calls see this frame as occupied
+        if (frameSim[currentFrame.id]) {
+          if (!frameSim[currentFrame.id].cages.includes(cage.id)) {
+            frameSim[currentFrame.id].cages.push(cage.id);
+          }
+          frameSim[currentFrame.id].fixedForShipping = true;
+        }
         scheduledSteps.push({ action: 'already_framed', cage, frame: currentFrame, date: boatDate, note: `Already in ${currentFrame.name} ✓` });
       } else {
         // Need to reframe
@@ -5705,6 +5743,7 @@ async function generateBoatMovements() {
         if (better) {
           boatReservedFrameIds.add(better.id);
           frameSim[better.id]?.cages.push(cage.id);
+          if (frameSim[better.id]) frameSim[better.id].fixedForShipping = true;
           warnings.push(`⚠ Cage ${cage.name} reframed: ${issues.join(', ')}`);
           const day = earliestDay();
           useMove(day);
@@ -5757,6 +5796,7 @@ async function generateBoatMovements() {
       if (frame) {
         boatReservedFrameIds.add(frame.id);
         frameSim[frame.id]?.cages.push(cage.id);
+        if (frameSim[frame.id]) frameSim[frame.id].fixedForShipping = true;
         const isReturning = !!frameSim[frame.id]?.returningOn;
         if (needsWaler(cage) && !frame.hasWaler) warnings.push(`⚠ Cage ${cage.name} needs waler but ${frame.name} has none`);
         const retNote = isReturning ? ` [frame returns ${fmt(frameSim[frame.id].returningOn)}]` : '';
@@ -5795,6 +5835,7 @@ async function generateBoatMovements() {
       if (frame) {
         boatReservedFrameIds.add(frame.id);
         frameSim[frame.id]?.cages.push(cage.id);
+        if (frameSim[frame.id]) frameSim[frame.id].fixedForShipping = true;
         const isReturning = !!frameSim[frame.id]?.returningOn;
         if (needsWaler(cage) && !frame.hasWaler) warnings.push(`⚠ Cage ${cage.name} needs waler but ${frame.name} has none`);
         const retNote = isReturning ? ` [frame returns ${fmt(frameSim[frame.id].returningOn)}]` : '';
