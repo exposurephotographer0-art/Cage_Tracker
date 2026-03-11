@@ -5354,11 +5354,14 @@ async function generateBoatMovements() {
   // rmdSim[`NX`] = { cage1: cageId|null, cage2: cageId|null }
 
   const frameSim = {};
+  // Boat-selected cages already in a frame will be RE-framed for shipping.
+  // Strip them from frameSim so their current frame appears available to the planner.
+  const boatCageIds = new Set(boatCages.map(c => c.id));
   STATE.frames.forEach(f => {
     frameSim[f.id] = {
       frame: f,
       location: f.location,
-      cages: [...f.cages],
+      cages: f.cages.filter(cid => !boatCageIds.has(cid)),
       fixedForShipping: f.fixedForShipping || false,
       returningOn: (f.location === 'client' || f.location === 'boat') && f.returnDate ? f.returnDate : null,
     };
@@ -6739,8 +6742,12 @@ function renderMovementsDayView() {
   });
 
   // Build simulated frame occupancy: frameId → [cageId]
+  // Seed ALL frames referenced in any movement (including returning frames) so the
+  // map can display cage positions for non-facility frames too.
   const simFrameCages = {};
-  STATE.frames.filter(f=>f.location==='facility').forEach(f => { simFrameCages[f.id]=[]; });
+  STATE.frames.forEach(f => { simFrameCages[f.id] = []; });
+  // Also add any frame IDs referenced in movements that may not be in STATE.frames
+  allPending.forEach(m => { if (m.frameId && !(m.frameId in simFrameCages)) simFrameCages[m.frameId] = []; });
   cageLocSim.forEach((loc, cid) => {
     if (loc.location==='frame' && loc.frameId && simFrameCages[loc.frameId]!==undefined)
       simFrameCages[loc.frameId].push(cid);
@@ -6969,8 +6976,13 @@ function renderMovementsMap(dayCtx) {
   ).join('');
 
   // ── Frame cards HTML ──
+  // In day view (preview), also include any non-facility frames referenced in movements
+  // (e.g. returning frames assigned as boat frames by the boat planner).
   const facilityFrames = STATE.frames.filter(f=>f.location==='facility');
-  const sortedFrames = [...facilityFrames].sort((a,b)=>{
+  const relevantFrames = isDayView
+    ? STATE.frames.filter(f => f.location === 'facility' || activeFrames.has(f.id))
+    : facilityFrames;
+  const sortedFrames = [...relevantFrames].sort((a,b)=>{
     return (activeFrames.has(b.id)?1:0)-(activeFrames.has(a.id)?1:0);
   });
 
