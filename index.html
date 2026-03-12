@@ -573,6 +573,114 @@ tr.dragging { opacity: 0.4; }
   .stat-card { min-width: 90px; padding: 10px; }
 }
 
+/* ── Mobile (phones) ── */
+@media (max-width: 600px) {
+
+  /* Hide desktop sidebar entirely — replaced by bottom nav */
+  .sidebar { display: none !important; }
+
+  /* Header: compact single row */
+  .header {
+    padding: 0 12px;
+    height: 50px;
+    gap: 8px;
+  }
+  .header-sub { display: none; }
+  .header-title { font-size: 15px; }
+  .header-logo { width: 28px; height: 28px; font-size: 12px; }
+  #hdr-time { font-size: 13px !important; }
+  #hdr-date { display: none; }
+  .header-search-btn .search-kbd { display: none; }
+  .header-search-btn span:last-child { display: none; }
+  .header-search-btn { padding: 6px 10px; font-size: 12px; }
+
+  /* Main content: full width, padding for bottom nav */
+  .main {
+    padding: 14px 12px 80px 12px; /* bottom pad clears the nav bar */
+    max-height: calc(100vh - 50px);
+  }
+
+  /* Layout: no sidebar column */
+  .layout { display: block; }
+
+  /* Bottom navigation bar */
+  #mobile-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 62px;
+    background: #1a2235;
+    border-top: 1px solid #2d3a50;
+    z-index: 1000;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  #mobile-nav::-webkit-scrollbar { display: none; }
+  .mob-nav-btn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; flex: 0 0 auto; min-width: 60px; padding: 6px 8px;
+    border: none; background: transparent; color: #8899aa;
+    font: 500 9px 'Outfit', sans-serif; cursor: pointer;
+    transition: color 0.12s; -webkit-tap-highlight-color: transparent;
+  }
+  .mob-nav-btn .mob-icon { font-size: 18px; line-height: 1; }
+  .mob-nav-btn.active { color: #e8a830; }
+  .mob-nav-btn.active .mob-icon { filter: drop-shadow(0 0 4px rgba(232,168,48,0.5)); }
+
+  /* Cards: reduce padding */
+  .card { padding: 12px; margin-bottom: 10px; }
+
+  /* Section titles */
+  .section-title { font-size: 17px; margin-bottom: 12px; }
+
+  /* Stat row: 2 per row */
+  .stat-card { min-width: calc(50% - 5px); padding: 12px 8px; }
+  .stat-val { font-size: 22px; }
+
+  /* Forms: always single column on phone */
+  .form-grid-3, .form-grid-2 { grid-template-columns: 1fr; }
+
+  /* Buttons: easier to tap */
+  .btn { padding: 10px 14px; font-size: 13px; min-height: 40px; }
+  .btn-sm { padding: 8px 12px; font-size: 12px; min-height: 36px; }
+  .btn-xs { padding: 6px 10px; font-size: 11px; min-height: 32px; }
+
+  /* Inputs: larger touch targets */
+  input, select, textarea { padding: 10px 12px; font-size: 15px !important; }
+
+  /* Tables: horizontal scroll */
+  .card table { font-size: 12px; }
+  td, th { padding: 8px 8px; }
+
+  /* Planner layout: stack */
+  .planner-layout { grid-template-columns: 1fr; }
+  .planner-sidebar { max-height: none; }
+
+  /* Report summary grid: 2 cols */
+  .report-summary-grid { grid-template-columns: 1fr 1fr; }
+
+  /* Week grid: 2 cols on phone */
+  .week-grid { grid-template-columns: repeat(2, 1fr) !important; }
+
+  /* RMD site cards: full width */
+  .rmd-site-card { min-width: 100% !important; }
+
+  /* Flex-between: allow wrap */
+  .flex-between { flex-wrap: wrap; gap: 8px; }
+
+  /* Filter bar: scroll horizontally */
+  .filter-bar { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+  .filter-btn { flex-shrink: 0; }
+
+  /* PIN box: full width friendly */
+  .pin-box { width: calc(100vw - 32px); padding: 32px 20px; }
+  #pin-input { font-size: 24px !important; }
+}
+
+/* Show mobile nav only on small screens */
+#mobile-nav { display: none; }
+
 /* ── PIN Overlay ── */
 #pin-overlay {
   position: fixed; inset: 0; z-index: 9999;
@@ -619,6 +727,11 @@ tr.dragging { opacity: 0.4; }
   letter-spacing: 0.04em; margin-left: 12px;
 }
 #app-wrapper { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+@media (max-width: 600px) {
+  #app-wrapper { position: relative; }
+  /* Log out button: hide text on small screens */
+  .logout-text { display: none; }
+}
 </style>
 <script>
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1152,12 +1265,27 @@ function _applyZoomTransform(tab) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // RENDER ENGINE
 // ═══════════════════════════════════════════════════════════════════════════════
+function renderMobileNav() {
+  const nav = document.getElementById('mobile-nav');
+  if (!nav) return;
+  // Only show on small screens
+  const isMobile = window.innerWidth <= 600;
+  nav.style.display = isMobile ? 'flex' : 'none';
+  nav.innerHTML = TABS.map(t => `
+    <button class="mob-nav-btn ${activeTab===t.id?'active':''}" onclick="switchTab('${t.id}')">
+      <span class="mob-icon">${t.icon}</span>
+      <span>${t.label.replace(' Planner','').replace(' Storage','')}</span>
+    </button>
+  `).join('');
+}
+
 function renderSidebar() {
   document.getElementById('sidebar').innerHTML = TABS.map(t=>`
     <button class="sidebar-btn ${activeTab===t.id?'active':''}" onclick="switchTab('${t.id}')">
       <span class="sidebar-icon">${t.icon}</span><span>${t.label}</span>
     </button>
   `).join('');
+  renderMobileNav();
 }
 
 function switchTab(id) {
@@ -1168,6 +1296,9 @@ function switchTab(id) {
   activeTab=id;
   try { sessionStorage.setItem('ct_activeTab', id); } catch(e) {}
   renderSidebar(); renderMain();
+  // Scroll main content to top on tab switch (important on mobile)
+  const main = document.getElementById('main-content');
+  if (main) main.scrollTop = 0;
 }
 
 function renderMain() {
@@ -8849,6 +8980,10 @@ function hidePinScreen() {
     badge.textContent = isReadOnly() ? '👁 READ ONLY' : '✏ READ & WRITE';
     badge.style.background = isReadOnly() ? '#2563b0' : '#1a8a4a';
   }
+  // Initialise mobile nav visibility
+  renderMobileNav();
+  // Keep mobile nav in sync if window is resized (e.g. rotation)
+  window.addEventListener('resize', () => renderMobileNav(), { passive: true });
 }
 
 async function submitPin() {
@@ -9032,7 +9167,7 @@ document.addEventListener("DOMContentLoaded", async function() {
     <div id="hdr-date" style="font:500 10px var(--font-mono);color:#8899aa;letter-spacing:0.06em"></div>
   </div>
   <button onclick="logout()" title="Log out and switch PIN" style="border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#aabbcc;border-radius:6px;padding:6px 12px;font:600 11px var(--font-display);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.12s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,0.14)';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,0.07)';this.style.color='#aabbcc'">
-    🔓 Log Out
+    🔓 <span class="logout-text">Log Out</span>
   </button>
 </header>
 
@@ -9075,5 +9210,7 @@ document.addEventListener("DOMContentLoaded", async function() {
   </main>
 <input type="file" id="excel-import" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleExcelImport(this)">
 
+<!-- mobile bottom nav -->
+<nav id="mobile-nav"></nav>
 
 </body></html>
