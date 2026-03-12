@@ -841,6 +841,8 @@ async function loadState() {
         frameSpare:     PRELOAD_STATE.settings?.frameSpare     !== undefined ? parseFloat(PRELOAD_STATE.settings.frameSpare)     : FRAME_SPARE,
         frameTierSmall: PRELOAD_STATE.settings?.frameTierSmall !== undefined ? parseFloat(PRELOAD_STATE.settings.frameTierSmall) : FRAME_TIER_SMALL,
         frameTierMed:   PRELOAD_STATE.settings?.frameTierMed   !== undefined ? parseFloat(PRELOAD_STATE.settings.frameTierMed)   : FRAME_TIER_MED,
+        nextShipTripId:   PRELOAD_STATE.settings?.nextShipTripId   || null,
+        secondShipTripId: PRELOAD_STATE.settings?.secondShipTripId || null,
       },
   };
 
@@ -873,6 +875,8 @@ async function loadState() {
         frameSpare:     data.settings?.frameSpare     !== undefined ? parseFloat(data.settings.frameSpare)     : FRAME_SPARE,
         frameTierSmall: data.settings?.frameTierSmall !== undefined ? parseFloat(data.settings.frameTierSmall) : FRAME_TIER_SMALL,
         frameTierMed:   data.settings?.frameTierMed   !== undefined ? parseFloat(data.settings.frameTierMed)   : FRAME_TIER_MED,
+        nextShipTripId:   data.settings?.nextShipTripId   || null,
+        secondShipTripId: data.settings?.secondShipTripId || null,
       }
     };
     console.log('[CageTracker] State synced from API:', STATE.cages.length, 'cages');
@@ -1181,6 +1185,23 @@ function render() { renderSidebar(); renderMain(); }
 // ═══════════════════════════════════════════════════════════════════════════════
 // ── Shipment shading helpers ─────────────────────────────────────────────────
 function getShipmentDays() {
+  // If trips are manually pinned, use their departDate/loadDate
+  const s = STATE.settings || {};
+  if (s.nextShipTripId || s.secondShipTripId) {
+    const next   = s.nextShipTripId   ? getBoatTrip(s.nextShipTripId)   : null;
+    const second = s.secondShipTripId ? getBoatTrip(s.secondShipTripId) : null;
+    const nextDay   = next   ? (next.departDate   || next.loadDate   || null) : null;
+    const secondDay = second ? (second.departDate || second.loadDate || null) : null;
+    // Fall back to auto for any slot that has no pinned trip
+    const autoDays = [...new Set(
+      STATE.cages
+        .filter(c => c.location !== 'shipped' && c.proposedShipDay)
+        .map(c => c.proposedShipDay)
+    )].sort();
+    const d0 = nextDay   || autoDays[0]  || null;
+    const d1 = secondDay || (d0 ? autoDays.find(d => d !== d0) : null) || null;
+    return [d0, d1].filter(Boolean);
+  }
   return [...new Set(
     STATE.cages
       .filter(c => c.location !== 'shipped' && c.proposedShipDay)
@@ -1706,8 +1727,47 @@ function renderDashboard() {
 
   const rmdLegendHTML = shipmentLegendHTML(_dashShipDays);
 
+  // ── Shipment colour assignment widget ──
+  const _allTrips = [...(STATE.boatTrips||[])].sort((a,b)=>(a.departDate||a.loadDate||'').localeCompare(b.departDate||b.loadDate||''));
+  const _nextId   = (STATE.settings||{}).nextShipTripId   || '';
+  const _secondId = (STATE.settings||{}).secondShipTripId || '';
+  function _tripOpts(selectedId) {
+    const autoOpt = `<option value="">— Auto (earliest date) —</option>`;
+    return autoOpt + _allTrips.map(t => {
+      const dateStr = t.departDate ? fmt(t.departDate) : t.loadDate ? fmt(t.loadDate) : '(no date)';
+      const label = esc(t.label || tripLabel(t)) + ' · ' + dateStr;
+      return `<option value="${t.id}" ${t.id===selectedId?'selected':''}>${label}</option>`;
+    }).join('');
+  }
+  const shipmentAssignHTML = `
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+        <div class="card-title" style="margin:0">🎨 Shipment Colour Assignment</div>
+        <span style="font-size:11px;color:var(--text-muted)">Controls which trips are highlighted purple/lilac across RMD, frames, and movements views</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#3b1d6e;flex-shrink:0"></span>
+            Next Shipment
+          </label>
+          <select id="dash-next-trip" style="font-size:12px">${_tripOpts(_nextId)}</select>
+        </div>
+        <div>
+          <label style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:#c8b8e8;flex-shrink:0"></span>
+            2nd Shipment
+          </label>
+          <select id="dash-second-trip" style="font-size:12px">${_tripOpts(_secondId)}</select>
+        </div>
+      </div>
+      <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
+        <button class="btn btn-primary btn-sm" onclick="applyShipmentAssignment()">Apply</button>
+        <button class="btn btn-secondary btn-sm" onclick="clearShipmentAssignment()">Reset to Auto</button>
+        ${_dashShipDays.length ? `<span style="font-size:11px;color:var(--text-muted)">Currently: <span style="background:#3b1d6e;color:#e0ccff;font:700 10px var(--font-mono);padding:1px 8px;border-radius:8px">${fmt(_dashShipDays[0])}</span>${_dashShipDays[1]?` <span style="background:#c8b8e8;color:#4a2a7a;font:700 10px var(--font-mono);padding:1px 8px;border-radius:8px">${fmt(_dashShipDays[1])}</span>`:''}</span>` : ''}
+      </div>
+    </div>`;
 
-  let rmdMiniHTML = RMD_LAYOUT.map(row=>{
     let items = row.items.map(item=>{
       const r = getRMDByNum(item);
       if (!r) return '';
@@ -1756,6 +1816,7 @@ function renderDashboard() {
         ${renderRMDHeatmap()}
         ${renderNextDueDelivery()}
         ${renderDashboardFrames()}
+        ${shipmentAssignHTML}
         <div style="display:grid;grid-template-columns:1fr;gap:14px">
           <div class="card" style="overflow-x:auto">
             <div class="card-title">RMD Storage — Live View <span style="font-size:11px;font-weight:400;color:var(--text-muted)">(click any cage to toggle shipping preference ★)</span></div>
@@ -8364,6 +8425,23 @@ function renderSettings() {
   `;
 }
 
+async function applyShipmentAssignment() {
+  const nextEl   = document.getElementById('dash-next-trip');
+  const secondEl = document.getElementById('dash-second-trip');
+  if (!nextEl || !secondEl) return;
+  STATE.settings.nextShipTripId   = nextEl.value   || null;
+  STATE.settings.secondShipTripId = secondEl.value || null;
+  render();
+  await saveSettings(STATE.settings);
+}
+
+async function clearShipmentAssignment() {
+  STATE.settings.nextShipTripId   = null;
+  STATE.settings.secondShipTripId = null;
+  render();
+  await saveSettings(STATE.settings);
+}
+
 async function applySettings() {
   const get = id => {
     const el = document.getElementById('setting-' + id);
@@ -8379,6 +8457,8 @@ async function applySettings() {
     frameSpare:     Math.max(0, get('frameSpare')     !== null ? get('frameSpare')     : 0.2),
     frameTierSmall: Math.max(0.1, get('frameTierSmall') || 1.1),
     frameTierMed:   Math.max(0.1, get('frameTierMed')   || 1.5),
+    nextShipTripId:   STATE.settings.nextShipTripId   || null,
+    secondShipTripId: STATE.settings.secondShipTripId || null,
   };
   if (newSettings.heightShortMax >= newSettings.heightMedMax) {
     showError('Short/Medium threshold must be less than Medium/Tall threshold.');
