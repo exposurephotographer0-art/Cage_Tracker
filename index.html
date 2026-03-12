@@ -33,6 +33,19 @@
   --radius-lg: 12px;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
+
+@media print {
+  body { background: #fff !important; font-family: Arial, sans-serif; }
+  .header, .sidebar, #pin-overlay, .al-controls, .al-print-btn { display: none !important; }
+  .main { padding: 0 !important; max-height: none !important; overflow: visible !important; }
+  .layout { display: block !important; }
+  .tab-content { display: block !important; }
+  .card { box-shadow: none !important; border: 1px solid #ccc !important; break-inside: avoid; }
+  .al-stat-row { display: flex !important; }
+  textarea { border: 1px solid #ccc !important; background: #fff !important; resize: none !important; }
+  .al-print-header { display: block !important; }
+  tr { break-inside: avoid; }
+}
 body {
   font-family: var(--font-display);
   background: var(--bg-deep);
@@ -5033,18 +5046,104 @@ async function saveActionedLogEntry(date, field, value) {
   try { await api('/api/actioned-log', 'PUT', STATE.actionedLog); } catch(e) {}
 }
 
-function renderActionedLog() {
-  // Gather all dates that have completed movements
+// ── Actioned Log state ──
+let alDateFrom = '';
+let alDateTo = '';
+
+function alApplyFilter() {
+  alDateFrom = document.getElementById('al-from')?.value || '';
+  alDateTo   = document.getElementById('al-to')?.value   || '';
+  const el = document.getElementById('al-table-wrap');
+  if (el) el.innerHTML = buildActionedLogTable();
+  updateAlStats();
+}
+
+function alClearFilter() {
+  alDateFrom = ''; alDateTo = '';
+  const f = document.getElementById('al-from'); if (f) f.value = '';
+  const t = document.getElementById('al-to');   if (t) t.value = '';
+  const el = document.getElementById('al-table-wrap');
+  if (el) el.innerHTML = buildActionedLogTable();
+  updateAlStats();
+}
+
+function updateAlStats() {
+  const completed = STATE.plannedMovements.filter(m => m.completed);
+  const RMD_TYPES = new Set(['rmd-to-frame','frame-to-rmd','facility-to-rmd']);
+  const dates = getAlDates();
+  const filteredMoves = completed.filter(m => dates.includes((m.completedAt||m.date||'').slice(0,10)));
+  const filteredRmd = filteredMoves.filter(m => RMD_TYPES.has(m.typeKey)).length;
+  const el = document.getElementById('al-stats');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="card" style="padding:10px 16px;text-align:center;min-width:90px">
+      <div style="font:700 20px var(--font-mono);color:var(--accent)">${dates.length}</div>
+      <div style="font-size:10px;color:var(--text-muted)">Days shown</div>
+    </div>
+    <div class="card" style="padding:10px 16px;text-align:center;min-width:90px">
+      <div style="font:700 20px var(--font-mono);color:var(--accent)">${filteredMoves.length}</div>
+      <div style="font-size:10px;color:var(--text-muted)">Movements</div>
+    </div>
+    <div class="card" style="padding:10px 16px;text-align:center;min-width:90px">
+      <div style="font:700 20px var(--font-mono);color:#0e7490">${filteredRmd}</div>
+      <div style="font-size:10px;color:var(--text-muted)">RMD moves</div>
+    </div>
+    <div class="card" style="padding:10px 16px;text-align:center;min-width:90px">
+      <div style="font:700 20px var(--font-mono);color:#0e7490">${filteredRmd*2}h</div>
+      <div style="font-size:10px;color:var(--text-muted)">Total hours</div>
+    </div>`;
+}
+
+function getAlDates() {
   const completed = STATE.plannedMovements.filter(m => m.completed);
   const dateSet = new Set(completed.map(m => (m.completedAt||m.date||'').slice(0,10)).filter(Boolean));
-  // Also include any dates that already have log entries (e.g. downtime days with no movements)
   Object.keys(STATE.actionedLog || {}).forEach(d => dateSet.add(d));
-  const dates = [...dateSet].sort((a,b) => b.localeCompare(a)); // most recent first
+  let dates = [...dateSet].sort((a,b) => b.localeCompare(a));
+  if (alDateFrom) dates = dates.filter(d => d >= alDateFrom);
+  if (alDateTo)   dates = dates.filter(d => d <= alDateTo);
+  return dates;
+}
 
-  if (dates.length === 0) {
-    return `<div class="card"><h2 class="card-title">Actioned Log</h2><div class="empty-msg">No completed movements yet. Complete movements from the Planner tab to populate this log.</div></div>`;
-  }
+function printActionedLog() {
+  const fromLabel = alDateFrom ? fmt(alDateFrom) : null;
+  const toLabel   = alDateTo   ? fmt(alDateTo)   : null;
+  const rangeText = fromLabel && toLabel ? `${fromLabel} – ${toLabel}`
+                  : fromLabel ? `From ${fromLabel}`
+                  : toLabel   ? `Up to ${toLabel}`
+                  : 'All dates';
 
+  const tableHTML = document.getElementById('al-table-wrap')?.innerHTML || '';
+  const statsHTML = document.getElementById('al-stats')?.innerHTML || '';
+
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head><title>Actioned Log — ${rangeText}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #1a1f2e; padding: 24px; }
+    h1 { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
+    .sub { font-size: 11px; color: #666; margin-bottom: 16px; }
+    .stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .stat-box { border: 1px solid #ddd; border-radius: 6px; padding: 8px 14px; text-align: center; min-width: 80px; }
+    .stat-val { font-size: 18px; font-weight: 700; font-family: monospace; color: #c08520; }
+    .stat-lbl { font-size: 9px; color: #888; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 7px 10px; font-size: 9px; text-transform: uppercase; letter-spacing: .06em; color: #666; border-bottom: 2px solid #ccc; background: #f5f5f5; }
+    td { padding: 8px 10px; border-bottom: 1px solid #eee; vertical-align: top; font-size: 11px; }
+    textarea { border: 1px solid #ccc; border-radius: 4px; padding: 4px 6px; font-size: 11px; width: 100%; min-height: 44px; resize: none; font-family: Arial, sans-serif; }
+    @media print { button { display: none; } }
+  </style></head><body>
+  <h1>✓ Actioned Log</h1>
+  <div class="sub">Cage Tracker — Printed ${new Date().toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'})} &nbsp;|&nbsp; ${rangeText}</div>
+  <div class="stats">${statsHTML}</div>
+  ${tableHTML}
+  <div style="margin-top:16px;text-align:right">
+    <button onclick="window.print()" style="padding:8px 20px;background:#c08520;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">🖨 Print / Save as PDF</button>
+  </div>
+  </body></html>`);
+  win.document.close();
+}
+
+function buildActionedLogTable() {
+  const completed = STATE.plannedMovements.filter(m => m.completed);
   const MOVE_TYPE_LABELS = {
     'rmd-to-frame': 'RMD → Frame',
     'frame-to-rmd': 'Frame → RMD',
@@ -5063,9 +5162,12 @@ function renderActionedLog() {
     'frame-fix-shipping': '#c08520',
     'frame-return-from-client': '#0e7490',
   };
-
-  // RMD-related movement types (into or out of RMD)
   const RMD_TYPES = new Set(['rmd-to-frame','frame-to-rmd','facility-to-rmd']);
+  const dates = getAlDates();
+
+  if (dates.length === 0) {
+    return `<div style="padding:24px;color:var(--text-muted);font-style:italic;font-size:13px">No entries found for the selected date range.</div>`;
+  }
 
   const rowsHTML = dates.map(date => {
     const dayMoves = completed.filter(m => (m.completedAt||m.date||'').slice(0,10) === date);
@@ -5074,8 +5176,6 @@ function renderActionedLog() {
     const dayShiftAlloc = logEntry.dayShiftAlloc || '';
     const rmdMoveCount = dayMoves.filter(m => RMD_TYPES.has(m.typeKey)).length;
     const hoursEquiv = rmdMoveCount * 2;
-
-    // Build movement list grouped by type
     const byType = {};
     dayMoves.forEach(m => {
       const tk = m.typeKey || 'unknown';
@@ -5085,7 +5185,7 @@ function renderActionedLog() {
     const movesHTML = Object.entries(byType).map(([tk, moves]) => {
       const label = MOVE_TYPE_LABELS[tk] || tk;
       const color = MOVE_TYPE_COLORS[tk] || 'var(--text-secondary)';
-      const items = moves.map(m => {
+      return moves.map(m => {
         const cage = getCage(m.cageId);
         const cageName = cage ? esc(cage.name) : '?';
         const desc = esc(m.description || label);
@@ -5096,7 +5196,6 @@ function renderActionedLog() {
           <span style="font-size:10px;color:var(--text-muted)">— ${desc}</span>${note}
         </div>`;
       }).join('');
-      return items;
     }).join('');
 
     return `<tr style="vertical-align:top">
@@ -5106,9 +5205,7 @@ function renderActionedLog() {
         <div style="margin-top:4px;font-size:10px;color:var(--text-muted)">${dayMoves.length} movement${dayMoves.length!==1?'s':''} total</div>
       </td>
       <td style="padding:10px 12px;min-width:180px">
-        <textarea
-          id="al-dt-${date}"
-          placeholder="Enter downtime notes…"
+        <textarea id="al-dt-${date}" placeholder="Enter downtime notes…"
           onchange="saveActionedLogEntry('${date}','downtimeNotes',this.value)"
           style="width:100%;min-height:52px;font-size:11px;resize:vertical;background:var(--bg-input);border:1px solid var(--border);border-radius:5px;padding:5px 7px;color:var(--text-primary);font-family:var(--font-body)"
         >${esc(downtimeNotes)}</textarea>
@@ -5122,9 +5219,7 @@ function renderActionedLog() {
         <div style="font-size:9px;color:var(--text-muted);margin-top:1px">@ 2h/move</div>
       </td>
       <td style="padding:10px 12px;min-width:180px">
-        <textarea
-          id="al-ds-${date}"
-          placeholder="Day shift allocation notes…"
+        <textarea id="al-ds-${date}" placeholder="Day shift allocation notes…"
           onchange="saveActionedLogEntry('${date}','dayShiftAlloc',this.value)"
           style="width:100%;min-height:52px;font-size:11px;resize:vertical;background:var(--bg-input);border:1px solid var(--border);border-radius:5px;padding:5px 7px;color:var(--text-primary);font-family:var(--font-body)"
         >${esc(dayShiftAlloc)}</textarea>
@@ -5132,50 +5227,68 @@ function renderActionedLog() {
     </tr>`;
   }).join('');
 
-  // Summary stats
-  const totalRmdMoves = completed.filter(m => RMD_TYPES.has(m.typeKey)).length;
-  const totalHours = totalRmdMoves * 2;
-  const totalDays = dates.length;
+  return `<table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr style="border-bottom:2px solid var(--border);background:var(--bg-deep)">
+        <th style="padding:10px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Date</th>
+        <th style="padding:10px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Movements</th>
+        <th style="padding:10px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Down Time</th>
+        <th style="padding:10px 12px;text-align:center;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Non-Normal Ops<br><span style="font-weight:400;font-size:9px">(RMD in/out)</span></th>
+        <th style="padding:10px 12px;text-align:center;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Hours<br><span style="font-weight:400;font-size:9px">(2h / move)</span></th>
+        <th style="padding:10px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Day Shift Allocation</th>
+      </tr>
+    </thead>
+    <tbody>${rowsHTML}</tbody>
+  </table>`;
+}
+
+function renderActionedLog() {
+  const completed = STATE.plannedMovements.filter(m => m.completed);
+  const allDateSet = new Set(completed.map(m => (m.completedAt||m.date||'').slice(0,10)).filter(Boolean));
+  Object.keys(STATE.actionedLog || {}).forEach(d => allDateSet.add(d));
+
+  if (allDateSet.size === 0) {
+    return `<div class="card"><h2 class="card-title">Actioned Log</h2><div class="empty-msg">No completed movements yet. Complete movements from the Planner tab to populate this log.</div></div>`;
+  }
+
+  // Determine min/max dates for the pickers
+  const allDates = [...allDateSet].sort();
+  const minDate = allDates[0];
+  const maxDate = allDates[allDates.length - 1];
 
   return `
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:10px">
       <h2 class="section-title" style="margin:0">✓ Actioned Log</h2>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <div class="card" style="padding:10px 16px;text-align:center;min-width:90px">
-          <div style="font:700 20px var(--font-mono);color:var(--accent)">${totalDays}</div>
-          <div style="font-size:10px;color:var(--text-muted)">Days logged</div>
+      <div id="al-stats" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+    </div>
+
+    <!-- Controls bar -->
+    <div class="card al-controls" style="padding:12px 16px;margin-bottom:14px">
+      <div style="display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap">
+        <div>
+          <label style="display:block;font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">From</label>
+          <input type="date" id="al-from" value="${alDateFrom}" min="${minDate}" max="${maxDate}"
+            style="width:150px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-input);color:var(--text-primary);font-size:13px">
         </div>
-        <div class="card" style="padding:10px 16px;text-align:center;min-width:90px">
-          <div style="font:700 20px var(--font-mono);color:var(--accent)">${completed.length}</div>
-          <div style="font-size:10px;color:var(--text-muted)">Total movements</div>
+        <div>
+          <label style="display:block;font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">To</label>
+          <input type="date" id="al-to" value="${alDateTo}" min="${minDate}" max="${maxDate}"
+            style="width:150px;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg-input);color:var(--text-primary);font-size:13px">
         </div>
-        <div class="card" style="padding:10px 16px;text-align:center;min-width:90px">
-          <div style="font:700 20px var(--font-mono);color:#0e7490">${totalRmdMoves}</div>
-          <div style="font-size:10px;color:var(--text-muted)">RMD moves</div>
-        </div>
-        <div class="card" style="padding:10px 16px;text-align:center;min-width:90px">
-          <div style="font:700 20px var(--font-mono);color:#0e7490">${totalHours}h</div>
-          <div style="font-size:10px;color:var(--text-muted)">Total hours</div>
-        </div>
+        <button class="btn btn-primary" onclick="alApplyFilter()" style="height:34px">Apply</button>
+        <button class="btn btn-secondary" onclick="alClearFilter()" style="height:34px">Show All</button>
+        <button class="btn al-print-btn" onclick="printActionedLog()"
+          style="height:34px;background:linear-gradient(135deg,#2563b0,#1a4a8a);color:#fff;border:none;margin-left:auto">
+          🖨 Print / Export
+        </button>
       </div>
     </div>
+
     <div class="card" style="overflow-x:auto;padding:0">
-      <table style="width:100%;border-collapse:collapse">
-        <thead>
-          <tr style="border-bottom:2px solid var(--border);background:var(--bg-deep)">
-            <th style="padding:10px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Date</th>
-            <th style="padding:10px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Movements</th>
-            <th style="padding:10px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Down Time</th>
-            <th style="padding:10px 12px;text-align:center;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Non-Normal Ops<br><span style="font-weight:400;font-size:9px">(RMD in/out)</span></th>
-            <th style="padding:10px 12px;text-align:center;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Hours<br><span style="font-weight:400;font-size:9px">(2h / move)</span></th>
-            <th style="padding:10px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap">Day Shift Allocation</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rowsHTML}
-        </tbody>
-      </table>
-    </div>`;
+      <div id="al-table-wrap">${buildActionedLogTable()}</div>
+    </div>
+
+    <script>updateAlStats();<\/script>`;
 }
 
 function renderAuditLog() {
