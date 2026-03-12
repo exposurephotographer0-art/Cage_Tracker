@@ -6721,6 +6721,133 @@ let mvFilter = 'all';
 let mvDayView = false;   // false = "all movements" map, true = day-by-day view
 let mvDayDate = null;    // ISO date string of the currently viewed day (null = auto-select today/first day)
 
+// ── Click-to-Plan state ──
+// mvPick = null (idle) | { cageId, cageName, fromLocation, fromDetail }
+let mvPick = null;
+
+// ── Click-to-Plan Functions ──
+// Step 1: user clicks a cage icon → set mvPick and re-render to show destination targets
+function mvPickCage(cageId) {
+  const cage = getCage(cageId);
+  if (!cage) return;
+  // If already picking this cage, cancel
+  if (mvPick && mvPick.cageId === cageId) { mvPick = null; render(); return; }
+  mvPick = { cageId, cageName: cage.name, fromLocation: cage.location, fromDetail: cage.locationDetail || '' };
+  render();
+}
+
+// Step 2: user clicks a destination → show date modal and add movement
+function mvPickDestination(destType, destId, destLabel) {
+  if (!mvPick) return;
+  const cage = getCage(mvPick.cageId);
+  if (!cage) { mvPick = null; render(); return; }
+
+  // Determine movement typeKey
+  let typeKey = '';
+  if (mvPick.fromLocation === 'facility' && destType === 'frame') typeKey = 'facility-to-frame';
+  else if (mvPick.fromLocation === 'facility' && destType === 'rmd') typeKey = 'facility-to-rmd';
+  else if (mvPick.fromLocation === 'rmd' && destType === 'frame') typeKey = 'rmd-to-frame';
+  else if (mvPick.fromLocation === 'frame' && destType === 'rmd') typeKey = 'frame-to-rmd';
+  else if (mvPick.fromLocation === 'frame' && destType === 'frame') typeKey = 'frame-to-frame';
+  else {
+    alert(`Cannot plan movement from ${mvPick.fromLocation} to ${destType}.`);
+    return;
+  }
+
+  // Build description
+  const typeLabel = MOVE_TYPES.find(t => t.value === typeKey)?.label || typeKey;
+  const frameWidthTag = (f) => f && f.width ? ` [${f.width}m]` : '';
+  let parts = [];
+  if (typeKey === 'frame-to-frame') {
+    const srcFrame = STATE.frames.find(f => f.cages.includes(mvPick.cageId));
+    parts = [cage.name, srcFrame ? (srcFrame.name + frameWidthTag(srcFrame)) : '', destLabel];
+  } else {
+    parts = [cage.name, destLabel];
+  }
+  const desc = parts.filter(Boolean).join(' → ');
+
+  // Show date picker modal
+  const overlay = document.createElement('div');
+  overlay.id = 'mv-pick-date-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:3000;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:24px 28px;width:360px;box-shadow:0 8px 40px rgba(0,0,0,0.25)">
+      <div style="font:700 16px var(--font-display);color:var(--text-primary);margin-bottom:4px">Plan Movement</div>
+      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">${esc(desc)}</div>
+      <div style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Movement Date</div>
+      <input type="date" id="mv-pick-date-input" value="${todayStr()}" style="margin-bottom:14px;font-size:14px">
+      <div style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Shift</div>
+      <select id="mv-pick-shift" style="margin-bottom:18px;font-size:13px"><option value="day">Day Shift</option><option value="night">Night Shift</option></select>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" style="flex:1" onclick="mvConfirmPick('${typeKey}','${destType}','${destId}')">✓ Add to Plan</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('mv-pick-date-overlay').remove();mvPick=null;render()">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+async function mvConfirmPick(typeKey, destType, destId) {
+  if (!mvPick) return;
+  const cage = getCage(mvPick.cageId);
+  if (!cage) return;
+
+  const dateInput = document.getElementById('mv-pick-date-input');
+  const shiftInput = document.getElementById('mv-pick-shift');
+  const date = dateInput ? dateInput.value : todayStr();
+  const shift = shiftInput ? shiftInput.value : 'day';
+  if (!date) { alert('Please select a date.'); return; }
+
+  const overlay = document.getElementById('mv-pick-date-overlay');
+  if (overlay) overlay.remove();
+
+  let frameId = '', rmdSlot = '';
+  let resolvedFrameId = '';
+
+  if (destType === 'frame') {
+    frameId = destId;
+    resolvedFrameId = destId;
+  } else if (destType === 'rmd') {
+    rmdSlot = destId; // e.g. "3A"
+  }
+
+  const frame = getFrame(resolvedFrameId);
+  const frameWidthTag = (f) => f && f.width ? ` [${f.width}m]` : '';
+
+  let parts = [];
+  if (typeKey === 'frame-to-frame') {
+    const srcFrame = STATE.frames.find(f => f.cages.includes(mvPick.cageId));
+    parts = [cage.name, srcFrame ? (srcFrame.name + frameWidthTag(srcFrame)) : '', frame ? (frame.name + frameWidthTag(frame)) : destId];
+  } else {
+    parts = [cage.name];
+    if (frame) parts.push(frame.name + frameWidthTag(frame));
+    if (rmdSlot) parts.push('RMD-' + rmdSlot);
+  }
+  const desc = parts.filter(Boolean).join(' → ');
+  const typeLabel = MOVE_TYPES.find(t => t.value === typeKey)?.label || typeKey;
+
+  const move = {
+    id: uid(), type: typeLabel, typeKey, cageId: mvPick.cageId,
+    frameId: resolvedFrameId, rmdSlot, date, shift,
+    notes: '', completed: false, description: desc,
+    createdAt: new Date().toISOString(),
+    sortOrder: STATE.plannedMovements.length
+  };
+  if (typeKey === 'frame-to-frame') {
+    const srcFrame = STATE.frames.find(f => f.cages.includes(mvPick.cageId));
+    if (srcFrame) move.srcFrameId = srcFrame.id;
+  }
+  // For frame-to-rmd, auto-resolve frameId from cage's current location
+  if (typeKey === 'frame-to-rmd' && !move.frameId) {
+    const currentFrame = STATE.frames.find(f => f.cages.includes(mvPick.cageId));
+    if (currentFrame) move.frameId = currentFrame.id;
+  }
+
+  STATE.plannedMovements.push(move);
+  mvPick = null;
+  render();
+  await addMovementToAPI(move);
+}
+
 // ── Movement Edit Modal ──
 function openMvCageMovements(cageId) {
   const cage = getCage(cageId);
@@ -7059,7 +7186,9 @@ function renderMovementsMap(dayCtx) {
     const slotLabels = {cage1:'Inside', cage2:'Outside'};
     let slotsHTML = '';
     sides.forEach(side => {
-      slotsHTML += `<div style="font:700 8px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin:5px 0 3px">Side ${side}</div>`;
+      slotsHTML += `<div style="font:700 8px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin:5px 0 3px">${
+        mvPick ? `<button onclick="mvPickDestination('rmd','${rmdNum}${side}','RMD-${rmdNum} Side ${side}')" style="font:700 9px var(--font-mono);background:#1a2235;color:#e8a830;border:1.5px solid #e8a830;border-radius:5px;padding:2px 8px;cursor:pointer;text-transform:uppercase;letter-spacing:.05em">▶ RMD-${rmdNum} Side ${side}</button>` : `Side ${side}`
+      }</div>`;
       let sideHasContent = false;
       slotKeys.forEach(sk => {
         const cid = rmdData[side][sk];
@@ -7082,7 +7211,9 @@ function renderMovementsMap(dayCtx) {
           const arrow = mvOut ? '<span style="color:#c08520;font-weight:800;margin-right:4px">→</span>'
                       : mvIn  ? '<span style="color:#27a060;font-weight:800;margin-right:4px">←</span>' : '';
           const hasMoves = STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length > 0;
-          const cageNameHTML = `<span style="font:600 10px var(--font-mono);${nameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${cid}')" title="Click to view/edit movements for cage ${esc(cage.name)}">${hDot(cage.height)}${esc(cage.name)}${hasMoves?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length}</span>`:''}</span>`;
+          const isPickedCage = mvPick && mvPick.cageId === cid;
+          const pickBtnHTML = `<button onclick="mvPickCage('${cid}')" title="Click to plan movement for cage ${esc(cage.name)}" style="border:none;background:${isPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${isPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${isPickedCage?'✓':'🏷'}</button>`;
+          const cageNameHTML = `<span style="font:600 10px var(--font-mono);${nameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${cid}')" title="Click to view/edit movements for cage ${esc(cage.name)}">${hDot(cage.height)}${esc(cage.name)}${hasMoves?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length}</span>`:''}</span>${pickBtnHTML}`;
           slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;background:var(--bg-input);margin-bottom:2px;${bg}">
             <div style="display:flex;align-items:center;">${arrow}${cageNameHTML}</div>
             <div style="font-size:9px;padding-left:${arrow?'14':'0'}px;${detailStyle||'color:var(--text-muted);'}">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</div>
@@ -7167,8 +7298,10 @@ function renderMovementsMap(dayCtx) {
       const fNameStyle = (_fShade && out) ? 'color:#7a5000;' : _fShade === 'next' ? 'color:#e0ccff;' : _fShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference ? 'color:#7a5c00;' : '';
       const fDetailStyle = (_fShade && out) ? 'color:#a07000;' : _fShade === 'next' ? 'color:#c0a8ee;' : _fShade === 'second' ? 'color:#6a4a9a;' : 'color:var(--text-muted);';
       const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
+      const fIsPickedCage = mvPick && mvPick.cageId === c.id;
+      const fPickBtn = `<button onclick="event.stopPropagation();mvPickCage('${c.id}')" title="Plan movement for cage ${esc(c.name)}" style="border:none;background:${fIsPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${fIsPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${fIsPickedCage?'✓':'🏷'}</button>`;
       html += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${fBg}">
-        <div style="display:flex;align-items:center;gap:2px;">${out?'<span style="color:#c08520;font-weight:800">→</span>':''}<span style="font:600 10px var(--font-mono);${fNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
+        <div style="display:flex;align-items:center;gap:2px;">${out?'<span style="color:#c08520;font-weight:800">→</span>':''}<span style="font:600 10px var(--font-mono);${fNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span>${fPickBtn}</div>
         <div style="font-size:9px;padding-left:${out?'13':'0'}px;${fDetailStyle}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
       </div>`;
     });
@@ -7191,11 +7324,14 @@ function renderMovementsMap(dayCtx) {
       </div>`;
     });
     if(!html) html='<div style="font-size:10px;color:var(--text-muted);font-style:italic">empty</div>';
-    const border = isActive ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);' : 'border:1px solid var(--border);';
-    return `<div id="mvf-${f.id}" style="background:var(--bg-card);${border}border-radius:8px;padding:9px 10px;min-width:100px;">
-      <div style="font:700 12px var(--font-mono);color:${isActive?'var(--accent)':'var(--text-primary)'}">${esc(f.name)}</div>
+    const border = isActive ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);' : mvPick ? 'border:2px dashed #e8a830;cursor:pointer;' : 'border:1px solid var(--border);';
+    const frameClickHandler = mvPick ? `onclick="mvPickDestination('frame','${f.id}','${esc(f.name)} [${f.width}m]')"` : '';
+    const framePickHint = mvPick ? `<div style="font-size:9px;color:#e8a830;font-weight:600;margin-top:4px;text-align:center">▶ Move here</div>` : '';
+    return `<div id="mvf-${f.id}" style="background:${mvPick?'#1e2a1e':'var(--bg-card)'};${border}border-radius:8px;padding:9px 10px;min-width:100px;transition:all 0.1s" ${frameClickHandler} title="${mvPick?`Move cage ${esc(mvPick.cageName)} to ${esc(f.name)}`:''}">
+      <div style="font:700 12px var(--font-mono);color:${isActive?'var(--accent)':mvPick?'#b0d890':'var(--text-primary)'}">${esc(f.name)}</div>
       <div style="font-size:9px;color:var(--text-muted);margin-bottom:4px">${f.width}m${f.hasWaler?' 🔩':''}</div>
       ${html}
+      ${framePickHint}
     </div>`;
   }
 
@@ -7382,6 +7518,21 @@ function renderMovementsMap(dayCtx) {
       <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">${filtered.length} movement${filtered.length!==1?'s':''}</span>
     </div>
 
+    <!-- ── Click-to-Plan Banner ── -->
+    ${mvPick ? `
+    <div style="display:flex;align-items:center;gap:10px;background:#1a2235;border:2px solid var(--accent);border-radius:8px;padding:10px 16px;margin-bottom:14px;flex-wrap:wrap">
+      <span style="font-size:18px">📍</span>
+      <div style="flex:1;min-width:0">
+        <div style="font:700 13px var(--font-display);color:#e8a830">Planning mode — cage <span style="font-family:var(--font-mono)">${esc(mvPick.cageName)}</span> selected</div>
+        <div style="font:400 11px var(--font-display);color:#8899aa;margin-top:2px">Now click a <strong style="color:#e8d090">frame card</strong> or <strong style="color:#e8d090">RMD slot side (A/B)</strong> below as the destination</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="mvPick=null;render()" style="flex-shrink:0">✕ Cancel</button>
+    </div>` : `
+    <div style="display:flex;align-items:center;gap:8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:8px 14px;margin-bottom:14px">
+      <span style="font-size:14px">☞</span>
+      <span style="font:500 12px var(--font-display);color:var(--text-muted)"><strong style="color:var(--text-secondary)">Click-to-Plan:</strong> Click the 🏷 icon next to any cage name to start planning its next movement</span>
+    </div>`}
+
     <div id="zoom-outer-movements" class="zoom-outer">
       <div id="zoom-wrap-movements" class="zoom-wrap">
         <div style="display:grid;grid-template-columns:1fr 260px;gap:16px;align-items:start">
@@ -7414,6 +7565,7 @@ function renderMovementsMap(dayCtx) {
                           ${hasPlan ? '<span style="color:#2563b0;font-weight:800;flex-shrink:0">→</span>' : '<span style="width:9px;flex-shrink:0"></span>'}
                           ${hDot(c.height)}<span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
                           <span style="color:${datCol};font-size:9px;margin-left:auto;white-space:nowrap">${isOverdue ? '⚠' : ''}${fmt(c.departureDate)}</span>
+                          <button onclick="mvPickCage('${c.id}')" title="Plan movement for cage ${esc(c.name)}" style="border:none;background:${mvPick&&mvPick.cageId===c.id?'var(--accent)':'rgba(192,133,32,0.15)'};color:${mvPick&&mvPick.cageId===c.id?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;font-weight:700">${mvPick&&mvPick.cageId===c.id?'✓':'🏷'}</button>
                         </div>
                         <div style="font-size:9px;color:var(--text-muted);padding-left:12px">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
                       </div>`;
