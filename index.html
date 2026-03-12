@@ -5558,16 +5558,28 @@ async function printDailyReport() {
   // Switch Movements tab to day-by-day view for the chosen date, then capture
   let mapImgDataUrl = null;
   try {
-    const prevTab     = activeTab;
-    const prevDayView = mvDayView;
-    const prevDayDate = mvDayDate;
+    const prevTab      = activeTab;
+    const prevDayView  = mvDayView;
+    const prevDayDate  = mvDayDate;
+    const prevZoom     = tabZoom['movements'] || 1;
 
+    // Switch to movements tab, day view, reset zoom to 1 so screen px = DOM px
     mvDayView = true;
     mvDayDate = reportSingleDay;
     activeTab = 'movements';
+    tabZoom['movements'] = 1;
     render();
-    // Wait for DOM + SVG arrows to fully render
-    await new Promise(r => setTimeout(r, 700));
+
+    // Wait for DOM, zoom transform, and SVG arrows to fully settle
+    await new Promise(r => setTimeout(r, 800));
+
+    // Force zoom transform to 1 in case render() re-applied it
+    const zoomWrap = document.getElementById('zoom-wrap-movements');
+    if (zoomWrap) zoomWrap.style.transform = 'scale(1)';
+
+    // Redraw arrows at zoom=1 so coordinates are correct
+    mvRedraw();
+    await new Promise(r => setTimeout(r, 300));
 
     const mapEl = document.getElementById('mv-content');
     const svgEl = document.getElementById('mv-svg-arrows');
@@ -5575,29 +5587,29 @@ async function printDailyReport() {
     if (mapEl && typeof html2canvas !== 'undefined') {
       const SCALE = 1.5;
 
-      // Step 1: capture the HTML map (no SVG yet) via html2canvas
+      // Step 1: capture HTML map (skipping SVG — we composite it manually)
       const baseCanvas = await html2canvas(mapEl, {
         backgroundColor: '#ffffff',
         scale: SCALE,
         useCORS: true,
         logging: false,
-        ignoreElements: el => el.id === 'mv-svg-arrows', // skip SVG — we'll draw it ourselves
+        ignoreElements: el => el.id === 'mv-svg-arrows',
       });
 
-      // Step 2: serialise the SVG and draw it on top via a temporary Image
+      // Step 2: serialise the SVG and draw it on top
       if (svgEl) {
         await new Promise(resolve => {
           try {
-            // Fix SVG dimensions so it matches the map element exactly
             const mapRect = mapEl.getBoundingClientRect();
             const svgClone = svgEl.cloneNode(true);
+            svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
             svgClone.setAttribute('width',  mapRect.width);
             svgClone.setAttribute('height', mapRect.height);
-            // Inline all computed styles on child elements so they survive serialisation
+            // Inline all presentation attributes so they survive serialisation
             svgClone.querySelectorAll('*').forEach(el => {
-              const cs = window.getComputedStyle(el);
-              ['stroke','stroke-width','stroke-dasharray','fill','marker-end','opacity'].forEach(p => {
-                const v = el.getAttribute(p) || cs.getPropertyValue(p);
+              ['stroke','stroke-width','stroke-dasharray','fill','opacity',
+               'marker-end','marker-start','d','points'].forEach(p => {
+                const v = el.getAttribute(p);
                 if (v) el.setAttribute(p, v);
               });
             });
@@ -5613,14 +5625,15 @@ async function printDailyReport() {
             };
             img.onerror = () => { URL.revokeObjectURL(url); resolve(); };
             img.src = url;
-          } catch(e) { resolve(); }
+          } catch(e) { console.warn('SVG overlay failed:', e); resolve(); }
         });
       }
 
       mapImgDataUrl = baseCanvas.toDataURL('image/png');
     }
 
-    // Restore previous state
+    // Restore everything
+    tabZoom['movements'] = prevZoom;
     mvDayView = prevDayView;
     mvDayDate = prevDayDate;
     activeTab  = prevTab;
