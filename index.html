@@ -675,6 +675,7 @@ function hCat(h) {
 }
 function lCat(l) { const t = (STATE.settings && STATE.settings.walerLengthThreshold) || 6.5; return l < t ? 'Stumpy' : 'Long'; }
 function hBadge(h) { const c = hCat(h); return c === 'Short' ? 'green' : c === 'Medium' ? 'yellow' : 'red'; }
+function hColor(h) { const c = hCat(h); return c === 'Short' ? 'var(--green)' : c === 'Medium' ? 'var(--orange)' : 'var(--red)'; }
 function cageLabel(c) { return `${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
 function cageLabelRaw(c) { return `${c.name} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
 function locBadge(l) { return {facility:'blue', rmd:'green', frame:'orange', shipped:'purple'}[l] || 'accent'; }
@@ -1681,7 +1682,7 @@ function renderDashboard() {
     if (cage) {
       const shade = shipmentShadeClass(cage, _dashShipDays);
       const slotBg = shade ? shipmentShadeBg(shade) + 'border-radius:4px;padding:2px 4px;' : (cage.shippingPreference ? shipPrefSlotBg(cage)+'border-radius:4px;padding:2px 4px;' : '');
-      const nameColor = shipmentShadeNameColor(shade) || shipPrefNameColor(cage);
+      const nameColor = shipmentShadeNameColor(shade) || shipPrefNameColor(cage) || `color:${hColor(cage.height)};`;
       const detailColor = shipmentShadeDetailColor(shade);
       return `<div class="rmd-slot" onclick="toggleShipPref('${cage.id}')" style="cursor:pointer;${slotBg}" title="${cage.shippingPreference ? 'Click to remove shipping preference' : 'Click to set shipping preference'}">
         <span class="rmd-slot-label">${posLabel}</span>
@@ -7070,7 +7071,7 @@ function renderMovementsMap(dayCtx) {
           else if (mvOut) bg = 'background:#fff7ed;border-color:#f5a742;';
           else if (mvIn) bg = 'background:#f0faf4;border-color:#4aad72;';
           else bg = 'border-color:var(--border);';
-          const nameStyle = (_mvShade && mvOut) ? 'color:#7a5000;' : _mvShade === 'next' ? 'color:#e0ccff;' : _mvShade === 'second' ? 'color:#4a2a7a;' : cage.shippingPreference ? 'color:#7a5c00;' : '';
+          const nameStyle = (_mvShade && mvOut) ? 'color:#7a5000;' : _mvShade === 'next' ? 'color:#e0ccff;' : _mvShade === 'second' ? 'color:#4a2a7a;' : cage.shippingPreference ? 'color:#7a5c00;' : `color:${hColor(cage.height)};`;
           const detailStyle = (_mvShade && mvOut) ? 'color:#a07000;' : _mvShade === 'next' ? 'color:#c0a8ee;' : _mvShade === 'second' ? 'color:#6a4a9a;' : '';
           const arrow = mvOut ? '<span style="color:#c08520;font-weight:800;margin-right:4px">→</span>'
                       : mvIn  ? '<span style="color:#27a060;font-weight:800;margin-right:4px">←</span>' : '';
@@ -7157,7 +7158,7 @@ function renderMovementsMap(dayCtx) {
       else if (_fShade === 'second') fBg = 'background:#c8b8e8;border-color:#9070c8;';
       else if (c.shippingPreference) fBg = 'background:#fff8c5;border-color:#e8d850;';
       else fBg = `background:${out?'#fff7ed':'var(--bg-input)'};border-color:${out?'#f5a742':'var(--border)'};`;
-      const fNameStyle = (_fShade && out) ? 'color:#7a5000;' : _fShade === 'next' ? 'color:#e0ccff;' : _fShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference ? 'color:#7a5c00;' : '';
+      const fNameStyle = (_fShade && out) ? 'color:#7a5000;' : _fShade === 'next' ? 'color:#e0ccff;' : _fShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference ? 'color:#7a5c00;' : `color:${hColor(c.height)};`;
       const fDetailStyle = (_fShade && out) ? 'color:#a07000;' : _fShade === 'next' ? 'color:#c0a8ee;' : _fShade === 'second' ? 'color:#6a4a9a;' : 'color:var(--text-muted);';
       const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
       html += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${fBg}">
@@ -7175,7 +7176,7 @@ function renderMovementsMap(dayCtx) {
       else if (_iShade === 'second') iBg = 'background:#c8b8e8;border-color:#9070c8;';
       else if (c.shippingPreference) iBg = 'background:#fff8c5;border-color:#e8d850;';
       else iBg = 'background:#f0faf4;border-color:#4aad72;';
-      const iNameStyle = _iShade === 'next' ? 'color:#e0ccff;' : _iShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference ? 'color:#7a5c00;' : '';
+      const iNameStyle = _iShade === 'next' ? 'color:#e0ccff;' : _iShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference ? 'color:#7a5c00;' : `color:${hColor(c.height)};`;
       const iDetailStyle = _iShade === 'next' ? 'color:#c0a8ee;' : _iShade === 'second' ? 'color:#6a4a9a;' : 'color:var(--text-muted);';
       const iMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
       html+=`<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${iBg}">
