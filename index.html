@@ -7409,10 +7409,13 @@ function renderMovementsMap(dayCtx) {
                       const daysLeft = Math.ceil((depDate - today) / 86400000);
                       const isOverdue = daysLeft < 0;
                       const datCol = isOverdue ? 'var(--red)' : daysLeft <= 3 ? 'var(--orange)' : 'var(--text-muted)';
-                      return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid ${hasPlan?'#93c5fd':'var(--border)'};background:${hasPlan?'#eff6ff':'var(--bg-input)'};margin-bottom:2px;display:flex;align-items:center;gap:3px;">
-                        ${hasPlan ? '<span style="color:#2563b0;font-weight:800;flex-shrink:0">→</span>' : '<span style="width:9px;flex-shrink:0"></span>'}
-                        ${hDot(c.height)}<span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
-                        <span style="color:${datCol};font-size:9px;margin-left:auto;white-space:nowrap">${isOverdue ? '⚠' : ''}${fmt(c.departureDate)}</span>
+                      return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid ${hasPlan?'#93c5fd':'var(--border)'};background:${hasPlan?'#eff6ff':'var(--bg-input)'};margin-bottom:2px;">
+                        <div style="display:flex;align-items:center;gap:3px;">
+                          ${hasPlan ? '<span style="color:#2563b0;font-weight:800;flex-shrink:0">→</span>' : '<span style="width:9px;flex-shrink:0"></span>'}
+                          ${hDot(c.height)}<span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
+                          <span style="color:${datCol};font-size:9px;margin-left:auto;white-space:nowrap">${isOverdue ? '⚠' : ''}${fmt(c.departureDate)}</span>
+                        </div>
+                        <div style="font-size:9px;color:var(--text-muted);padding-left:12px">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
                       </div>`;
                     }).join('') : '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no departures set</div>'}
                   </div>
