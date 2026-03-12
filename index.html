@@ -5563,73 +5563,57 @@ async function printDailyReport() {
     const prevDayDate  = mvDayDate;
     const prevZoom     = tabZoom['movements'] || 1;
 
-    // Switch to movements tab, day view, reset zoom to 1 so screen px = DOM px
+    // Switch to movements tab, day view, zoom=1 so screen px === DOM px
     mvDayView = true;
     mvDayDate = reportSingleDay;
     activeTab = 'movements';
     tabZoom['movements'] = 1;
     render();
 
-    // Wait for DOM, zoom transform, and SVG arrows to fully settle
+    // Let DOM fully settle, zoom transform applied, arrows drawn
     await new Promise(r => setTimeout(r, 800));
 
-    // Force zoom transform to 1 in case render() re-applied it
+    // Force zoom=1 directly on the wrap element just in case
     const zoomWrap = document.getElementById('zoom-wrap-movements');
     if (zoomWrap) zoomWrap.style.transform = 'scale(1)';
 
-    // Redraw arrows at zoom=1 so coordinates are correct
+    // Redraw arrows at zoom=1
     mvRedraw();
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 350));
 
-    const mapEl = document.getElementById('mv-content');
-    const svgEl = document.getElementById('mv-svg-arrows');
-
-    if (mapEl && typeof html2canvas !== 'undefined') {
-      const SCALE = 1.5;
-
-      // Step 1: capture HTML map (skipping SVG — we composite it manually)
-      const baseCanvas = await html2canvas(mapEl, {
-        backgroundColor: '#ffffff',
-        scale: SCALE,
-        useCORS: true,
-        logging: false,
-        ignoreElements: el => el.id === 'mv-svg-arrows',
-      });
-
-      // Step 2: serialise the SVG and draw it on top
+    // Inline CSS custom properties onto mv-map-wrapper so html2canvas resolves them
+    const wrapperEl = document.getElementById('mv-map-wrapper');
+    if (wrapperEl && typeof html2canvas !== 'undefined') {
+      // Temporarily make the SVG use concrete px values (html2canvas can't read CSS vars)
+      const svgEl = document.getElementById('mv-svg-arrows');
       if (svgEl) {
-        await new Promise(resolve => {
-          try {
-            const mapRect = mapEl.getBoundingClientRect();
-            const svgClone = svgEl.cloneNode(true);
-            svgClone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-            svgClone.setAttribute('width',  mapRect.width);
-            svgClone.setAttribute('height', mapRect.height);
-            // Inline all presentation attributes so they survive serialisation
-            svgClone.querySelectorAll('*').forEach(el => {
-              ['stroke','stroke-width','stroke-dasharray','fill','opacity',
-               'marker-end','marker-start','d','points'].forEach(p => {
-                const v = el.getAttribute(p);
-                if (v) el.setAttribute(p, v);
-              });
-            });
-            const svgData = new XMLSerializer().serializeToString(svgClone);
-            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-            const url = URL.createObjectURL(svgBlob);
-            const img = new Image();
-            img.onload = () => {
-              const ctx = baseCanvas.getContext('2d');
-              ctx.drawImage(img, 0, 0, mapRect.width * SCALE, mapRect.height * SCALE);
-              URL.revokeObjectURL(url);
-              resolve();
-            };
-            img.onerror = () => { URL.revokeObjectURL(url); resolve(); };
-            img.src = url;
-          } catch(e) { console.warn('SVG overlay failed:', e); resolve(); }
+        svgEl.querySelectorAll('path, line, polyline, polygon, circle').forEach(el => {
+          const cs = window.getComputedStyle(el);
+          // Resolve any CSS-var colours to concrete values
+          ['stroke', 'fill'].forEach(attr => {
+            const val = el.getAttribute(attr) || '';
+            if (val.startsWith('var(')) {
+              const resolved = cs.getPropertyValue(
+                val.replace(/^var\(/, '').replace(/\)$/, '').trim()
+              ).trim();
+              if (resolved) el.setAttribute(attr, resolved);
+            }
+          });
         });
       }
 
-      mapImgDataUrl = baseCanvas.toDataURL('image/png');
+      const canvas = await html2canvas(wrapperEl, {
+        backgroundColor: '#ffffff',
+        scale: 1.5,
+        useCORS: true,
+        logging: false,
+        // Scroll the capture target to top-left so coordinates are consistent
+        scrollX: 0,
+        scrollY: -window.scrollY,
+        windowWidth:  wrapperEl.scrollWidth,
+        windowHeight: wrapperEl.scrollHeight,
+      });
+      mapImgDataUrl = canvas.toDataURL('image/png');
     }
 
     // Restore everything
@@ -7976,7 +7960,7 @@ function renderMovementsMap(dayCtx) {
         <div style="display:grid;grid-template-columns:1fr 260px;gap:16px;align-items:start">
 
           <!-- Canvas map -->
-          <div style="position:relative">
+          <div id="mv-map-wrapper" style="position:relative">
             <div id="mv-content">
 
               <!-- RMD zone -->
