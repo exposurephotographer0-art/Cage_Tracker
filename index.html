@@ -896,6 +896,7 @@ function normaliseCage(c) {
     proposedShipDay: c.proposed_ship_day || c.proposedShipDay || null,
     proposedTripId: c.proposed_trip_id || c.proposedTripId || null,
     shippingPreference: !!(c.shipping_preference || c.shippingPreference),
+    shippingPreference2: !!(c.shipping_preference2 || c.shippingPreference2),
     notes: c.notes || '',
     createdAt: c.created_at || c.createdAt || new Date().toISOString(),
     locationHistory: c.locationHistory || [],
@@ -1069,6 +1070,32 @@ function toggleShipPref(cageId) {
   const c = getCage(cageId);
   if (!c) return;
   toggleShippingPreference(cageId, !c.shippingPreference);
+}
+
+async function toggleShippingPreference2(cageId, checked) {
+  const c = getCage(cageId);
+  if (!c) return;
+  c.shippingPreference2 = checked;
+  render();
+  await saveCage(c);
+}
+function toggleShipPref2(cageId) {
+  const c = getCage(cageId);
+  if (!c) return;
+  toggleShippingPreference2(cageId, !c.shippingPreference2);
+}
+// Blue highlight helpers for shippingPreference2
+function shipPref2SlotBg(cage) {
+  if (!cage || !cage.shippingPreference2) return '';
+  return 'background:#dbeafe;border:1px solid #3b82f6;';
+}
+function shipPref2NameColor(cage) {
+  if (!cage || !cage.shippingPreference2) return '';
+  return 'color:#1e40af;font-weight:700;';
+}
+function shipPref2DetailColor(cage) {
+  if (!cage || !cage.shippingPreference2) return '';
+  return 'color:#3b82f6;';
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1252,6 +1279,7 @@ function shipmentLegendHTML(shipDays) {
     ${shipDays[0] ? `<span style="background:#3b1d6e;color:#e0ccff;font:700 9px var(--font-mono);padding:2px 10px;border-radius:10px">&#9632; Next shipment: ${fmt(shipDays[0])}</span>` : ''}
     ${shipDays[1] ? `<span style="background:#c8b8e8;color:#4a2a7a;font:700 9px var(--font-mono);padding:2px 10px;border-radius:10px">&#9632; 2nd shipment: ${fmt(shipDays[1])}</span>` : ''}
     <span style="background:#fff8c5;color:#7a5c00;border:1px solid #e8d850;font:700 9px var(--font-mono);padding:2px 10px;border-radius:10px">&#9632; Shipping preference</span>
+    <span style="background:#dbeafe;color:#1e40af;border:1px solid #3b82f6;font:700 9px var(--font-mono);padding:2px 10px;border-radius:10px">&#9632; Shipping preference 2</span>
   </div>`;
 }
 
@@ -1708,13 +1736,13 @@ function renderDashboard() {
     const cage = cid ? getCage(cid) : null;
     if (cage) {
       const shade = shipmentShadeClass(cage, _dashShipDays);
-      const slotBg = shade ? shipmentShadeBg(shade) + 'border-radius:4px;padding:2px 4px;' : (cage.shippingPreference ? shipPrefSlotBg(cage)+'border-radius:4px;padding:2px 4px;' : '');
-      const nameColor = shipmentShadeNameColor(shade) || shipPrefNameColor(cage);
-      const detailColor = shipmentShadeDetailColor(shade);
+      const slotBg = shade ? shipmentShadeBg(shade) + 'border-radius:4px;padding:2px 4px;' : (cage.shippingPreference2 ? shipPref2SlotBg(cage)+'border-radius:4px;padding:2px 4px;' : cage.shippingPreference ? shipPrefSlotBg(cage)+'border-radius:4px;padding:2px 4px;' : '');
+      const nameColor = shipmentShadeNameColor(shade) || shipPref2NameColor(cage) || shipPrefNameColor(cage);
+      const detailColor = shipmentShadeDetailColor(shade) || shipPref2DetailColor(cage);
       return `<div class="rmd-slot" onclick="toggleShipPref('${cage.id}')" style="cursor:pointer;${slotBg}" title="${cage.shippingPreference ? 'Click to remove shipping preference' : 'Click to set shipping preference'}">
         <span class="rmd-slot-label">${posLabel}</span>
         <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${nameColor}">${hDot(cage.height)}${esc(cage.name)}${cage.shippingPreference ? ' ★' : ''}</span><span class="rmd-cage-detail" style="${detailColor}">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</span></span>
+          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${nameColor}">${hDot(cage.height)}${esc(cage.name)}${cage.shippingPreference ? ' ★' : ''}${cage.shippingPreference2 ? ' <span style="font-size:9px;color:#3b82f6">●</span>' : ''}</span><span class="rmd-cage-detail" style="${detailColor}">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</span></span>
         </div>
       </div>`;
     } else {
@@ -2188,6 +2216,7 @@ function renderCages() {
           <td><span class="badge badge-${hBadge(c.height)}">${hCat(c.height)}</span></td>
           <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
           <td style="text-align:center"><input type="checkbox" id="ce-sp-${c.id}" ${c.shippingPreference?'checked':''} style="width:15px;height:15px;accent-color:#e8b800" title="Shipping Preference"/></td>
+          <td style="text-align:center"><input type="checkbox" id="ce-sp2-${c.id}" ${c.shippingPreference2?'checked':''} style="width:15px;height:15px;accent-color:#3b82f6" title="Shipping Preference 2"/></td>
           <td colspan="2" style="white-space:nowrap">
             <button class="btn btn-primary btn-xs" onclick="saveCageEdit('${c.id}')">✓ Save</button>
             <button class="btn btn-secondary btn-xs" style="margin-left:4px" onclick="cageEditing=null;render()">Cancel</button>
@@ -2197,7 +2226,7 @@ function renderCages() {
       const sel = cageSelected.has(c.id);
       const daysLeft = c.departureDate ? Math.ceil((new Date(c.departureDate+'T12:00:00') - new Date()) / 86400000) : null;
       const depBadge = daysLeft !== null ? (daysLeft < 0 ? '<span style="color:var(--red);font-size:10px">OVERDUE</span>' : daysLeft <= 7 ? `<span style="color:var(--orange);font-size:10px">⚠ ${daysLeft}d</span>` : `<span style="color:var(--text-muted);font-size:10px">${daysLeft}d</span>`) : '';
-      const cageRowStyle = sel ? 'background:#fdf8ee' : c.shippingPreference ? 'background:#fffbea;border-left:3px solid #e8b800' : '';
+      const cageRowStyle = sel ? 'background:#fdf8ee' : c.shippingPreference2 ? 'background:#eff6ff;border-left:3px solid #3b82f6' : c.shippingPreference ? 'background:#fffbea;border-left:3px solid #e8b800' : '';
       return `<tr style="${cageRowStyle}">
         <td style="width:32px;text-align:center">
           <input type="checkbox" ${sel?'checked':''} onchange="toggleCageSelect('${c.id}',this.checked)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)"/>
@@ -2213,6 +2242,9 @@ function renderCages() {
         <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
         <td style="text-align:center">
           <input type="checkbox" title="Shipping Preference — highlights yellow across all views" ${c.shippingPreference?'checked':''} onchange="toggleShippingPreference('${c.id}',this.checked)" style="width:15px;height:15px;cursor:pointer;accent-color:#e8b800"/>
+        </td>
+        <td style="text-align:center">
+          <input type="checkbox" title="Shipping Preference 2 — highlights blue across all views" ${c.shippingPreference2?'checked':''} onchange="toggleShippingPreference2('${c.id}',this.checked)" style="width:15px;height:15px;cursor:pointer;accent-color:#3b82f6"/>
         </td>
         <td style="white-space:nowrap">
           <select style="font-size:11px;padding:3px 6px;max-width:180px" onchange="changeCageLocation('${c.id}',this.value);this.value=''">
@@ -2287,7 +2319,7 @@ function renderCages() {
       <table>
         <thead><tr>
           <th style="width:32px"><input type="checkbox" id="cage-select-all" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)" onchange="toggleAllCages(this.checked,${JSON.stringify(filtered.map(c=>c.id))})"/></th>
-          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Boat Trip</th><th>Category</th><th>Location</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th>Move</th><th></th>
+          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Boat Trip</th><th>Category</th><th>Location</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th title="Shipping Preference 2 — highlight blue across all views">🔵 SP2</th><th>Move</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -2447,6 +2479,7 @@ function saveCageEdit(id) {
   const wt = parseFloat(document.getElementById('ce-wt-'+id).value);
   const dep = document.getElementById('ce-dep-'+id).value;
   const spEl = document.getElementById('ce-sp-'+id);
+  const sp2El = document.getElementById('ce-sp2-'+id);
   if (!name) return alert('Name required.');
   c.name = name;
   if (!isNaN(h)) c.height = h;
@@ -2455,6 +2488,7 @@ function saveCageEdit(id) {
   if (!isNaN(wt)) c.weight = wt;
   c.departureDate = dep || null;
   if (spEl) c.shippingPreference = spEl.checked;
+  if (sp2El) c.shippingPreference2 = sp2El.checked;
   cageEditing = null;
   render();
   saveCage(c);
@@ -2844,7 +2878,7 @@ function renderFrames() {
     const _frmShipDays = getShipmentDays();
     let cageListHTML = fCages.map(c=>{
       const _shade = shipmentShadeClass(c, _frmShipDays);
-      const _bg = _shade ? shipmentShadeBg(_shade)+'border-radius:4px;padding:2px 6px;display:flex;justify-content:space-between;align-items:center;' : (c.shippingPreference ? shipPrefSlotBg(c)+'border-radius:4px;padding:2px 6px;display:flex;justify-content:space-between;align-items:center;' : '');
+      const _bg = _shade ? shipmentShadeBg(_shade)+'border-radius:4px;padding:2px 6px;display:flex;justify-content:space-between;align-items:center;' : (c.shippingPreference2 ? shipPref2SlotBg(c)+'border-radius:4px;padding:2px 6px;display:flex;justify-content:space-between;align-items:center;' : c.shippingPreference ? shipPrefSlotBg(c)+'border-radius:4px;padding:2px 6px;display:flex;justify-content:space-between;align-items:center;' : '');
       const _nc = shipmentShadeNameColor(_shade) || shipPrefNameColor(c);
       return `<div class="frame-cage-item" style="${_bg}">
         <span style="${_nc}">${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t${needsWaler(c) ? ' <span style="color:var(--yellow);font-size:10px" title="Cage below waler length threshold — needs waler for shipping">⚠ waler req.</span>' : ''}</span>
@@ -3076,7 +3110,7 @@ function renderRMD() {
     const cage = cid ? getCage(cid) : null;
     if(cage) {
       const _ts = shipmentShadeClass(cage, _rmdTabShipDays);
-      const _tBg = _ts ? shipmentShadeBg(_ts)+'border-radius:4px;padding:1px 4px;' : (cage.shippingPreference ? shipPrefSlotBg(cage)+'border-radius:4px;padding:1px 4px;' : '');
+      const _tBg = _ts ? shipmentShadeBg(_ts)+'border-radius:4px;padding:1px 4px;' : (cage.shippingPreference2 ? shipPref2SlotBg(cage)+'border-radius:4px;padding:1px 4px;' : cage.shippingPreference ? shipPrefSlotBg(cage)+'border-radius:4px;padding:1px 4px;' : '');
       return `<div class="rmd-slot" style="${_tBg}">
         <span class="rmd-slot-label">${posLabel}</span>
         <div class="rmd-slot-content">
@@ -3151,7 +3185,7 @@ function renderRMD() {
                 const cage2 = cid2 ? getCage(cid2) : null;
                 if(cage2) {
                   const _s = shipmentShadeClass(cage2, _rmdTabShipDays);
-                  const _b = _s ? shipmentShadeBg(_s)+'border-radius:4px;padding:1px 4px;' : (cage2.shippingPreference ? shipPrefSlotBg(cage2)+'border-radius:4px;padding:1px 4px;' : '');
+                  const _b = _s ? shipmentShadeBg(_s)+'border-radius:4px;padding:1px 4px;' : (cage2.shippingPreference2 ? shipPref2SlotBg(cage2)+'border-radius:4px;padding:1px 4px;' : cage2.shippingPreference ? shipPrefSlotBg(cage2)+'border-radius:4px;padding:1px 4px;' : '');
                   const _nc = shipmentShadeNameColor(_s) || shipPrefNameColor(cage2);
                   return '<div class="rmd-slot" style="'+_b+'"><span class="rmd-slot-label">'+posLabel+'</span><div class="rmd-slot-content"><span class="rmd-cage-info"><span class="rmd-cage-name" style="'+_nc+'">'+esc(cage2.name)+'</span><span class="rmd-cage-detail" style="'+shipmentShadeDetailColor(_s)+'">'+cage2.width+'m·'+hCat(cage2.height)+'·'+lCat(cage2.length)+'·'+cage2.weight+'t</span></span><button class="remove-btn" onclick="removeFromRMD('+idx2+',\''+side+'\',\''+slot+'\')">&#215;</button></div></div>';
                 } else {
@@ -7264,12 +7298,15 @@ function renderMovementsMap(dayCtx) {
           if (_mvShade && mvOut) { bg = 'background:#fff8c5;border-color:#e8b800;'; }
           else if (_mvShade === 'next') bg = 'background:#3b1d6e;border-color:#7040c0;';
           else if (_mvShade === 'second') bg = 'background:#c8b8e8;border-color:#9070c8;';
+          else if (cage.shippingPreference2) bg = 'background:#dbeafe;border-color:#3b82f6;';
           else if (cage.shippingPreference) bg = 'background:#fff8c5;border-color:#e8d850;';
           else if (mvOut) bg = 'background:#fff7ed;border-color:#f5a742;';
           else if (mvIn) bg = 'background:#f0faf4;border-color:#4aad72;';
           else bg = 'border-color:var(--border);';
-          const nameStyle = (_mvShade && mvOut) ? 'color:#7a5000;' : _mvShade === 'next' ? 'color:#e0ccff;' : _mvShade === 'second' ? 'color:#4a2a7a;' : cage.shippingPreference ? 'color:#7a5c00;' : '';
-          const detailStyle = (_mvShade && mvOut) ? 'color:#a07000;' : _mvShade === 'next' ? 'color:#c0a8ee;' : _mvShade === 'second' ? 'color:#6a4a9a;' : '';
+          const nameStyle = (_mvShade && mvOut) ? 'color:#7a5000;' : _mvShade === 'next' ? 'color:#e0ccff;' : _mvShade === 'second' ? 'color:#4a2a7a;' : cage.shippingPreference2 ? 'color:#1e40af;' : cage.shippingPreference ? 'color:#7a5c00;' : '';
+          const detailStyle = (_mvShade && mvOut) ? 'color:#a07000;' : _mvShade === 'next' ? 'color:#c0a8ee;' : _mvShade === 'second' ? 'color:#6a4a9a;' : cage.shippingPreference2 ? 'color:#3b82f6;' : '';
+          const slotLabel = slotLabels[sk];
+          const slotTag = `<span style="font:600 8px var(--font-mono);padding:1px 4px;border-radius:3px;margin-right:3px;flex-shrink:0;${sk==='cage1'?'background:#1e3a5f;color:#7dd3fc;':'background:#064e3b;color:#6ee7b7;'}">${slotLabel}</span>`;
           const arrow = mvOut ? '<span style="color:#c08520;font-weight:800;margin-right:4px">→</span>'
                       : mvIn  ? '<span style="color:#27a060;font-weight:800;margin-right:4px">←</span>' : '';
           const hasMoves = STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length > 0;
@@ -7277,7 +7314,7 @@ function renderMovementsMap(dayCtx) {
           const pickBtnHTML = `<button onclick="mvPickCage('${cid}')" title="Click to plan movement for cage ${esc(cage.name)}" style="border:none;background:${isPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${isPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${isPickedCage?'✓':'🏷'}</button>`;
           const cageNameHTML = `<span style="font:600 10px var(--font-mono);${nameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${cid}')" title="Click to view/edit movements for cage ${esc(cage.name)}">${hDot(cage.height)}${esc(cage.name)}${hasMoves?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length}</span>`:''}</span>${pickBtnHTML}`;
           slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;background:var(--bg-input);margin-bottom:2px;${bg}">
-            <div style="display:flex;align-items:center;">${arrow}${cageNameHTML}</div>
+            <div style="display:flex;align-items:center;">${arrow}${slotTag}${cageNameHTML}</div>
             <div style="font-size:9px;padding-left:${arrow?'14':'0'}px;${detailStyle||'color:var(--text-muted);'}">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</div>
           </div>`;
         }
@@ -7355,10 +7392,11 @@ function renderMovementsMap(dayCtx) {
       if (_fShade && out) fBg = 'background:#fff8c5;border-color:#e8b800;';
       else if (_fShade === 'next') fBg = 'background:#3b1d6e;border-color:#7040c0;';
       else if (_fShade === 'second') fBg = 'background:#c8b8e8;border-color:#9070c8;';
+      else if (c.shippingPreference2) fBg = 'background:#dbeafe;border-color:#3b82f6;';
       else if (c.shippingPreference) fBg = 'background:#fff8c5;border-color:#e8d850;';
       else fBg = `background:${out?'#fff7ed':'var(--bg-input)'};border-color:${out?'#f5a742':'var(--border)'};`;
-      const fNameStyle = (_fShade && out) ? 'color:#7a5000;' : _fShade === 'next' ? 'color:#e0ccff;' : _fShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference ? 'color:#7a5c00;' : '';
-      const fDetailStyle = (_fShade && out) ? 'color:#a07000;' : _fShade === 'next' ? 'color:#c0a8ee;' : _fShade === 'second' ? 'color:#6a4a9a;' : 'color:var(--text-muted);';
+      const fNameStyle = (_fShade && out) ? 'color:#7a5000;' : _fShade === 'next' ? 'color:#e0ccff;' : _fShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference2 ? 'color:#1e40af;' : c.shippingPreference ? 'color:#7a5c00;' : '';
+      const fDetailStyle = (_fShade && out) ? 'color:#a07000;' : _fShade === 'next' ? 'color:#c0a8ee;' : _fShade === 'second' ? 'color:#6a4a9a;' : c.shippingPreference2 ? 'color:#3b82f6;' : 'color:var(--text-muted);';
       const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
       const fIsPickedCage = mvPick && mvPick.cageId === c.id;
       const fPickBtn = `<button onclick="event.stopPropagation();mvPickCage('${c.id}')" title="Plan movement for cage ${esc(c.name)}" style="border:none;background:${fIsPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${fIsPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${fIsPickedCage?'✓':'🏷'}</button>`;
@@ -7375,10 +7413,11 @@ function renderMovementsMap(dayCtx) {
       let iBg;
       if (_iShade === 'next') iBg = 'background:#3b1d6e;border-color:#7040c0;';
       else if (_iShade === 'second') iBg = 'background:#c8b8e8;border-color:#9070c8;';
+      else if (c.shippingPreference2) iBg = 'background:#dbeafe;border-color:#3b82f6;';
       else if (c.shippingPreference) iBg = 'background:#fff8c5;border-color:#e8d850;';
       else iBg = 'background:#f0faf4;border-color:#4aad72;';
-      const iNameStyle = _iShade === 'next' ? 'color:#e0ccff;' : _iShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference ? 'color:#7a5c00;' : '';
-      const iDetailStyle = _iShade === 'next' ? 'color:#c0a8ee;' : _iShade === 'second' ? 'color:#6a4a9a;' : 'color:var(--text-muted);';
+      const iNameStyle = _iShade === 'next' ? 'color:#e0ccff;' : _iShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference2 ? 'color:#1e40af;' : c.shippingPreference ? 'color:#7a5c00;' : '';
+      const iDetailStyle = _iShade === 'next' ? 'color:#c0a8ee;' : _iShade === 'second' ? 'color:#6a4a9a;' : c.shippingPreference2 ? 'color:#3b82f6;' : 'color:var(--text-muted);';
       const iMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
       const iIsPickedCage = mvPick && mvPick.cageId === c.id;
       const iPickBtn = `<button onclick="event.stopPropagation();mvPickCage('${c.id}')" title="Plan movement for cage ${esc(c.name)}" style="border:none;background:${iIsPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${iIsPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${iIsPickedCage?'✓':'🏷'}</button>`;
