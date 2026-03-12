@@ -7280,7 +7280,7 @@ function renderMovementsMap(dayCtx) {
     const frameCageIds = isDayView ? (dayCtx.simFrameCages[f.id] || []) : f.cages;
     const fCages = frameCageIds.map(cid=>getCage(cid)).filter(Boolean);
     const outIds  = movesForFrame.filter(m=>m.typeKey==='frame-to-rmd').map(m=>m.cageId);
-    const inIds   = movesForFrame.filter(m=>m.typeKey==='rmd-to-frame'||m.typeKey==='facility-to-frame').map(m=>m.cageId);
+    const inIds   = movesForFrame.filter(m=>m.typeKey==='rmd-to-frame'||m.typeKey==='facility-to-frame'||m.typeKey==='frame-to-frame').map(m=>m.cageId);
     // facility-exit cages: planned Facility→Frame then Frame→RMD — show them as incoming+outgoing
     const transitIds = movesForFrame.filter(m=>m.typeKey==='frame-to-rmd').map(m=>m.cageId)
       .filter(cid => filtered.some(m2=>m2.cageId===cid && m2.typeKey==='facility-to-frame' && resolveFrameId(m2)===f.id));
@@ -7639,11 +7639,21 @@ function renderMovementsMap(dayCtx) {
                     </div>`;
                   });
                   if (!cageHTML) cageHTML = '<div style="font-size:10px;color:var(--text-muted);font-style:italic">away</div>';
-                  return `<div id="mvboat-${f.id}" style="background:var(--bg-card);${border}border-radius:8px;padding:9px 10px;min-width:100px;">
-                    <div style="font:700 12px var(--font-mono);color:${isActive?'var(--accent)':'#0e7490'}">${esc(f.name)}</div>
+                  const boatBorder = isActive
+                    ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);'
+                    : mvPick
+                      ? 'border:2px dashed #e8a830;cursor:pointer;'
+                      : hasActivity
+                        ? 'border:2px solid #0e7490;box-shadow:0 0 0 3px rgba(14,116,144,0.10);'
+                        : 'border:1px solid #a5f3fc;';
+                  const boatClickHandler = mvPick ? `onclick="mvPickDestination('frame','${f.id}','${esc(f.name)} [${f.width}m] (returning ${f.returnDate ? fmt(f.returnDate) : ''})')"` : '';
+                  const boatPickHint = mvPick ? `<div style="font-size:9px;color:#e8a830;font-weight:600;margin-top:4px;text-align:center">▶ Move here (pre-plan)</div>` : '';
+                  return `<div id="mvboat-${f.id}" style="background:${mvPick?'#1a2520':'var(--bg-card)'};${boatBorder}border-radius:8px;padding:9px 10px;min-width:100px;transition:all 0.1s" ${boatClickHandler} title="${mvPick?`Pre-plan cage ${esc(mvPick?.cageName||'')} into ${esc(f.name)} (returns ${f.returnDate||'?'})`:''}">
+                    <div style="font:700 12px var(--font-mono);color:${isActive?'var(--accent)':mvPick?'#b0d890':'#0e7490'}">${esc(f.name)}</div>
                     <div style="font-size:9px;color:var(--text-muted);margin-bottom:2px">${f.width}m · ${f.location}</div>
                     <div style="font-size:9px;color:${retCol};font-family:var(--font-mono);margin-bottom:4px">↩ ${retStr}</div>
                     ${cageHTML}
+                    ${boatPickHint}
                   </div>`;
                 }
 
