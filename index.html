@@ -3754,7 +3754,8 @@ async function completeMove(id) {
     if (frame.cages.length === 1) {
       const existing = getCage(frame.cages[0]);
       if (existing && !canFitTwo(existing, cage, frame.width)) {
-        alert(`Cannot complete: cages don't fit together in ${frame.name}.`); return;
+        const override = confirm(`⚠️ Warning: cages don't fit together in ${frame.name}.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
+        if (!override) return;
       }
     }
     frame.cages.push(cage.id);
@@ -3799,7 +3800,8 @@ async function completeMove(id) {
     if (frame.cages.length === 1) {
       const existing = getCage(frame.cages[0]);
       if (existing && !canFitTwo(existing, cage, frame.width)) {
-        alert(`Cannot complete: cages don't fit together in ${frame.name}.`); return;
+        const override = confirm(`⚠️ Warning: cages don't fit together in ${frame.name}.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
+        if (!override) return;
       }
     }
     frame.cages.push(cage.id);
@@ -3852,7 +3854,8 @@ async function completeMove(id) {
     if (frame.cages.length === 1) {
       const existing = getCage(frame.cages[0]);
       if (existing && !canFitTwo(existing, cage, frame.width)) {
-        alert(`Cannot complete: cages don't fit together in ${frame.name}.`); return;
+        const override = confirm(`⚠️ Warning: cages don't fit together in ${frame.name}.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
+        if (!override) return;
       }
     }
     frame.cages.push(cage.id);
