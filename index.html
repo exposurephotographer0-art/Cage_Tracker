@@ -676,6 +676,7 @@ function hCat(h) {
 function lCat(l) { const t = (STATE.settings && STATE.settings.walerLengthThreshold) || 6.5; return l < t ? 'Stumpy' : 'Long'; }
 function hBadge(h) { const c = hCat(h); return c === 'Short' ? 'green' : c === 'Medium' ? 'yellow' : 'red'; }
 function hColor(h) { const c = hCat(h); return c === 'Short' ? 'var(--green)' : c === 'Medium' ? 'var(--orange)' : 'var(--red)'; }
+function hDot(h) { const col = hColor(h); return `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${col};margin-right:3px;flex-shrink:0;vertical-align:middle"></span>`; }
 function cageLabel(c) { return `${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
 function cageLabelRaw(c) { return `${c.name} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
 function locBadge(l) { return {facility:'blue', rmd:'green', frame:'orange', shipped:'purple'}[l] || 'accent'; }
@@ -1682,12 +1683,12 @@ function renderDashboard() {
     if (cage) {
       const shade = shipmentShadeClass(cage, _dashShipDays);
       const slotBg = shade ? shipmentShadeBg(shade) + 'border-radius:4px;padding:2px 4px;' : (cage.shippingPreference ? shipPrefSlotBg(cage)+'border-radius:4px;padding:2px 4px;' : '');
-      const nameColor = shipmentShadeNameColor(shade) || shipPrefNameColor(cage) || `color:${hColor(cage.height)};`;
+      const nameColor = shipmentShadeNameColor(shade) || shipPrefNameColor(cage);
       const detailColor = shipmentShadeDetailColor(shade);
       return `<div class="rmd-slot" onclick="toggleShipPref('${cage.id}')" style="cursor:pointer;${slotBg}" title="${cage.shippingPreference ? 'Click to remove shipping preference' : 'Click to set shipping preference'}">
         <span class="rmd-slot-label">${posLabel}</span>
         <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${nameColor}">${esc(cage.name)}${cage.shippingPreference ? ' ★' : ''}</span><span class="rmd-cage-detail" style="${detailColor}">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</span></span>
+          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${nameColor}">${hDot(cage.height)}${esc(cage.name)}${cage.shippingPreference ? ' ★' : ''}</span><span class="rmd-cage-detail" style="${detailColor}">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</span></span>
         </div>
       </div>`;
     } else {
@@ -7071,12 +7072,12 @@ function renderMovementsMap(dayCtx) {
           else if (mvOut) bg = 'background:#fff7ed;border-color:#f5a742;';
           else if (mvIn) bg = 'background:#f0faf4;border-color:#4aad72;';
           else bg = 'border-color:var(--border);';
-          const nameStyle = (_mvShade && mvOut) ? 'color:#7a5000;' : _mvShade === 'next' ? 'color:#e0ccff;' : _mvShade === 'second' ? 'color:#4a2a7a;' : cage.shippingPreference ? 'color:#7a5c00;' : `color:${hColor(cage.height)};`;
+          const nameStyle = (_mvShade && mvOut) ? 'color:#7a5000;' : _mvShade === 'next' ? 'color:#e0ccff;' : _mvShade === 'second' ? 'color:#4a2a7a;' : cage.shippingPreference ? 'color:#7a5c00;' : '';
           const detailStyle = (_mvShade && mvOut) ? 'color:#a07000;' : _mvShade === 'next' ? 'color:#c0a8ee;' : _mvShade === 'second' ? 'color:#6a4a9a;' : '';
           const arrow = mvOut ? '<span style="color:#c08520;font-weight:800;margin-right:4px">→</span>'
                       : mvIn  ? '<span style="color:#27a060;font-weight:800;margin-right:4px">←</span>' : '';
           const hasMoves = STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length > 0;
-          const cageNameHTML = `<span style="font:600 10px var(--font-mono);${nameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${cid}')" title="Click to view/edit movements for cage ${esc(cage.name)}">${esc(cage.name)}${hasMoves?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length}</span>`:''}</span>`;
+          const cageNameHTML = `<span style="font:600 10px var(--font-mono);${nameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${cid}')" title="Click to view/edit movements for cage ${esc(cage.name)}">${hDot(cage.height)}${esc(cage.name)}${hasMoves?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length}</span>`:''}</span>`;
           slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;background:var(--bg-input);margin-bottom:2px;${bg}">
             <div style="display:flex;align-items:center;">${arrow}${cageNameHTML}</div>
             <div style="font-size:9px;padding-left:${arrow?'14':'0'}px;${detailStyle||'color:var(--text-muted);'}">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</div>
@@ -7158,11 +7159,11 @@ function renderMovementsMap(dayCtx) {
       else if (_fShade === 'second') fBg = 'background:#c8b8e8;border-color:#9070c8;';
       else if (c.shippingPreference) fBg = 'background:#fff8c5;border-color:#e8d850;';
       else fBg = `background:${out?'#fff7ed':'var(--bg-input)'};border-color:${out?'#f5a742':'var(--border)'};`;
-      const fNameStyle = (_fShade && out) ? 'color:#7a5000;' : _fShade === 'next' ? 'color:#e0ccff;' : _fShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference ? 'color:#7a5c00;' : `color:${hColor(c.height)};`;
+      const fNameStyle = (_fShade && out) ? 'color:#7a5000;' : _fShade === 'next' ? 'color:#e0ccff;' : _fShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference ? 'color:#7a5c00;' : '';
       const fDetailStyle = (_fShade && out) ? 'color:#a07000;' : _fShade === 'next' ? 'color:#c0a8ee;' : _fShade === 'second' ? 'color:#6a4a9a;' : 'color:var(--text-muted);';
       const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
       html += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${fBg}">
-        <div style="display:flex;align-items:center;gap:2px;">${out?'<span style="color:#c08520;font-weight:800">→</span>':''}<span style="font:600 10px var(--font-mono);${fNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
+        <div style="display:flex;align-items:center;gap:2px;">${out?'<span style="color:#c08520;font-weight:800">→</span>':''}<span style="font:600 10px var(--font-mono);${fNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
         <div style="font-size:9px;padding-left:${out?'13':'0'}px;${fDetailStyle}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
       </div>`;
     });
@@ -7176,11 +7177,11 @@ function renderMovementsMap(dayCtx) {
       else if (_iShade === 'second') iBg = 'background:#c8b8e8;border-color:#9070c8;';
       else if (c.shippingPreference) iBg = 'background:#fff8c5;border-color:#e8d850;';
       else iBg = 'background:#f0faf4;border-color:#4aad72;';
-      const iNameStyle = _iShade === 'next' ? 'color:#e0ccff;' : _iShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference ? 'color:#7a5c00;' : `color:${hColor(c.height)};`;
+      const iNameStyle = _iShade === 'next' ? 'color:#e0ccff;' : _iShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference ? 'color:#7a5c00;' : '';
       const iDetailStyle = _iShade === 'next' ? 'color:#c0a8ee;' : _iShade === 'second' ? 'color:#6a4a9a;' : 'color:var(--text-muted);';
       const iMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
       html+=`<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${iBg}">
-        <div style="display:flex;align-items:center;gap:2px;"><span style="color:#27a060;font-weight:800">←</span><span style="font:600 10px var(--font-mono);${iNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${esc(c.name)}${iMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${iMoveCount}</span>`:''}</span></div>
+        <div style="display:flex;align-items:center;gap:2px;"><span style="color:#27a060;font-weight:800">←</span><span style="font:600 10px var(--font-mono);${iNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${esc(c.name)}${iMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${iMoveCount}</span>`:''}</span></div>
         <div style="font-size:9px;padding-left:13px;${iDetailStyle}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
       </div>`;
     });
@@ -7195,8 +7196,12 @@ function renderMovementsMap(dayCtx) {
 
   const framesHTML = sortedFrames.map(f=>buildFrameCard(f)).join('');
 
-  // ── Facility movements (for facility box display) ──
+  // ── Facility box: all cages with departure date, sorted by date ──
   const facilityMoves = filtered.filter(m => m.typeKey === 'facility-to-frame' || m.typeKey === 'facility-to-rmd');
+  const facilityDepartureCages = STATE.cages
+    .filter(c => c.location === 'facility' && c.departureDate)
+    .sort((a, b) => a.departureDate.localeCompare(b.departureDate));
+  const facilityCageIdsWithPlan = new Set(facilityMoves.map(m => m.cageId));
   const boatMoves = filtered.filter(m => m.typeKey === 'frame-return-from-client');
 
   // ── Movement list sidebar ──
@@ -7390,16 +7395,21 @@ function renderMovementsMap(dayCtx) {
                 </div>
                 <div>
                   <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🏭 Facility</div>
-                  <div id="mv-facility-box" style="background:var(--bg-card);border:${facilityMoves.length?'2px solid #2563b0;box-shadow:0 0 0 3px rgba(37,99,176,0.12);':'1px solid var(--border);'}border-radius:8px;padding:12px 16px;min-width:130px;">
+                  <div id="mv-facility-box" style="background:var(--bg-card);border:${facilityMoves.length?'2px solid #2563b0;box-shadow:0 0 0 3px rgba(37,99,176,0.12);':'1px solid var(--border);'}border-radius:8px;padding:12px 16px;min-width:150px;">
                     <div style="font:700 13px var(--font-mono);color:${facilityMoves.length?'#2563b0':'var(--text-muted)'};margin-bottom:8px">Facility</div>
-                    ${facilityMoves.length ? facilityMoves.map(m=>{
-                      const c=getCage(m.cageId); if(!c) return '';
-                      return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #93c5fd;background:#eff6ff;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
-                        <span style="color:#2563b0;font-weight:800">→</span>
-                        <span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
-                        <span style="color:var(--text-muted)">${c.height}m</span>
+                    ${facilityDepartureCages.length ? facilityDepartureCages.map(c => {
+                      const hasPlan = facilityCageIdsWithPlan.has(c.id);
+                      const today = new Date(); today.setHours(0,0,0,0);
+                      const depDate = new Date(c.departureDate + 'T00:00:00');
+                      const daysLeft = Math.ceil((depDate - today) / 86400000);
+                      const isOverdue = daysLeft < 0;
+                      const datCol = isOverdue ? 'var(--red)' : daysLeft <= 3 ? 'var(--orange)' : 'var(--text-muted)';
+                      return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid ${hasPlan?'#93c5fd':'var(--border)'};background:${hasPlan?'#eff6ff':'var(--bg-input)'};margin-bottom:2px;display:flex;align-items:center;gap:3px;">
+                        ${hasPlan ? '<span style="color:#2563b0;font-weight:800;flex-shrink:0">→</span>' : '<span style="width:9px;flex-shrink:0"></span>'}
+                        ${hDot(c.height)}<span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
+                        <span style="color:${datCol};font-size:9px;margin-left:auto;white-space:nowrap">${isOverdue ? '⚠' : ''}${fmt(c.departureDate)}</span>
                       </div>`;
-                    }).join('') : '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no movements</div>'}
+                    }).join('') : '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no departures set</div>'}
                   </div>
                 </div>
               </div>
