@@ -6,6 +6,7 @@
 <title>Cage Tracker — Facility Management</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 :root {
@@ -4600,7 +4601,8 @@ async function returnFromClient(fid) {
 // REPORT
 // ═══════════════════════════════════════════════════════════════════════════════
 let reportFrom = todayStr();
-let reportTo = (() => { const d=new Date(); d.setDate(d.getDate()+7); return toISO(d); })();
+let reportTo = todayStr();
+let reportSingleDay = todayStr();
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // OVERVIEW / PRESENTATION
@@ -4706,11 +4708,11 @@ function renderOverview() {
 }
 
 async function clearReportMovements() {
-  const inRange = STATE.plannedMovements.filter(m => m.date >= reportFrom && m.date <= reportTo);
-  if (inRange.length === 0) return alert('No movements in the selected date range.');
-  if (!confirm(`Clear ${inRange.length} movement${inRange.length!==1?'s':''} between ${fmt(reportFrom)} and ${fmt(reportTo)}? This cannot be undone.`)) return;
+  const inRange = STATE.plannedMovements.filter(m => m.date === reportSingleDay);
+  if (inRange.length === 0) return alert('No movements on the selected day.');
+  if (!confirm(`Clear ${inRange.length} movement${inRange.length!==1?'s':''} on ${fmt(reportSingleDay)}? This cannot be undone.`)) return;
   const ids = inRange.map(m=>m.id);
-  STATE.plannedMovements = STATE.plannedMovements.filter(m => !(m.date >= reportFrom && m.date <= reportTo));
+  STATE.plannedMovements = STATE.plannedMovements.filter(m => m.date !== reportSingleDay);
   render();
   await Promise.all(ids.map(id => deleteMovementFromAPI(id)));
 }
