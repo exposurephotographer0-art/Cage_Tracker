@@ -7683,14 +7683,26 @@ function renderMovementsDayView() {
         });
       });
     }
-    // Add to RMD if moved in
-    if ((m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') && m.rmdNumber != null) {
-      const rn = m.rmdNumber, side = m.rmdSide || 'A';
-      if (!simRmdState[rn]) simRmdState[rn] = {A:{cage1:null,cage2:null},B:{cage1:null,cage2:null}};
-      // Find first free slot
-      const slots = ['cage1','cage2'];
-      const free = slots.find(s => !simRmdState[rn][side][s]);
-      if (free) simRmdState[rn][side][free] = m.cageId;
+    // Add to RMD if moved in — support both rmdNumber/rmdSide (boat planner)
+    // and rmdSlot string like "12A" or "12A:cage2" (manual planner)
+    if (m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') {
+      let rn = m.rmdNumber != null ? parseInt(m.rmdNumber) : null;
+      let side = m.rmdSide ? m.rmdSide.toUpperCase() : null;
+      let preferredSlot = null;
+      if (rn == null && m.rmdSlot) {
+        const match = String(m.rmdSlot).match(/^(\d+)\s*([ABab])/);
+        if (match) { rn = parseInt(match[1]); side = match[2].toUpperCase(); }
+        const slotMatch = String(m.rmdSlot).match(/:?(cage[12])$/i);
+        if (slotMatch) preferredSlot = slotMatch[1];
+      }
+      if (rn != null && side) {
+        if (!simRmdState[rn]) simRmdState[rn] = {A:{cage1:null,cage2:null},B:{cage1:null,cage2:null}};
+        const slots = ['cage1','cage2'];
+        const target = preferredSlot && !simRmdState[rn][side][preferredSlot]
+          ? preferredSlot
+          : slots.find(s => !simRmdState[rn][side][s]);
+        if (target) simRmdState[rn][side][target] = m.cageId;
+      }
     }
   });
 
