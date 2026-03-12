@@ -5558,8 +5558,7 @@ async function printDailyReport() {
   // Switch Movements tab to day-by-day view for the chosen date, then capture
   let mapImgDataUrl = null;
   try {
-    // Temporarily switch to movements tab, day view, for capture
-    const prevTab    = activeTab;
+    const prevTab     = activeTab;
     const prevDayView = mvDayView;
     const prevDayDate = mvDayDate;
 
@@ -5567,24 +5566,64 @@ async function printDailyReport() {
     mvDayDate = reportSingleDay;
     activeTab = 'movements';
     render();
-    // Wait for DOM + SVG arrows to render
-    await new Promise(r => setTimeout(r, 600));
+    // Wait for DOM + SVG arrows to fully render
+    await new Promise(r => setTimeout(r, 700));
 
     const mapEl = document.getElementById('mv-content');
+    const svgEl = document.getElementById('mv-svg-arrows');
+
     if (mapEl && typeof html2canvas !== 'undefined') {
-      const canvas = await html2canvas(mapEl, {
+      const SCALE = 1.5;
+
+      // Step 1: capture the HTML map (no SVG yet) via html2canvas
+      const baseCanvas = await html2canvas(mapEl, {
         backgroundColor: '#ffffff',
-        scale: 1.5,
+        scale: SCALE,
         useCORS: true,
         logging: false,
+        ignoreElements: el => el.id === 'mv-svg-arrows', // skip SVG — we'll draw it ourselves
       });
-      mapImgDataUrl = canvas.toDataURL('image/png');
+
+      // Step 2: serialise the SVG and draw it on top via a temporary Image
+      if (svgEl) {
+        await new Promise(resolve => {
+          try {
+            // Fix SVG dimensions so it matches the map element exactly
+            const mapRect = mapEl.getBoundingClientRect();
+            const svgClone = svgEl.cloneNode(true);
+            svgClone.setAttribute('width',  mapRect.width);
+            svgClone.setAttribute('height', mapRect.height);
+            // Inline all computed styles on child elements so they survive serialisation
+            svgClone.querySelectorAll('*').forEach(el => {
+              const cs = window.getComputedStyle(el);
+              ['stroke','stroke-width','stroke-dasharray','fill','marker-end','opacity'].forEach(p => {
+                const v = el.getAttribute(p) || cs.getPropertyValue(p);
+                if (v) el.setAttribute(p, v);
+              });
+            });
+            const svgData = new XMLSerializer().serializeToString(svgClone);
+            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(svgBlob);
+            const img = new Image();
+            img.onload = () => {
+              const ctx = baseCanvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, mapRect.width * SCALE, mapRect.height * SCALE);
+              URL.revokeObjectURL(url);
+              resolve();
+            };
+            img.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+            img.src = url;
+          } catch(e) { resolve(); }
+        });
+      }
+
+      mapImgDataUrl = baseCanvas.toDataURL('image/png');
     }
 
     // Restore previous state
     mvDayView = prevDayView;
     mvDayDate = prevDayDate;
-    activeTab = prevTab;
+    activeTab  = prevTab;
     render();
   } catch(e) {
     console.warn('Map capture failed:', e);
