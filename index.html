@@ -1764,10 +1764,11 @@ function renderDashboard() {
       <div style="margin-top:10px;display:flex;align-items:center;gap:10px">
         <button class="btn btn-primary btn-sm" onclick="applyShipmentAssignment()">Apply</button>
         <button class="btn btn-secondary btn-sm" onclick="clearShipmentAssignment()">Reset to Auto</button>
-        ${_dashShipDays.length ? `<span style="font-size:11px;color:var(--text-muted)">Currently: <span style="background:#3b1d6e;color:#e0ccff;font:700 10px var(--font-mono);padding:1px 8px;border-radius:8px">${fmt(_dashShipDays[0])}</span>${_dashShipDays[1]?` <span style="background:#c8b8e8;color:#4a2a7a;font:700 10px var(--font-mono);padding:1px 8px;border-radius:8px">${fmt(_dashShipDays[1])}</span>`:''}</span>` : ''}
+        ${_dashShipDays.length ? '<span style="font-size:11px;color:var(--text-muted)">Currently: <span style="background:#3b1d6e;color:#e0ccff;font:700 10px var(--font-mono);padding:1px 8px;border-radius:8px">' + fmt(_dashShipDays[0]) + '</span>' + (_dashShipDays[1] ? ' <span style="background:#c8b8e8;color:#4a2a7a;font:700 10px var(--font-mono);padding:1px 8px;border-radius:8px">' + fmt(_dashShipDays[1]) + '</span>' : '') + '</span>' : ''}
       </div>
     </div>`;
 
+  let rmdMiniHTML = RMD_LAYOUT.map(row=>{
     let items = row.items.map(item=>{
       const r = getRMDByNum(item);
       if (!r) return '';
