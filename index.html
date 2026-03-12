@@ -5056,6 +5056,95 @@ function renderAuditLog() {
     </div>
     <div style="margin-top:8px;font-size:11px;color:var(--text-muted);text-align:right">Showing ${movements.length} of ${total} movements</div>
 
+    <!-- Generated Boat Plans -->
+    ${(() => {
+      const plans = (STATE.savedPlans || []);
+      if (plans.length === 0) return '';
+      const ACTION_META_SHORT = {
+        facility_exit_to_frame:     { icon:'🏭', label:'Fac→Frame (transit)'  },
+        facility_exit_frame_to_rmd: { icon:'📦', label:'Frame→RMD (via frame)'},
+        facility_exit_frame_storage:{ icon:'🏭', label:'Fac→Frame (storage)'  },
+        facility_to_rmd:            { icon:'🏭', label:'Fac→RMD'              },
+        rmd_to_frame:               { icon:'📦', label:'RMD→Frame (boat)'     },
+        facility_to_frame:          { icon:'🏭', label:'Fac→Frame (boat)'     },
+        reframe:                    { icon:'🔄', label:'Reframe'              },
+        already_framed:             { icon:'✅', label:'Already framed'        },
+        no_frame:                   { icon:'⚠️', label:'No frame'             },
+        fix:                        { icon:'🔩', label:'Fix for shipping'      },
+      };
+      const planRows = plans.map(plan => {
+        const ts = plan.createdAt ? new Date(plan.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+        const warnCount = (plan.warnings||[]).filter(w=>w.startsWith('🚨')).length;
+        const warnNote = (plan.warnings||[]).filter(w=>!w.startsWith('🚨')).length;
+        const warningBadge = warnCount > 0
+          ? `<span style="background:#fef2f2;color:#c0392b;border:1px solid #fca5a5;border-radius:10px;padding:1px 7px;font:600 10px var(--font-mono);margin-left:6px">⚠ ${warnCount} err</span>`
+          : warnNote > 0
+          ? `<span style="background:#fef0e6;color:var(--orange);border:1px solid #e8c8a0;border-radius:10px;padding:1px 7px;font:600 10px var(--font-mono);margin-left:6px">⚠ ${warnNote} warn</span>`
+          : '';
+        // Build step table rows grouped by date
+        const byDate = {};
+        (plan.steps||[]).forEach(s => { const d = s.date||'—'; if(!byDate[d])byDate[d]=[]; byDate[d].push(s); });
+        const stepRows = Object.keys(byDate).sort().map(d => {
+          const daySteps = byDate[d];
+          return daySteps.map((s,i) => {
+            const m = ACTION_META_SHORT[s.action] || {icon:'↔',label:s.action||'Move'};
+            const dest = s.rmdSlot || s.frameName || '—';
+            return `<tr style="${i%2===0?'':'background:var(--bg-elevated)'}">
+              <td style="padding:3px 6px;font-size:10px;font-family:var(--font-mono);color:var(--text-muted);white-space:nowrap">${i===0?d:''}</td>
+              <td style="padding:3px 6px;font-size:11px">${m.icon}</td>
+              <td style="padding:3px 6px;font:600 11px var(--font-mono)">${esc(s.cageName)}</td>
+              <td style="padding:3px 6px;font-size:10px;color:var(--text-secondary)">${esc(m.label)}</td>
+              <td style="padding:3px 6px;font-size:10px;color:var(--text-muted)">${esc(dest)}</td>
+              <td style="padding:3px 6px;font-size:9px;color:var(--text-muted);max-width:200px">${esc(s.note||'')}</td>
+            </tr>`;
+          }).join('');
+        }).join('');
+        const warnHTML = (plan.warnings||[]).length ? `<div style="margin-bottom:8px">${plan.warnings.map(w=>`<div style="padding:4px 10px;background:${w.startsWith('🚨')?'#fef2f2':'#fef0e6'};border:1px solid ${w.startsWith('🚨')?'#fca5a5':'#e8c8a0'};border-radius:5px;font-size:11px;color:${w.startsWith('🚨')?'#c0392b':'var(--orange)'};margin-bottom:3px">${esc(w)}</div>`).join('')}</div>` : '';
+        const detailId = 'plan-detail-' + plan.id;
+        const pendingCount = (plan.movementIds||[]).filter(mid => STATE.plannedMovements.find(m=>m.id===mid&&!m.completed)).length;
+        const totalCount = (plan.movementIds||[]).length;
+        const doneCount = totalCount - pendingCount;
+        return `<div style="border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-elevated);cursor:pointer"
+               onclick="const d=document.getElementById('${detailId}');d.style.display=d.style.display==='none'?'block':'none'">
+            <span style="font:700 12px var(--font-mono);color:var(--accent)">${esc(plan.ref)}</span>
+            <span style="font-size:11px;color:var(--text-muted)">${ts}</span>
+            <span style="font-size:11px;color:var(--text-secondary)">🚢 ${fmt(plan.boatDate)}</span>
+            <span style="font-size:11px;color:var(--text-muted)">${esc(plan.label)}</span>
+            ${warningBadge}
+            <span style="margin-left:auto;font-size:10px;color:var(--text-muted)">${doneCount}/${totalCount} moves done ▾</span>
+          </div>
+          <div id="${detailId}" style="display:none;padding:12px 14px">
+            ${plan.boatCages ? `<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px"><strong>Boat cages:</strong> ${esc(plan.boatCages)}</div>` : ''}
+            ${warnHTML}
+            <div style="overflow-x:auto">
+              <table style="width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+                <thead><tr style="background:var(--bg-elevated)">
+                  <th style="padding:4px 6px;font-size:9px;color:var(--text-muted);text-align:left">Date</th>
+                  <th style="padding:4px 6px;font-size:9px;color:var(--text-muted)"></th>
+                  <th style="padding:4px 6px;font-size:9px;color:var(--text-muted);text-align:left">Cage</th>
+                  <th style="padding:4px 6px;font-size:9px;color:var(--text-muted);text-align:left">Action</th>
+                  <th style="padding:4px 6px;font-size:9px;color:var(--text-muted);text-align:left">Destination</th>
+                  <th style="padding:4px 6px;font-size:9px;color:var(--text-muted);text-align:left">Note</th>
+                </tr></thead>
+                <tbody>${stepRows}</tbody>
+              </table>
+            </div>
+            <div style="margin-top:8px;text-align:right">
+              <button class="btn btn-danger btn-xs" onclick="if(confirm('Remove this saved plan from the audit log?')){STATE.savedPlans=(STATE.savedPlans||[]).filter(p=>p.id!=='${plan.id}');render()}">✕ Remove</button>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+      return `
+        <div class="card" style="margin-top:24px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <div class="card-title" style="margin:0">⚙ Generated Boat Plans <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(${plans.length} saved)</span></div>
+          </div>
+          ${planRows}
+        </div>`;
+    })()}
+
     <!-- Shipping & Frame Return Events -->
     ${(() => {
       const events = (STATE.auditEvents || []);
@@ -6312,6 +6401,34 @@ async function commitBoatPlan() {
     fixCount: newMovements.filter(m=>m.typeKey==='frame-fix-shipping').length,
   };
 
+  // ── Save a generated plan snapshot to the audit log ──────────────────────
+  {
+    if (!STATE.savedPlans) STATE.savedPlans = [];
+    const planRef = 'BP-' + new Date().toISOString().slice(0,10) + '-' + Math.floor(Math.random()*9000+1000);
+    const boatCageNames = [...bpSelectedCages].map(id => getCage(id)?.name).filter(Boolean).join(', ');
+    const planSnapshot = {
+      id: uid(),
+      ref: planRef,
+      boatDate: bpBoatDate,
+      label: bpLastCommit.label,
+      boatCages: boatCageNames,
+      warnings: bpGeneratedMovements?.warnings || [],
+      steps: scheduledSteps.map(s => ({
+        date: s.date,
+        action: s.action || (s.isFixStep ? 'fix' : s.isFacilityExit ? 'facility_exit_to_frame' : 'facility_to_frame'),
+        cageName: s.cage?.name || s.frame?.name || '?',
+        frameName: s.frame?.name || null,
+        rmdSlot: s.rmdSlot ? `RMD-${s.rmdSlot.number}${s.rmdSlot.side}` : null,
+        note: s.note || '',
+      })),
+      movementIds: newMovements.map(m => m.id),
+      createdAt: new Date().toISOString(),
+    };
+    STATE.savedPlans.unshift(planSnapshot);
+    if (STATE.savedPlans.length > 50) STATE.savedPlans = STATE.savedPlans.slice(0, 50);
+    bpLastCommit.planRef = planRef;
+  }
+
   bpSelectedCages.clear();
   bpGeneratedMovements = null;
   render();
@@ -6957,15 +7074,17 @@ function renderMovementsMap(dayCtx) {
           const mvOut = movesForRmd.some(m => m.cageId===cid && m.typeKey==='rmd-to-frame');
           const mvIn  = movesForRmd.some(m => m.cageId===cid && m.typeKey==='frame-to-rmd');
           const _mvShade = shipmentShadeClass(cage, _mvShipDays);
+          const hasPendingMove = STATE.plannedMovements.some(m => m.cageId === cid && !m.completed);
           let bg;
-          if (_mvShade === 'next') bg = 'background:#3b1d6e;border-color:#7040c0;';
+          if (_mvShade && hasPendingMove) { bg = 'background:#fff8c5;border-color:#e8b800;'; }
+          else if (_mvShade === 'next') bg = 'background:#3b1d6e;border-color:#7040c0;';
           else if (_mvShade === 'second') bg = 'background:#c8b8e8;border-color:#9070c8;';
           else if (cage.shippingPreference) bg = 'background:#fff8c5;border-color:#e8d850;';
           else if (mvOut) bg = 'background:#fff7ed;border-color:#f5a742;';
           else if (mvIn) bg = 'background:#f0faf4;border-color:#4aad72;';
           else bg = 'border-color:var(--border);';
-          const nameStyle = _mvShade === 'next' ? 'color:#e0ccff;' : _mvShade === 'second' ? 'color:#4a2a7a;' : cage.shippingPreference ? 'color:#7a5c00;' : '';
-          const detailStyle = _mvShade === 'next' ? 'color:#c0a8ee;' : _mvShade === 'second' ? 'color:#6a4a9a;' : '';
+          const nameStyle = (_mvShade && hasPendingMove) ? 'color:#7a5000;' : _mvShade === 'next' ? 'color:#e0ccff;' : _mvShade === 'second' ? 'color:#4a2a7a;' : cage.shippingPreference ? 'color:#7a5c00;' : '';
+          const detailStyle = (_mvShade && hasPendingMove) ? 'color:#a07000;' : _mvShade === 'next' ? 'color:#c0a8ee;' : _mvShade === 'second' ? 'color:#6a4a9a;' : '';
           const arrow = mvOut ? '<span style="color:#c08520;font-weight:800;margin-right:4px">→</span>'
                       : mvIn  ? '<span style="color:#27a060;font-weight:800;margin-right:4px">←</span>' : '';
           const hasMoves = STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length > 0;
@@ -7045,13 +7164,15 @@ function renderMovementsMap(dayCtx) {
     fCages.forEach(c=>{
       const out = outIds.includes(c.id);
       const _fShade = shipmentShadeClass(c, _mvShipDays);
+      const fHasPendingMove = STATE.plannedMovements.some(m => m.cageId === c.id && !m.completed);
       let fBg;
-      if (_fShade === 'next') fBg = 'background:#3b1d6e;border-color:#7040c0;';
+      if (_fShade && fHasPendingMove) fBg = 'background:#fff8c5;border-color:#e8b800;';
+      else if (_fShade === 'next') fBg = 'background:#3b1d6e;border-color:#7040c0;';
       else if (_fShade === 'second') fBg = 'background:#c8b8e8;border-color:#9070c8;';
       else if (c.shippingPreference) fBg = 'background:#fff8c5;border-color:#e8d850;';
       else fBg = `background:${out?'#fff7ed':'var(--bg-input)'};border-color:${out?'#f5a742':'var(--border)'};`;
-      const fNameStyle = _fShade === 'next' ? 'color:#e0ccff;' : _fShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference ? 'color:#7a5c00;' : '';
-      const fDetailStyle = _fShade === 'next' ? 'color:#c0a8ee;' : _fShade === 'second' ? 'color:#6a4a9a;' : 'color:var(--text-muted);';
+      const fNameStyle = (_fShade && fHasPendingMove) ? 'color:#7a5000;' : _fShade === 'next' ? 'color:#e0ccff;' : _fShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference ? 'color:#7a5c00;' : '';
+      const fDetailStyle = (_fShade && fHasPendingMove) ? 'color:#a07000;' : _fShade === 'next' ? 'color:#c0a8ee;' : _fShade === 'second' ? 'color:#6a4a9a;' : 'color:var(--text-muted);';
       const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
       html += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${fBg}">
         <div style="display:flex;align-items:center;gap:2px;">${out?'<span style="color:#c08520;font-weight:800">→</span>':''}<span style="font:600 10px var(--font-mono);${fNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
@@ -7063,13 +7184,15 @@ function renderMovementsMap(dayCtx) {
       if(fCages.find(x=>x.id===cid))return; // already shown
       if(transitIds.includes(cid))return; // will be shown as transit below
       const _iShade = shipmentShadeClass(c, _mvShipDays);
+      const iHasPendingMove = STATE.plannedMovements.some(m => m.cageId === c.id && !m.completed);
       let iBg;
-      if (_iShade === 'next') iBg = 'background:#3b1d6e;border-color:#7040c0;';
+      if (_iShade && iHasPendingMove) iBg = 'background:#fff8c5;border-color:#e8b800;';
+      else if (_iShade === 'next') iBg = 'background:#3b1d6e;border-color:#7040c0;';
       else if (_iShade === 'second') iBg = 'background:#c8b8e8;border-color:#9070c8;';
       else if (c.shippingPreference) iBg = 'background:#fff8c5;border-color:#e8d850;';
       else iBg = 'background:#f0faf4;border-color:#4aad72;';
-      const iNameStyle = _iShade === 'next' ? 'color:#e0ccff;' : _iShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference ? 'color:#7a5c00;' : '';
-      const iDetailStyle = _iShade === 'next' ? 'color:#c0a8ee;' : _iShade === 'second' ? 'color:#6a4a9a;' : 'color:var(--text-muted);';
+      const iNameStyle = (_iShade && iHasPendingMove) ? 'color:#7a5000;' : _iShade === 'next' ? 'color:#e0ccff;' : _iShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference ? 'color:#7a5c00;' : '';
+      const iDetailStyle = (_iShade && iHasPendingMove) ? 'color:#a07000;' : _iShade === 'next' ? 'color:#c0a8ee;' : _iShade === 'second' ? 'color:#6a4a9a;' : 'color:var(--text-muted);';
       const iMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
       html+=`<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${iBg}">
         <div style="display:flex;align-items:center;gap:2px;"><span style="color:#27a060;font-weight:800">←</span><span style="font:600 10px var(--font-mono);${iNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${esc(c.name)}${iMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${iMoveCount}</span>`:''}</span></div>
