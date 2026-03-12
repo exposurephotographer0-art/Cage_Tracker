@@ -7722,7 +7722,7 @@ function renderMovementsDayView() {
   }).join('');
 
   // Now render the full map, passing our day-context overrides
-  return renderMovementsMap({ dayMoves, simFrameCages, simRmdState, dayIdx, dates, prevDay, nextDay, dayTabsHTML });
+  return renderMovementsMap({ dayMoves, simFrameCages, simRmdState, cageLocSim, dayIdx, dates, prevDay, nextDay, dayTabsHTML });
 }
 
 function renderMovementsMap(dayCtx) {
@@ -7973,8 +7973,16 @@ function renderMovementsMap(dayCtx) {
 
   // ── Facility box: all cages with departure date, sorted by date ──
   const facilityMoves = filtered.filter(m => m.typeKey === 'facility-to-frame' || m.typeKey === 'facility-to-rmd');
+  // In day view use simulated cage locations so cages moved out on prior days are removed
   const facilityDepartureCages = STATE.cages
-    .filter(c => c.location === 'facility' && c.departureDate)
+    .filter(c => {
+      if (!c.departureDate) return false;
+      if (isDayView && dayCtx.cageLocSim) {
+        const sim = dayCtx.cageLocSim.get(c.id);
+        return sim ? sim.location === 'facility' : c.location === 'facility';
+      }
+      return c.location === 'facility';
+    })
     .sort((a, b) => a.departureDate.localeCompare(b.departureDate));
   const facilityCageIdsWithPlan = new Set(facilityMoves.map(m => m.cageId));
   const boatMoves = filtered.filter(m => m.typeKey === 'frame-return-from-client');
