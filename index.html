@@ -676,7 +676,12 @@ function hCat(h) {
 function lCat(l) { const t = (STATE.settings && STATE.settings.walerLengthThreshold) || 6.5; return l < t ? 'Stumpy' : 'Long'; }
 function hBadge(h) { const c = hCat(h); return c === 'Short' ? 'green' : c === 'Medium' ? 'yellow' : 'red'; }
 function hColor(h) { const c = hCat(h); return c === 'Short' ? 'var(--green)' : c === 'Medium' ? 'var(--orange)' : 'var(--red)'; }
-function hDot(h) { const col = hColor(h); return `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${col};margin-right:3px;flex-shrink:0;vertical-align:middle"></span>`; }
+function hDot(h) {
+  const c = hCat(h);
+  const col = c === 'Short' ? '#22c55e' : c === 'Medium' ? '#facc15' : '#ef4444';
+  const glow = c === 'Short' ? '0 0 6px 2px rgba(34,197,94,0.85)' : c === 'Medium' ? '0 0 6px 2px rgba(250,204,21,0.95)' : '0 0 6px 2px rgba(239,68,68,0.85)';
+  return `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${col};box-shadow:${glow};margin-right:3px;flex-shrink:0;vertical-align:middle"></span>`;
+}
 function cageLabel(c) { return `${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
 function cageLabelRaw(c) { return `${c.name} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
 function locBadge(l) { return {facility:'blue', rmd:'green', frame:'orange', shipped:'purple'}[l] || 'accent'; }
