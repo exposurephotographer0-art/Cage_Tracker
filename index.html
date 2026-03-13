@@ -6031,6 +6031,13 @@ let bpTripId = null;
 let bpLastCommit = null; // { ids: [...], label: string } — set after commitBoatPlan for undo
 let bpGuidance = ''; // user-provided guidance text for re-generation
 
+function bpSetAIGuidance(text) {
+  bpGuidance = text;
+  render();
+  // Trigger re-generation automatically
+  setTimeout(() => generateBoatMovements(), 100);
+}
+
 function bpSetTrip(tripId) {
   bpTripId = tripId || null;
   if (bpTripId) {
@@ -6818,19 +6825,34 @@ async function generateBoatMovements() {
   // ── AI insight (non-blocking) ─────────────────────────────────────────
   try {
     const noFrameCages = scheduledSteps.filter(s => s.action === 'no_frame');
+    // Build per-day schedule summary for AI
+    const byDay = {};
+    scheduledSteps.filter(s=>s.action!=='no_frame').forEach(s => {
+      const d = s.date || 'unscheduled';
+      if (!byDay[d]) byDay[d] = [];
+      byDay[d].push(`${s.cage?.name} → ${s.frame?.name || '?'} (${s.action})`);
+    });
+    const daySchedule = Object.entries(byDay).sort(([a],[b])=>a.localeCompare(b))
+      .map(([d, steps]) => `  ${d}: ${steps.join(' | ')}`).join('\n');
+
     const payload = {
       boatDate: bpBoatDate,
       userGuidance: bpGuidance || null,
       facilityExitCages: exitCagesToPlan.map(c => ({ name: c.name, width: c.width, departureDate: c.departureDate })),
       boatCages: boatCages.map(c => ({ name: c.name, width: c.width, height: c.height, location: c.location, needsWaler: needsWaler(c) })),
       facilityFrames: STATE.frames.filter(f => f.location === 'facility').map(f => ({ name: f.name, width: f.width, hasWaler: f.hasWaler, occupancy: f.cages.length })),
-      returningFrames: STATE.frames.filter(f => (f.location==='client'||f.location==='boat') && f.returnDate && f.returnDate <= bpBoatDate).map(f => ({ name: f.name, width: f.width, returnDate: f.returnDate })),
+      returningFrames: STATE.frames.filter(f => (f.location==='client'||f.location==='boat') && f.returnDate && f.returnDate <= bpBoatDate).map(f => ({ name: f.name, width: f.width, returnDate: f.returnDate, hasWaler: f.hasWaler })),
       scheduledSteps: scheduledSteps.filter(s=>s.action!=='no_frame').map(s => ({ cage: s.cage?.name, frame: s.frame?.name, action: s.action, date: s.date, isReturningFrame: !!s.isReturningFrame })),
+      daySchedule,
       warnings: warnings.filter(w => w.startsWith('⚠') || w.startsWith('🚨')),
       noFrameCages: noFrameCages.map(s => s.cage?.name),
       productionStoppageDay,
       workDays: workDays.length,
       dailyLimit: DAILY_LIMIT,
+      existingMovements: (STATE.plannedMovements || []).filter(m => !m.completed).map(m => ({
+        date: m.date, description: m.description, shift: m.shift, type: m.type
+      })),
+      previousAiInsight: bpGeneratedMovements?.aiInsight || null,
     };
     const aiRes = await fetch(API_BASE + '/api/ai-boat-plan', {
       method: 'POST',
@@ -7323,6 +7345,12 @@ function renderBoatPlanner() {
             <textarea id="bp-guidance-input" rows="3" placeholder="Enter guidance here, one instruction per line…"
               style="width:100%;font:400 12px var(--font-display);padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);resize:vertical;margin-bottom:10px"
               oninput="bpGuidance=this.value">${esc(bpGuidance)}</textarea>
+            <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+              <button class="btn btn-secondary btn-sm" onclick="bpSetAIGuidance('re-examine the existing planned movements and this new plan, identify any conflicts or inefficiencies, and suggest a better schedule')">🤖 Ask AI to improve</button>
+              <button class="btn btn-secondary btn-sm" onclick="bpSetAIGuidance('look at the day-by-day workload and rebalance so no day is overloaded, keeping within the daily movement limit')">⚖ Rebalance days</button>
+              <button class="btn btn-secondary btn-sm" onclick="bpSetAIGuidance('check waler requirements for all cages and make sure every cage that needs a waler is assigned to a frame that has one')">🔩 Fix waler issues</button>
+              <button class="btn btn-secondary btn-sm" onclick="bpSetAIGuidance('prioritise cages with the earliest departure dates and make sure they are scheduled earliest in the plan')">⏰ Prioritise by date</button>
+            </div>
             <div class="form-actions">
               <button class="btn btn-primary" onclick="openBoatPlanPreview()" title="Review movements day-by-day before committing">📅 Preview Plan</button>
               <button class="btn btn-primary" onclick="commitBoatPlan()">✅ Add to Planner</button>
