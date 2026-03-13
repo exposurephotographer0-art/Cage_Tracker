@@ -6549,6 +6549,31 @@ async function generateBoatMovements() {
   const boatReservedFrameIds = new Set(); // frames reserved for boat loading
 
   for (const cage of boatCages) {
+    // ── Check if a pending planned movement is already moving this cage into a frame ──
+    // If so, we only need to fix it for shipping — no new movement required.
+    const pendingToFrame = STATE.plannedMovements.find(m =>
+      !m.completed && m.cageId === cage.id &&
+      (m.typeKey === 'facility-to-frame' || m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-to-frame')
+    );
+    if (pendingToFrame) {
+      const plannedFrame = pendingToFrame.frameId
+        ? STATE.frames.find(f => f.id === pendingToFrame.frameId)
+        : null;
+      if (plannedFrame) {
+        // Cage already has a planned movement into this frame — only need to fix for shipping.
+        // Do NOT mark fixedForShipping=true here — that prevents the fix step being generated below.
+        boatReservedFrameIds.add(plannedFrame.id);
+        scheduledSteps.push({
+          action: 'already_framed',
+          cage, frame: plannedFrame, date: boatDate,
+          note: `Already planned into ${plannedFrame.name} ✓ — only needs fixing for shipping`,
+          pendingMove: pendingToFrame,
+          needsFix: true,
+        });
+        continue;
+      }
+    }
+
     if (cage.location === 'frame') {
       // Already in a frame — check if it's suitable
       const currentFrame = STATE.frames.find(f => f.cages.includes(cage.id));
@@ -6689,16 +6714,32 @@ async function generateBoatMovements() {
   }
 
   // ── Fix-for-shipping steps ─────────────────────────────────────────────
-  // All frames used for boat cages (not for transit) need fixing down
+  // All frames used for boat cages need fixing down before boat date.
+  // Includes: new movements (rmd_to_frame, facility_to_frame, reframe)
+  // AND already_framed cages where a pending planned movement puts them in a frame
+  // (those frames aren't yet fixedForShipping in STATE, only in frameSim).
   const boatFrames = [...new Set(
     scheduledSteps
-      .filter(s => boatReservedFrameIds.has(s.frame?.id) && s.action !== 'no_frame' && s.action !== 'already_framed')
+      .filter(s => {
+        if (!boatReservedFrameIds.has(s.frame?.id)) return false;
+        if (s.action === 'no_frame') return false;
+        // For already_framed: include only if flagged needsFix (pending movement) or frame not yet fixed
+        if (s.action === 'already_framed') {
+          if (s.needsFix) return true; // has pending move into frame, fix step needed
+          const stateFrame = STATE.frames.find(f => f.id === s.frame?.id);
+          return !stateFrame?.fixedForShipping;
+        }
+        return true;
+      })
       .map(s => s.frame)
   )].filter(Boolean).filter(f => !f.fixedForShipping);
 
   for (const frame of boatFrames) {
-    const loadDay = scheduledSteps.find(s => s.frame?.id === frame.id && s.action !== 'already_framed')?.date || boatDate;
-    // Fix step happens on or after the cage is loaded, before boat date
+    // For already_framed with pending move: fix can only happen after that move's date
+    const pendingStep = scheduledSteps.find(s => s.frame?.id === frame.id && s.pendingMove);
+    const moveStep    = scheduledSteps.find(s => s.frame?.id === frame.id && s.action !== 'already_framed' && s.action !== 'no_frame');
+    const loadDay     = pendingStep?.pendingMove?.date || moveStep?.date || boatDate;
+    // Fix step on or after load day, on or before boat date
     const fixDay = workDays.filter(d => d >= loadDay && d <= boatDate).slice(-1)[0] || boatDate;
     useMove(fixDay);
     scheduledSteps.push({
@@ -6751,14 +6792,26 @@ async function generateBoatMovements() {
   let moveNum = 1;
 
   // Summary counts
-  const exitCount  = scheduledSteps.filter(s => s.action === 'facility_exit_to_frame').length;
-  const rmdCount   = scheduledSteps.filter(s => s.action === 'facility_exit_frame_to_rmd').length;
-  const storeCount = scheduledSteps.filter(s => s.action === 'facility_exit_frame_storage').length;
-  const boatCount  = scheduledSteps.filter(s => ['rmd_to_frame','facility_to_frame','reframe','already_framed'].includes(s.action)).length;
-  const noFrame    = scheduledSteps.filter(s => s.action === 'no_frame');
+  const exitCount     = scheduledSteps.filter(s => s.action === 'facility_exit_to_frame').length;
+  const rmdCount      = scheduledSteps.filter(s => s.action === 'facility_exit_frame_to_rmd').length;
+  const storeCount    = scheduledSteps.filter(s => s.action === 'facility_exit_frame_storage').length;
+  const boatMoveCount = scheduledSteps.filter(s => ['rmd_to_frame','facility_to_frame','reframe'].includes(s.action)).length;
+  const alreadyFramed = scheduledSteps.filter(s => s.action === 'already_framed');
+  const pendingFramed = alreadyFramed.filter(s => s.needsFix);
+  const fullyReady    = alreadyFramed.filter(s => !s.needsFix);
+  const boatCount     = boatMoveCount + alreadyFramed.length;
+  const noFrame       = scheduledSteps.filter(s => s.action === 'no_frame');
 
-  if (exitCount > 0 || storeCount > 0) {
-    moves.push({ type: '📋 Plan Summary', desc: `${exitCount} facility exit${exitCount!==1?'s':''} planned · ${boatCount} cage${boatCount!==1?'s':''} for boat loading${storeCount>0?' · '+storeCount+' cage(s) held in frame (RMD full)':''}`, category: 'info' });
+  {
+    const summaryParts = [];
+    if (exitCount > 0)        summaryParts.push(`${exitCount} facility exit${exitCount!==1?'s':''} planned`);
+    if (boatMoveCount > 0)    summaryParts.push(`${boatMoveCount} new boat movement${boatMoveCount!==1?'s':''}`);
+    if (pendingFramed.length) summaryParts.push(`${pendingFramed.length} cage${pendingFramed.length!==1?'s':''} already being moved into frame — fix only`);
+    if (fullyReady.length)    summaryParts.push(`${fullyReady.length} cage${fullyReady.length!==1?'s':''} already in frame & ready`);
+    if (storeCount > 0)       summaryParts.push(`${storeCount} cage(s) held in frame (RMD full)`);
+    if (summaryParts.length > 0) {
+      moves.push({ type: '📋 Plan Summary', desc: summaryParts.join(' · '), category: 'info' });
+    }
   }
 
   noFrame.forEach(s => {
@@ -6776,7 +6829,10 @@ async function generateBoatMovements() {
       }
 
       if (step.action === 'already_framed') {
-        moves.push({ type: '✓ Ready', desc: `Cage ${step.cage.name} — ${step.note}`, category: 'info' });
+        const readyLabel = step.needsFix
+          ? `⏳ Pending → ${step.frame.name}`
+          : '✓ Ready';
+        moves.push({ type: readyLabel, desc: `Cage ${step.cage.name} — ${step.note}`, category: 'info' });
       } else if (step.isFixStep) {
         moves.push({ type: `🔩 Fix · Move ${moveNum++}`, desc: step.note, category: 'move' });
       } else if (step.action === 'facility_exit_to_frame') {
