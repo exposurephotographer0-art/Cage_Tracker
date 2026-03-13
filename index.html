@@ -9488,25 +9488,21 @@ async function sendAIChatMessage(overrideText) {
   msgs.scrollTop = msgs.scrollHeight;
 
   try {
-    // Build context snapshot from current app state
+    // Build a lean context snapshot
+    const allCages = state.cages || [];
+    const allMovements = state.plannedMovements || [];
     const context = {
-      cages: (state.cages || []).map(c => ({
-        name: c.name, width: c.width, height: c.height, length: c.length,
-        weight: c.weight, location: c.location, locationDetail: c.locationDetail,
-        notes: c.notes, departureDate: c.departureDate
-      })),
-      frames: (state.frames || []).map(f => ({
-        name: f.name, width: f.width, location: f.location, hasWaler: f.hasWaler,
-        returnDate: f.returnDate, cages: f.cages
-      })),
-      movements: (state.plannedMovements || []).map(m => ({
-        date: m.date, description: m.description, shift: m.shift,
-        completed: m.completed, type: m.type
-      })),
-      boatTrips: (state.boatTrips || []).map(t => ({
-        label: t.label, loadDate: t.loadDate, departDate: t.departDate, notes: t.notes
-      })),
-      rmdSlots: state.rmdSlots || []
+      cages: allCages.map(c => ({ name: c.name, width: c.width, height: c.height, weight: c.weight, location: c.location })),
+      frames: (state.frames || []).map(f => ({ name: f.name, width: f.width, location: f.location, hasWaler: f.hasWaler, returnDate: f.returnDate || null, cageCount: (f.cages || []).length })),
+      movements: allMovements.slice(0, 50).map(m => ({ date: m.date, description: m.description, shift: m.shift, completed: m.completed })),
+      boatTrips: (state.boatTrips || []).map(t => ({ label: t.label, loadDate: t.loadDate, departDate: t.departDate })),
+      stats: {
+        totalCages: allCages.length,
+        atFacility: allCages.filter(c => c.location === 'facility').length,
+        atSea: allCages.filter(c => c.location === 'sea').length,
+        pendingMovements: allMovements.filter(m => !m.completed).length,
+        completedMovements: allMovements.filter(m => m.completed).length,
+      }
     };
 
     const res = await fetch(API_BASE + '/api/ai-chat', {
@@ -9515,25 +9511,27 @@ async function sendAIChatMessage(overrideText) {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + _sessionPin
       },
-      body: JSON.stringify({
-        message: text,
-        history: _aiChatHistory.slice(-12),
-        context
-      })
+      body: JSON.stringify({ message: text, history: _aiChatHistory.slice(-6), context })
     });
 
     thinkingDiv.remove();
-    const data = await res.json();
 
-    if (data.ok && data.reply) {
-      appendAIChatMsg('assistant', data.reply);
-      _aiChatHistory.push({ role: 'assistant', content: data.reply });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => String(res.status));
+      appendAIChatMsg('error', '⚠️ Server error (' + res.status + '): ' + errText);
     } else {
-      appendAIChatMsg('error', '⚠️ ' + (data.error || 'Something went wrong. Please try again.'));
+      const data = await res.json();
+      if (data.ok && data.reply) {
+        appendAIChatMsg('assistant', data.reply);
+        _aiChatHistory.push({ role: 'assistant', content: data.reply });
+      } else {
+        appendAIChatMsg('error', '⚠️ ' + (data.error || 'Something went wrong. Please try again.'));
+      }
     }
   } catch (e) {
     thinkingDiv.remove();
-    appendAIChatMsg('error', '⚠️ Connection error. Please check your network and try again.');
+    appendAIChatMsg('error', '⚠️ Error: ' + (e.message || 'Connection failed.'));
+    console.error('AI chat error:', e);
   }
 
   if (sendBtn) sendBtn.disabled = false;
