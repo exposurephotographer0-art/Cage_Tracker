@@ -1221,6 +1221,8 @@ async function api(path, method = 'GET', body = null) {
 
 // ── Load all state from D1 on startup ───────────────────────────────────────
 async function loadState() {
+  if (!STATE.customTabs)     STATE.customTabs     = [];
+  if (!STATE.customTabItems) STATE.customTabItems = [];
   // Load from embedded PRELOAD_STATE immediately so the UI is never blocked
   STATE = {
     ...initState(),
@@ -1285,6 +1287,8 @@ async function loadState() {
         secondShipTripId: data.settings?.secondShipTripId || null,
       }
     };
+    STATE.customTabs     = data.customTabs     || [];
+    STATE.customTabItems = data.customTabItems  || [];
     console.log('[CageTracker] State synced from API:', STATE.cages.length, 'cages');
     render();
   } catch(e) {
@@ -1569,11 +1573,36 @@ function renderMobileNav() {
 }
 
 function renderSidebar() {
+  const tabs = (STATE && STATE.customTabs) || [];
+  const ro = typeof isReadOnly === 'function' ? isReadOnly() : false;
+  let customHtml = '';
+  if (tabs.length > 0 || !ro) {
+    customHtml = `
+      <div class="sidebar-section-label">
+        My Tabs
+        ${!ro ? `<button class="sidebar-manage-btn" onclick="openCustomTabManager()" title="Manage custom tabs">⚙ Manage</button>` : ''}
+      </div>
+      ${tabs.map(t => `
+        <button class="sidebar-btn ${activeTab === 'custom_' + t.id ? 'active' : ''}"
+          onclick="switchTab('custom_${t.id}')">
+          <span class="sidebar-icon">${t.icon}</span>
+          <span>${t.label}</span>
+        </button>
+      `).join('')}
+      ${!ro ? `
+        <button class="sidebar-btn" style="color:var(--text-muted);font-style:italic"
+          onclick="openCustomTabManager()">
+          <span class="sidebar-icon" style="font-size:12px">＋</span>
+          <span style="font-size:12px">New Tab</span>
+        </button>
+      ` : ''}
+    `;
+  }
   document.getElementById('sidebar').innerHTML = TABS.map(t=>`
     <button class="sidebar-btn ${activeTab===t.id?'active':''}" onclick="switchTab('${t.id}')">
       <span class="sidebar-icon">${t.icon}</span><span>${t.label}</span>
     </button>
-  `).join('');
+  `).join('') + customHtml;
   renderMobileNav();
 }
 
@@ -1611,6 +1640,12 @@ function renderMain() {
 }
 
 function renderTab(id) {
+  if (id && id.startsWith('custom_')) {
+    const tabId = id.slice(7);
+    const tab = ((STATE && STATE.customTabs) || []).find(t => t.id === tabId);
+    if (tab) return renderCustomTab(tab);
+    return '<div style="padding:40px;color:var(--text-muted)">Tab not found.</div>';
+  }
   switch(id) {
     case 'dashboard': return renderDashboard();
     case 'analytics': return renderAnalytics();
@@ -9806,17 +9841,11 @@ document.addEventListener("DOMContentLoaded", async function() {
     const today = new Date().toISOString().slice(0,10);
     if (cached && cached.pin && cached.date === today) {
       // Attempt silent auth with cached PIN
-      const _authAbort = new AbortController();
-      const _authTimeout = setTimeout(() => _authAbort.abort(), 4000);
-      let res;
-      try {
-        res = await fetch(API_BASE + '/api/auth', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin: cached.pin }),
-          signal: _authAbort.signal
-        });
-      } finally { clearTimeout(_authTimeout); }
+      const res = await fetch(API_BASE + '/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: cached.pin })
+      });
       const data = await res.json();
       if (data.ok && (data.level === cached.level || data.level)) {
         _sessionPin = cached.pin;
@@ -9844,11 +9873,7 @@ document.addEventListener("DOMContentLoaded", async function() {
 
   // Check if IP is already locked before showing screen
   try {
-    const _lockAbort = new AbortController();
-    const _lockTimeout = setTimeout(() => _lockAbort.abort(), 4000);
-    let res;
-    try { res = await fetch(API_BASE + '/api/lockout-status', { signal: _lockAbort.signal }); }
-    finally { clearTimeout(_lockTimeout); }
+    const res = await fetch(API_BASE + '/api/lockout-status');
     const data = await res.json();
     if (data.locked) {
       showPinScreen('Too many previous attempts.', true, data.remaining);
@@ -9875,7 +9900,7 @@ document.addEventListener("DOMContentLoaded", async function() {
 });
 
 
-// ═══ Custom Tabs Patch ═══
+// ═══ Custom Tabs ═══
 
 // ═══════════════════════════════════════════════════════════════════════════
 // CUSTOM TABS SYSTEM
@@ -9916,57 +9941,6 @@ async function apiUpdateCustomTabItem(item) {
 }
 async function apiDeleteCustomTabItem(id) {
   try { await api('/api/custom_tab_items', 'DELETE', { id }); } catch(e) { showError('Failed to delete item: ' + e.message); }
-}
-
-// ── Sidebar integration: patch renderSidebar ──────────────────────────────
-// We wrap the existing renderSidebar to append custom tab buttons
-const _origRenderSidebar = renderSidebar;
-function renderSidebar() {
-  _origRenderSidebar();
-  const sidebar = document.getElementById('sidebar');
-  if (!sidebar) return;
-  const tabs = getCustomTabs();
-  if (tabs.length === 0 && isReadOnly()) return;
-  // Remove any previously injected custom tab section to avoid duplicates
-  const existing = sidebar.querySelector('.ct-sidebar-section');
-  if (existing) existing.remove();
-  const section = document.createElement('div');
-  section.className = 'ct-sidebar-section';
-  section.innerHTML = `
-    <div class="sidebar-section-label">
-      My Tabs
-      ${!isReadOnly() ? `<button class="sidebar-manage-btn" onclick="openCustomTabManager()" title="Manage custom tabs">⚙ Manage</button>` : ''}
-    </div>
-    ${tabs.map(t => `
-      <button class="sidebar-btn ${activeTab === 'custom_' + t.id ? 'active' : ''}"
-        onclick="switchTab('custom_${t.id}')">
-        <span class="sidebar-icon">${t.icon}</span>
-        <span>${esc(t.label)}</span>
-      </button>
-    `).join('')}
-    ${!isReadOnly() ? `
-      <button class="sidebar-btn" style="color:var(--text-muted);font-style:italic"
-        onclick="openCustomTabManager()">
-        <span class="sidebar-icon" style="font-size:12px">＋</span>
-        <span style="font-size:12px">New Tab</span>
-      </button>
-    ` : ''}
-  `;
-  sidebar.appendChild(section);
-}
-
-// ── Patch renderTab to handle custom_* tabs ────────────────────────────────
-const _origRenderTab = renderTab;
-function renderTab(id) {
-  if (id && id.startsWith('custom_')) {
-    const tabId = id.slice(7);
-    const tab = getCustomTabs().find(t => t.id === tabId);
-    if (tab) {
-      return renderCustomTab(tab);
-    }
-    return `<div style="padding:40px;color:var(--text-muted)">Tab not found.</div>`;
-  }
-  return _origRenderTab(id);
 }
 
 // ── Render a custom tab's content ─────────────────────────────────────────
@@ -10574,23 +10548,6 @@ async function ctPickIcon(tabId, icon) {
   if (picker) picker.remove();
   renderSidebar();
 }
-
-// ── Initialise: merge customTabs into STATE when loaded ───────────────────
-// Patch loadState to include customTabs and customTabItems from API response
-const _origLoadState = typeof loadState === 'function' ? loadState : null;
-// The state is already loaded by the existing loadState() which now returns
-// customTabs and customTabItems from the /api/state endpoint.
-// We just need to ensure the STATE normalization covers them.
-const _origNormalizeState = function(data) {
-  if (data.customTabs)     STATE.customTabs     = data.customTabs;
-  if (data.customTabItems) STATE.customTabItems  = data.customTabItems;
-};
-
-// Ensure custom tab state is always initialised (safe version - no render override)
-(function() {
-  if (!STATE.customTabs)     STATE.customTabs     = [];
-  if (!STATE.customTabItems) STATE.customTabItems = [];
-})();
 
 
 </script>
