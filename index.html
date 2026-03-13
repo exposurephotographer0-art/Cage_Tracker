@@ -7800,48 +7800,35 @@ function renderMovementsDayView() {
 
   // Movements FOR this day (all: pending + completed)
   const dayMoves = STATE.plannedMovements.filter(m => m.date === mvDayDate);
-  // Prior pending moves (simulate as if completed)
+  // Prior PENDING moves to simulate forward (not yet completed, scheduled before this day)
   const priorMoves = allPending.filter(m => m.date && m.date < mvDayDate)
     .sort((a, b) => (a.date||'').localeCompare(b.date||''));
 
+  // Completed moves that happened AFTER the viewed date — must be reversed to reconstruct past state
+  const futureDoneMoves = STATE.plannedMovements.filter(m =>
+    m.completed && m.date && m.date > mvDayDate
+  ).sort((a, b) => (b.date||'').localeCompare(a.date||''));
+  // Also reverse completed moves ON this day (we want start-of-day, before today's moves ran)
+  const sameDayDoneMoves = STATE.plannedMovements.filter(m =>
+    m.completed && m.date && m.date === mvDayDate
+  );
+  const allMovesToReverse = [...futureDoneMoves, ...sameDayDoneMoves];
+
   // ── Simulate cage locations at START of this day ─────────────────────────────
-  // Build override maps so buildRmdCard/buildFrameCard use simulated positions
-  // cageLocSim: cageId → { location, locationDetail, frameId }
+  // Strategy:
+  //   1. Start from current STATE (reflects all completed moves so far)
+  //   2. UNDO completed moves that happened on or after the viewed date
+  //   3. APPLY prior pending moves that were scheduled before this day
   const cageLocSim = new Map();
   STATE.cages.forEach(c => cageLocSim.set(c.id, {
-    location: c.location, locationDetail: c.locationDetail || '', frameId:
-      c.location === 'frame' ? (STATE.frames.find(f => f.cages.includes(c.id))?.id || null) : null
+    location: c.location, locationDetail: c.locationDetail || '',
+    frameId: c.location === 'frame' ? (STATE.frames.find(f => f.cages.includes(c.id))?.id || null) : null
   }));
-  // Also seed RMD locationDetail for cages in RMD
   STATE.cages.forEach(c => {
     if (c.location === 'rmd') cageLocSim.set(c.id, { location:'rmd', locationDetail: c.locationDetail||'', frameId:null });
   });
 
-  // Apply prior moves to get start-of-day state
-  priorMoves.forEach(m => {
-    if (!cageLocSim.has(m.cageId)) return;
-    if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'facility-to-frame' || m.typeKey === 'frame-to-frame') {
-      cageLocSim.set(m.cageId, { location:'frame', locationDetail: getFrame(m.frameId)?.name||'', frameId: m.frameId||null });
-    } else if (m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') {
-      const slot = m.rmdNumber != null ? `RMD-${m.rmdNumber}${m.rmdSide||''}` : (m.rmdSlot||'RMD');
-      cageLocSim.set(m.cageId, { location:'rmd', locationDetail: slot, frameId:null });
-    }
-  });
-
-  // Build simulated frame occupancy: frameId → [cageId]
-  // Seed ALL frames referenced in any movement (including returning frames) so the
-  // map can display cage positions for non-facility frames too.
-  const simFrameCages = {};
-  STATE.frames.forEach(f => { simFrameCages[f.id] = []; });
-  // Also add any frame IDs referenced in movements that may not be in STATE.frames
-  allPending.forEach(m => { if (m.frameId && !(m.frameId in simFrameCages)) simFrameCages[m.frameId] = []; });
-  cageLocSim.forEach((loc, cid) => {
-    if (loc.location==='frame' && loc.frameId && simFrameCages[loc.frameId]!==undefined)
-      simFrameCages[loc.frameId].push(cid);
-  });
-
-  // Build simulated RMD occupancy: rmdNum → { A:{cage1,cage2,...}, B:{...} }
-  // We overlay real RMD state then apply prior moves
+  // Build simulated RMD occupancy from current STATE
   const simRmdState = {};
   STATE.rmdSlots.forEach(r => {
     simRmdState[r.number] = {
@@ -7849,39 +7836,107 @@ function renderMovementsDayView() {
       B: { cage1: r.B.cage1||null, cage2: r.B.cage2||null },
     };
   });
-  // Apply prior moves: remove cages that moved out of RMD, add cages that moved in
-  priorMoves.forEach(m => {
-    // Remove from RMD if moved out
-    if (m.typeKey === 'rmd-to-frame') {
-      STATE.rmdSlots.forEach(r => {
-        ['A','B'].forEach(side => {
-          ['cage1','cage2'].forEach(slot => {
-            if (simRmdState[r.number]?.[side]?.[slot] === m.cageId) simRmdState[r.number][side][slot] = null;
-          });
+
+  // Helper: remove a cageId from wherever it appears in simRmdState
+  function simRmdRemoveCage(cageId) {
+    Object.values(simRmdState).forEach(rmd => {
+      ['A','B'].forEach(side => {
+        ['cage1','cage2'].forEach(slot => {
+          if (rmd[side][slot] === cageId) rmd[side][slot] = null;
         });
       });
+    });
+  }
+
+  // Helper: add a cage to an RMD slot based on movement data
+  function simRmdAddCage(m) {
+    let rn = m.rmdNumber != null ? parseInt(m.rmdNumber) : null;
+    let side = m.rmdSide ? m.rmdSide.toUpperCase() : null;
+    let preferredSlot = null;
+    if (rn == null && m.rmdSlot) {
+      const match = String(m.rmdSlot).match(/^(\d+)\s*([ABab])/);
+      if (match) { rn = parseInt(match[1]); side = match[2].toUpperCase(); }
+      const slotMatch = String(m.rmdSlot).match(/:?(cage[12])$/i);
+      if (slotMatch) preferredSlot = slotMatch[1];
     }
-    // Add to RMD if moved in — support both rmdNumber/rmdSide (boat planner)
-    // and rmdSlot string like "12A" or "12A:cage2" (manual planner)
-    if (m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') {
+    if (rn != null && side) {
+      if (!simRmdState[rn]) simRmdState[rn] = {A:{cage1:null,cage2:null},B:{cage1:null,cage2:null}};
+      const target = preferredSlot && !simRmdState[rn][side][preferredSlot]
+        ? preferredSlot
+        : ['cage1','cage2'].find(s => !simRmdState[rn][side][s]);
+      if (target) simRmdState[rn][side][target] = m.cageId;
+    }
+  }
+
+  // Step 1: UNDO completed moves that happened on or after the viewed date
+  allMovesToReverse.forEach(m => {
+    if (!m.cageId) return;
+    if (m.typeKey === 'rmd-to-frame') {
+      // Cage was in RMD before this move — put it back
       let rn = m.rmdNumber != null ? parseInt(m.rmdNumber) : null;
       let side = m.rmdSide ? m.rmdSide.toUpperCase() : null;
-      let preferredSlot = null;
-      if (rn == null && m.rmdSlot) {
-        const match = String(m.rmdSlot).match(/^(\d+)\s*([ABab])/);
-        if (match) { rn = parseInt(match[1]); side = match[2].toUpperCase(); }
-        const slotMatch = String(m.rmdSlot).match(/:?(cage[12])$/i);
-        if (slotMatch) preferredSlot = slotMatch[1];
+      if (rn == null) {
+        // Try to find old RMD location from location history or description
+        const hist = STATE.cages.find(c=>c.id===m.cageId)?.locationHistory;
+        const prev = hist ? [...hist].reverse().find(h => h.location === 'rmd' && h.date <= m.date) : null;
+        if (prev?.detail) {
+          const match = prev.detail.match(/(\d+)\s*([ABab])/);
+          if (match) { rn = parseInt(match[1]); side = match[2].toUpperCase(); }
+        }
       }
       if (rn != null && side) {
         if (!simRmdState[rn]) simRmdState[rn] = {A:{cage1:null,cage2:null},B:{cage1:null,cage2:null}};
-        const slots = ['cage1','cage2'];
-        const target = preferredSlot && !simRmdState[rn][side][preferredSlot]
-          ? preferredSlot
-          : slots.find(s => !simRmdState[rn][side][s]);
-        if (target) simRmdState[rn][side][target] = m.cageId;
+        const target = ['cage1','cage2'].find(s => !simRmdState[rn][side][s]);
+        if (target) {
+          simRmdState[rn][side][target] = m.cageId;
+          cageLocSim.set(m.cageId, { location:'rmd', locationDetail:`RMD-${rn}${side}`, frameId:null });
+        }
       }
     }
+    else if (m.typeKey === 'facility-to-frame') {
+      // Cage was in facility before — put it back
+      cageLocSim.set(m.cageId, { location:'facility', locationDetail:'', frameId:null });
+    }
+    else if (m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') {
+      // Cage was in a frame/facility before — remove from RMD, restore
+      simRmdRemoveCage(m.cageId);
+      const prevFrameId = m.frameId || null;
+      if (prevFrameId) {
+        cageLocSim.set(m.cageId, { location:'frame', locationDetail: getFrame(prevFrameId)?.name||'', frameId: prevFrameId });
+      } else {
+        cageLocSim.set(m.cageId, { location:'facility', locationDetail:'', frameId:null });
+      }
+    }
+    else if (m.typeKey === 'frame-to-frame') {
+      // Cage was in the source frame — restore
+      const srcFrameId = m.srcFrameId || null;
+      if (srcFrameId) {
+        cageLocSim.set(m.cageId, { location:'frame', locationDetail: getFrame(srcFrameId)?.name||'', frameId: srcFrameId });
+      }
+    }
+  });
+
+  // Step 2: APPLY prior pending moves forward (these haven't happened yet in STATE)
+  priorMoves.forEach(m => {
+    if (!cageLocSim.has(m.cageId)) return;
+    if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'facility-to-frame' || m.typeKey === 'frame-to-frame') {
+      simRmdRemoveCage(m.cageId);
+      cageLocSim.set(m.cageId, { location:'frame', locationDetail: getFrame(m.frameId)?.name||'', frameId: m.frameId||null });
+    } else if (m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') {
+      const slot = m.rmdNumber != null ? `RMD-${m.rmdNumber}${m.rmdSide||''}` : (m.rmdSlot||'RMD');
+      cageLocSim.set(m.cageId, { location:'rmd', locationDetail: slot, frameId:null });
+      simRmdAddCage(m);
+    }
+  });
+
+  // Build simulated frame occupancy from final cageLocSim
+  const simFrameCages = {};
+  STATE.frames.forEach(f => { simFrameCages[f.id] = []; });
+  allPending.forEach(m => { if (m.frameId && !(m.frameId in simFrameCages)) simFrameCages[m.frameId] = []; });
+  allMovesToReverse.forEach(m => { if (m.frameId && !(m.frameId in simFrameCages)) simFrameCages[m.frameId] = []; });
+  cageLocSim.forEach((loc, cid) => {
+    if (loc.location==='frame' && loc.frameId && simFrameCages[loc.frameId]!==undefined)
+      simFrameCages[loc.frameId].push(cid);
   });
 
   // Day tab strip
