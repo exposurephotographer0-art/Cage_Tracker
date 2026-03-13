@@ -826,6 +826,201 @@ tr.dragging { opacity: 0.4; }
   /* Log out button: hide text on small screens */
   .logout-text { display: none; }
 }
+
+/* ── Custom Tabs Patch ── */
+
+/* ── Custom Tab Manager ── */
+.ct-manager-overlay {
+  position: fixed; inset: 0; z-index: 1200;
+  background: rgba(10,15,30,0.55); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+}
+.ct-manager-modal {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); width: 560px; max-width: 95vw;
+  max-height: 85vh; display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+}
+.ct-manager-header {
+  padding: 18px 20px 14px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.ct-manager-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.ct-manager-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+
+.ct-tab-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius); margin-bottom: 8px;
+  background: var(--bg-elevated); cursor: grab;
+  transition: background 0.1s;
+}
+.ct-tab-row:hover { background: #f0f4f8; }
+.ct-tab-row.drag-over { background: var(--accent-dim); border-color: var(--accent); }
+.ct-tab-icon-picker {
+  font-size: 20px; cursor: pointer; padding: 2px 6px;
+  border-radius: 6px; transition: background 0.1s;
+  user-select: none;
+}
+.ct-tab-icon-picker:hover { background: var(--border); }
+.ct-tab-name-input {
+  flex: 1; border: 1px solid transparent; background: transparent;
+  font: 600 13px var(--font-display); color: var(--text-primary);
+  padding: 4px 8px; border-radius: 6px;
+}
+.ct-tab-name-input:focus { border-color: var(--accent); background: var(--bg-input); }
+
+/* ── Emoji Picker ── */
+.ct-emoji-picker {
+  position: absolute; z-index: 1300;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 10px;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.18);
+  display: flex; flex-wrap: wrap; gap: 4px;
+  width: 220px;
+}
+.ct-emoji-btn {
+  width: 32px; height: 32px; border: none; background: none;
+  cursor: pointer; font-size: 18px; border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.1s;
+}
+.ct-emoji-btn:hover { background: var(--border); }
+
+/* ── Custom Tab Content ── */
+.ct-toolbar {
+  display: flex; gap: 8px; align-items: center;
+  margin-bottom: 18px; flex-wrap: wrap;
+}
+.ct-item-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  transition: box-shadow 0.15s;
+}
+.ct-item-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.ct-item-header {
+  padding: 12px 14px 8px; display: flex; align-items: flex-start; gap: 10px;
+  border-bottom: 1px solid var(--border-light);
+}
+.ct-item-type-badge {
+  font: 600 9px var(--font-mono); text-transform: uppercase;
+  letter-spacing: 0.06em; padding: 2px 8px; border-radius: 10px;
+  flex-shrink: 0; margin-top: 2px;
+}
+.ct-item-title-input {
+  flex: 1; border: none; background: none; font: 600 14px var(--font-display);
+  color: var(--text-primary); padding: 0; outline: none;
+  border-bottom: 1px dashed transparent; transition: border-color 0.12s;
+}
+.ct-item-title-input:focus { border-bottom-color: var(--accent); }
+.ct-item-body { padding: 12px 14px; }
+.ct-item-actions { padding: 8px 14px; border-top: 1px solid var(--border-light); display: flex; gap: 6px; align-items: center; }
+
+/* ── Note type ── */
+.ct-note-textarea {
+  width: 100%; min-height: 80px; resize: vertical;
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 10px 12px; font: 400 13px var(--font-display);
+  color: var(--text-primary); background: var(--bg-input);
+  line-height: 1.6; transition: border-color 0.12s;
+}
+.ct-note-textarea:focus { outline: none; border-color: var(--accent); }
+
+/* ── Checklist type ── */
+.ct-checklist { list-style: none; padding: 0; margin: 0; }
+.ct-checklist-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 0; border-bottom: 1px solid var(--border-light);
+}
+.ct-checklist-item:last-child { border-bottom: none; }
+.ct-checklist-item input[type=checkbox] {
+  width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent);
+  flex-shrink: 0;
+}
+.ct-checklist-text {
+  flex: 1; border: none; background: none;
+  font: 400 13px var(--font-display); color: var(--text-primary);
+  padding: 2px 4px; border-radius: 4px; transition: background 0.1s;
+}
+.ct-checklist-text:focus { outline: none; background: var(--bg-input); }
+.ct-checklist-text.done { text-decoration: line-through; color: var(--text-muted); }
+
+/* ── Action/task type ── */
+.ct-action-row {
+  display: flex; align-items: center; gap: 8px; padding: 6px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+.ct-action-row:last-child { border-bottom: none; }
+.ct-action-status {
+  width: 24px; height: 24px; border-radius: 50%;
+  border: 2px solid var(--border); cursor: pointer;
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; background: var(--bg-card);
+  font-size: 12px;
+}
+.ct-action-status.done { background: var(--green); border-color: var(--green); }
+.ct-action-status.done::after { content: '✓'; color: white; font-weight: 700; }
+.ct-action-label {
+  flex: 1; font-size: 13px; color: var(--text-primary);
+  border: none; background: none; padding: 2px 4px;
+}
+.ct-action-label:focus { outline: none; background: var(--bg-input); border-radius: 4px; }
+.ct-action-label.done { text-decoration: line-through; color: var(--text-muted); }
+.ct-action-date { font: 600 10px var(--font-mono); color: var(--text-muted); }
+
+/* ── Table type ── */
+.ct-table-wrapper { overflow-x: auto; }
+.ct-data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ct-data-table th {
+  background: var(--bg-elevated); padding: 6px 10px;
+  font: 600 10px var(--font-mono); text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-muted);
+  border-bottom: 2px solid var(--border);
+}
+.ct-data-table td {
+  padding: 7px 10px; border-bottom: 1px solid var(--border-light);
+}
+.ct-data-table td input {
+  width: 100%; border: none; background: none; font-size: 12px;
+  padding: 2px 4px; color: var(--text-primary);
+}
+.ct-data-table td input:focus { outline: none; background: var(--bg-input); border-radius: 3px; }
+
+/* ── Link type ── */
+.ct-link-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid var(--border-light);
+}
+.ct-link-item:last-child { border-bottom: none; }
+.ct-link-icon { font-size: 18px; width: 28px; text-align: center; }
+.ct-link-text { flex: 1; }
+.ct-link-label { font: 600 13px var(--font-display); color: var(--text-primary); }
+.ct-link-url { font: 400 11px var(--font-mono); color: var(--blue); word-break: break-all; }
+.ct-link-url a { color: var(--blue); text-decoration: none; }
+.ct-link-url a:hover { text-decoration: underline; }
+
+/* ── Sidebar custom tab section ── */
+.sidebar-section-label {
+  padding: 10px 18px 4px;
+  font: 700 9px var(--font-mono);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-top: 1px solid var(--border-light);
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sidebar-manage-btn {
+  font: 600 9px var(--font-mono); background: none; border: none;
+  color: var(--text-muted); cursor: pointer; padding: 2px 4px;
+  border-radius: 4px; transition: all 0.1s;
+}
+.sidebar-manage-btn:hover { color: var(--accent); background: var(--accent-dim); }
+
+
 </style>
 <script>
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -9668,6 +9863,724 @@ document.addEventListener("DOMContentLoaded", async function() {
     }
   });
 });
+
+
+// ═══ Custom Tabs Patch ═══
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CUSTOM TABS SYSTEM
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── State ──────────────────────────────────────────────────────────────────
+// STATE.customTabs    = array of { id, label, icon, sortOrder }
+// STATE.customTabItems = array of { id, tabId, type, title, content, metadata, sortOrder }
+
+const CUSTOM_ITEM_TYPES = [
+  { key: 'note',      label: 'Note',      icon: '📝', color: '#2563b0', bg: '#e6f0fa' },
+  { key: 'checklist', label: 'Checklist', icon: '✅', color: '#1a8a4a', bg: '#e6f5ec' },
+  { key: 'actions',   label: 'Actions',   icon: '⚡', color: '#c08520', bg: '#f5e6c8' },
+  { key: 'table',     label: 'Table',     icon: '📊', color: '#7040c0', bg: '#f0e8fa' },
+  { key: 'links',     label: 'Links',     icon: '🔗', color: '#0e7490', bg: '#e0f7fa' },
+];
+
+const TAB_ICONS = ['📋','📌','⭐','🔖','🗂','📁','💡','🧪','🔬','📦','🚢','⚙','🗒','🎯','📅','🔔','🧭','💬','🔧','🛠','📐','🗃','📂','🌊','🐟','🏗','📈','🔍','✅','⚡'];
+
+function getCustomTabs() { return (STATE.customTabs || []); }
+function getCustomTabItems(tabId) { return (STATE.customTabItems || []).filter(i => i.tabId === tabId); }
+
+// ── API helpers ────────────────────────────────────────────────────────────
+async function apiAddCustomTab(tab) {
+  try { await api('/api/custom_tabs', 'POST', tab); } catch(e) { showError('Failed to save tab: ' + e.message); }
+}
+async function apiUpdateCustomTab(tab) {
+  try { await api('/api/custom_tabs', 'PUT', tab); } catch(e) { showError('Failed to update tab: ' + e.message); }
+}
+async function apiDeleteCustomTab(id) {
+  try { await api('/api/custom_tabs', 'DELETE', { id }); } catch(e) { showError('Failed to delete tab: ' + e.message); }
+}
+async function apiAddCustomTabItem(item) {
+  try { await api('/api/custom_tab_items', 'POST', item); } catch(e) { showError('Failed to save item: ' + e.message); }
+}
+async function apiUpdateCustomTabItem(item) {
+  try { await api('/api/custom_tab_items', 'PUT', item); } catch(e) { showError('Failed to update item: ' + e.message); }
+}
+async function apiDeleteCustomTabItem(id) {
+  try { await api('/api/custom_tab_items', 'DELETE', { id }); } catch(e) { showError('Failed to delete item: ' + e.message); }
+}
+
+// ── Sidebar integration: patch renderSidebar ──────────────────────────────
+// We wrap the existing renderSidebar to append custom tab buttons
+const _origRenderSidebar = renderSidebar;
+function renderSidebar() {
+  _origRenderSidebar();
+  const sidebar = document.getElementById('sidebar');
+  if (!sidebar) return;
+  const tabs = getCustomTabs();
+  if (tabs.length === 0 && isReadOnly()) return;
+  const section = document.createElement('div');
+  section.innerHTML = `
+    <div class="sidebar-section-label">
+      My Tabs
+      ${!isReadOnly() ? `<button class="sidebar-manage-btn" onclick="openCustomTabManager()" title="Manage custom tabs">⚙ Manage</button>` : ''}
+    </div>
+    ${tabs.map(t => `
+      <button class="sidebar-btn ${activeTab === 'custom_' + t.id ? 'active' : ''}"
+        onclick="switchTab('custom_${t.id}')">
+        <span class="sidebar-icon">${t.icon}</span>
+        <span>${esc(t.label)}</span>
+      </button>
+    `).join('')}
+    ${!isReadOnly() ? `
+      <button class="sidebar-btn" style="color:var(--text-muted);font-style:italic"
+        onclick="openCustomTabManager()">
+        <span class="sidebar-icon" style="font-size:12px">＋</span>
+        <span style="font-size:12px">New Tab</span>
+      </button>
+    ` : ''}
+  `;
+  sidebar.appendChild(section);
+}
+
+// ── Patch renderTab to handle custom_* tabs ────────────────────────────────
+const _origRenderTab = renderTab;
+function renderTab(id) {
+  if (id && id.startsWith('custom_')) {
+    const tabId = id.slice(7);
+    const tab = getCustomTabs().find(t => t.id === tabId);
+    if (tab) {
+      return renderCustomTab(tab);
+    }
+    return `<div style="padding:40px;color:var(--text-muted)">Tab not found.</div>`;
+  }
+  return _origRenderTab(id);
+}
+
+// ── Render a custom tab's content ─────────────────────────────────────────
+function renderCustomTab(tab) {
+  const items = getCustomTabItems(tab.id).sort((a,b) => a.sortOrder - b.sortOrder);
+  const ro = isReadOnly();
+
+  const itemsHTML = items.length
+    ? items.map(item => renderCustomTabItem(item, ro)).join('')
+    : `<div style="text-align:center;padding:60px 20px;color:var(--text-muted)">
+        <div style="font-size:48px;margin-bottom:12px">${tab.icon}</div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:6px">No items yet</div>
+        <div style="font-size:12px">Add a note, checklist, action list, table, or links below.</div>
+      </div>`;
+
+  return `
+    <div class="section-title">${tab.icon} ${esc(tab.label)}</div>
+    ${!ro ? `
+    <div class="ct-toolbar">
+      ${CUSTOM_ITEM_TYPES.map(t => `
+        <button class="btn btn-secondary" onclick="ctAddItem('${tab.id}','${t.key}')">
+          ${t.icon} ${t.label}
+        </button>
+      `).join('')}
+      <button class="btn btn-secondary" style="margin-left:auto" onclick="openCustomTabManager()">⚙ Manage Tabs</button>
+    </div>
+    ` : ''}
+    <div id="ct-items-${tab.id}">
+      ${itemsHTML}
+    </div>
+  `;
+}
+
+function ctItemTypeMeta(type) {
+  return CUSTOM_ITEM_TYPES.find(t => t.key === type) || CUSTOM_ITEM_TYPES[0];
+}
+
+function renderCustomTabItem(item, ro) {
+  const meta = ctItemTypeMeta(item.type);
+  const bodyHTML = ctRenderItemBody(item, ro);
+  return `
+    <div class="ct-item-card" id="ct-item-${item.id}">
+      <div class="ct-item-header">
+        <span class="ct-item-type-badge" style="color:${meta.color};background:${meta.bg}">${meta.icon} ${meta.label}</span>
+        <input class="ct-item-title-input" value="${esc(item.title)}" placeholder="Title…"
+          ${ro ? 'disabled' : `onblur="ctSaveTitle('${item.id}',this.value)"`}
+          onkeydown="if(event.key==='Enter')this.blur()">
+        ${!ro ? `
+        <button class="btn btn-secondary btn-xs" onclick="ctDeleteItem('${item.id}')"
+          style="color:var(--red);flex-shrink:0" title="Delete">✕</button>
+        ` : ''}
+      </div>
+      <div class="ct-item-body">${bodyHTML}</div>
+    </div>
+  `;
+}
+
+function ctRenderItemBody(item, ro) {
+  switch(item.type) {
+    case 'note':      return ctRenderNote(item, ro);
+    case 'checklist': return ctRenderChecklist(item, ro);
+    case 'actions':   return ctRenderActions(item, ro);
+    case 'table':     return ctRenderTable(item, ro);
+    case 'links':     return ctRenderLinks(item, ro);
+    default:          return ctRenderNote(item, ro);
+  }
+}
+
+// ── Note ──────────────────────────────────────────────────────────────────
+function ctRenderNote(item, ro) {
+  return `<textarea class="ct-note-textarea" placeholder="Write your note here…"
+    ${ro ? 'disabled' : `onblur="ctSaveNoteContent('${item.id}',this.value)"`}
+  >${esc(item.content)}</textarea>`;
+}
+
+async function ctSaveNoteContent(itemId, value) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  item.content = value;
+  item.updatedAt = new Date().toISOString();
+  await apiUpdateCustomTabItem(item);
+}
+
+// ── Checklist ─────────────────────────────────────────────────────────────
+function ctRenderChecklist(item, ro) {
+  const rows = (item.metadata.rows || []);
+  const checkItems = rows.map((r, idx) => `
+    <li class="ct-checklist-item">
+      <input type="checkbox" ${r.done ? 'checked' : ''}
+        ${ro ? 'disabled' : `onchange="ctChecklistToggle('${item.id}',${idx},this.checked)"`}>
+      <input class="ct-checklist-text ${r.done ? 'done' : ''}" value="${esc(r.text||'')}"
+        placeholder="Item…"
+        ${ro ? 'disabled' : `onblur="ctChecklistEditText('${item.id}',${idx},this.value)"`}
+        onkeydown="if(event.key==='Enter'){event.preventDefault();ctChecklistAdd('${item.id}');}">
+      ${!ro ? `<button class="btn btn-secondary btn-xs" style="color:var(--red)"
+        onclick="ctChecklistDelete('${item.id}',${idx})">✕</button>` : ''}
+    </li>
+  `).join('');
+
+  const done = rows.filter(r=>r.done).length;
+  return `
+    ${rows.length ? `<div style="font:600 10px var(--font-mono);color:var(--text-muted);margin-bottom:8px">${done}/${rows.length} completed</div>` : ''}
+    <ul class="ct-checklist">${checkItems}</ul>
+    ${!ro ? `<button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="ctChecklistAdd('${item.id}')">＋ Add item</button>` : ''}
+  `;
+}
+
+async function ctChecklistToggle(itemId, idx, checked) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  if (!item.metadata.rows) item.metadata.rows = [];
+  item.metadata.rows[idx].done = checked;
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+}
+
+async function ctChecklistEditText(itemId, idx, text) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item || !item.metadata.rows) return;
+  item.metadata.rows[idx].text = text;
+  await apiUpdateCustomTabItem(item);
+}
+
+async function ctChecklistAdd(itemId) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  if (!item.metadata.rows) item.metadata.rows = [];
+  item.metadata.rows.push({ text: '', done: false });
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+  // Focus last input
+  setTimeout(() => {
+    const card = document.getElementById('ct-item-' + itemId);
+    if (card) {
+      const inputs = card.querySelectorAll('.ct-checklist-text');
+      if (inputs.length) inputs[inputs.length-1].focus();
+    }
+  }, 50);
+}
+
+async function ctChecklistDelete(itemId, idx) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item || !item.metadata.rows) return;
+  item.metadata.rows.splice(idx, 1);
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────
+function ctRenderActions(item, ro) {
+  const rows = (item.metadata.rows || []);
+  const actionItems = rows.map((r, idx) => `
+    <div class="ct-action-row">
+      <div class="ct-action-status ${r.done ? 'done' : ''}"
+        ${ro ? '' : `onclick="ctActionToggle('${item.id}',${idx})"`}
+        title="${r.done ? 'Mark incomplete' : 'Mark complete'}"></div>
+      <input class="ct-action-label ${r.done ? 'done' : ''}" value="${esc(r.label||'')}"
+        placeholder="Action…"
+        ${ro ? 'disabled' : `onblur="ctActionEditLabel('${item.id}',${idx},this.value)"`}
+        onkeydown="if(event.key==='Enter'){event.preventDefault();ctActionAdd('${item.id}');}">
+      ${r.dueDate ? `<span class="ct-action-date">Due: ${r.dueDate}</span>` : ''}
+      ${!ro ? `
+        <input type="date" value="${r.dueDate||''}" style="width:130px;font-size:11px"
+          onchange="ctActionSetDate('${item.id}',${idx},this.value)" title="Due date">
+        <button class="btn btn-secondary btn-xs" style="color:var(--red)"
+          onclick="ctActionDelete('${item.id}',${idx})">✕</button>
+      ` : ''}
+    </div>
+  `).join('');
+
+  const done = rows.filter(r=>r.done).length;
+  return `
+    ${rows.length ? `<div style="font:600 10px var(--font-mono);color:var(--text-muted);margin-bottom:8px">${done}/${rows.length} done</div>` : ''}
+    <div>${actionItems}</div>
+    ${!ro ? `<button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="ctActionAdd('${item.id}')">＋ Add action</button>` : ''}
+  `;
+}
+
+async function ctActionToggle(itemId, idx) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item || !item.metadata.rows) return;
+  item.metadata.rows[idx].done = !item.metadata.rows[idx].done;
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+}
+async function ctActionEditLabel(itemId, idx, text) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item || !item.metadata.rows) return;
+  item.metadata.rows[idx].label = text;
+  await apiUpdateCustomTabItem(item);
+}
+async function ctActionSetDate(itemId, idx, date) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item || !item.metadata.rows) return;
+  item.metadata.rows[idx].dueDate = date || null;
+  await apiUpdateCustomTabItem(item);
+}
+async function ctActionAdd(itemId) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  if (!item.metadata.rows) item.metadata.rows = [];
+  item.metadata.rows.push({ label: '', done: false, dueDate: null });
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+  setTimeout(() => {
+    const card = document.getElementById('ct-item-' + itemId);
+    if (card) {
+      const inputs = card.querySelectorAll('.ct-action-label');
+      if (inputs.length) inputs[inputs.length-1].focus();
+    }
+  }, 50);
+}
+async function ctActionDelete(itemId, idx) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item || !item.metadata.rows) return;
+  item.metadata.rows.splice(idx, 1);
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+}
+
+// ── Table ─────────────────────────────────────────────────────────────────
+function ctRenderTable(item, ro) {
+  const headers = item.metadata.headers || ['Column 1', 'Column 2', 'Column 3'];
+  const rows    = item.metadata.rows || [];
+  const hCols   = headers.length;
+
+  const headerCells = headers.map((h, hi) => `
+    <th>
+      <input style="width:100%;border:none;background:none;font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em"
+        value="${esc(h)}" ${ro ? 'disabled' : `onblur="ctTableEditHeader('${item.id}',${hi},this.value)"`}
+        onkeydown="if(event.key==='Enter')this.blur()">
+    </th>
+  `).join('');
+
+  const dataRows = rows.map((row, ri) => `
+    <tr>
+      ${headers.map((_,ci) => `
+        <td><input value="${esc(row[ci]||'')}" placeholder="—"
+          ${ro ? 'disabled' : `onblur="ctTableEditCell('${item.id}',${ri},${ci},this.value)"`}
+          onkeydown="if(event.key==='Enter')this.blur()">
+        </td>
+      `).join('')}
+      ${!ro ? `<td style="width:28px"><button class="btn btn-secondary btn-xs" style="color:var(--red)" onclick="ctTableDeleteRow('${item.id}',${ri})">✕</button></td>` : ''}
+    </tr>
+  `).join('');
+
+  return `
+    <div class="ct-table-wrapper">
+      <table class="ct-data-table">
+        <thead><tr>${headerCells}${!ro ? '<th style="width:28px"></th>' : ''}</tr></thead>
+        <tbody>${dataRows}</tbody>
+      </table>
+    </div>
+    ${!ro ? `
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+      <button class="btn btn-secondary btn-sm" onclick="ctTableAddRow('${item.id}')">＋ Row</button>
+      <button class="btn btn-secondary btn-sm" onclick="ctTableAddCol('${item.id}')">＋ Column</button>
+      ${hCols > 1 ? `<button class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="ctTableRemoveCol('${item.id}')">− Column</button>` : ''}
+    </div>
+    ` : ''}
+  `;
+}
+
+async function ctTableEditHeader(itemId, idx, val) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  if (!item.metadata.headers) item.metadata.headers = [];
+  item.metadata.headers[idx] = val;
+  await apiUpdateCustomTabItem(item);
+}
+async function ctTableEditCell(itemId, ri, ci, val) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item || !item.metadata.rows) return;
+  if (!item.metadata.rows[ri]) item.metadata.rows[ri] = [];
+  item.metadata.rows[ri][ci] = val;
+  await apiUpdateCustomTabItem(item);
+}
+async function ctTableAddRow(itemId) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  const cols = (item.metadata.headers || []).length || 3;
+  if (!item.metadata.rows) item.metadata.rows = [];
+  item.metadata.rows.push(Array(cols).fill(''));
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+}
+async function ctTableAddCol(itemId) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  if (!item.metadata.headers) item.metadata.headers = ['Column 1','Column 2','Column 3'];
+  item.metadata.headers.push('Column ' + (item.metadata.headers.length + 1));
+  if (item.metadata.rows) item.metadata.rows.forEach(r => r.push(''));
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+}
+async function ctTableRemoveCol(itemId) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item || !item.metadata.headers || item.metadata.headers.length <= 1) return;
+  item.metadata.headers.pop();
+  if (item.metadata.rows) item.metadata.rows.forEach(r => r.pop());
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+}
+async function ctTableDeleteRow(itemId, ri) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item || !item.metadata.rows) return;
+  item.metadata.rows.splice(ri, 1);
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+}
+
+// ── Links ─────────────────────────────────────────────────────────────────
+function ctRenderLinks(item, ro) {
+  const links = item.metadata.links || [];
+  const linkItems = links.map((l, idx) => `
+    <div class="ct-link-item">
+      <div class="ct-link-icon">${l.icon||'🔗'}</div>
+      <div class="ct-link-text">
+        <div class="ct-link-label">
+          <input value="${esc(l.label||'')}" placeholder="Label…"
+            style="border:none;background:none;font:600 13px var(--font-display);width:100%"
+            ${ro ? 'disabled' : `onblur="ctLinkEdit('${item.id}',${idx},'label',this.value)"`}
+            onkeydown="if(event.key==='Enter')this.blur()">
+        </div>
+        <div class="ct-link-url">
+          ${ro
+            ? (l.url ? `<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.url)}</a>` : '—')
+            : `<input value="${esc(l.url||'')}" placeholder="https://…"
+                style="border:none;background:none;font:400 11px var(--font-mono);color:var(--blue);width:100%"
+                onblur="ctLinkEdit('${item.id}',${idx},'url',this.value)"
+                onkeydown="if(event.key==='Enter')this.blur()">`
+          }
+        </div>
+      </div>
+      ${!ro ? `
+        <button class="btn btn-secondary btn-xs" onclick="ctLinkOpen('${item.id}',${idx})" title="Open link">↗</button>
+        <button class="btn btn-secondary btn-xs" style="color:var(--red)" onclick="ctLinkDelete('${item.id}',${idx})">✕</button>
+      ` : `<a href="${esc(l.url||'#')}" target="_blank" rel="noopener" class="btn btn-secondary btn-xs" title="Open">↗</a>`}
+    </div>
+  `).join('');
+
+  return `
+    <div>${linkItems}</div>
+    ${!ro ? `<button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="ctLinkAdd('${item.id}')">＋ Add link</button>` : ''}
+  `;
+}
+
+async function ctLinkEdit(itemId, idx, field, val) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item || !item.metadata.links) return;
+  item.metadata.links[idx][field] = val;
+  await apiUpdateCustomTabItem(item);
+}
+async function ctLinkAdd(itemId) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  if (!item.metadata.links) item.metadata.links = [];
+  item.metadata.links.push({ label: '', url: '', icon: '🔗' });
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+}
+async function ctLinkDelete(itemId, idx) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item || !item.metadata.links) return;
+  item.metadata.links.splice(idx, 1);
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+}
+function ctLinkOpen(itemId, idx) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item || !item.metadata.links) return;
+  const url = item.metadata.links[idx]?.url;
+  if (url) window.open(url, '_blank', 'noopener');
+}
+
+// ── Shared helpers ────────────────────────────────────────────────────────
+
+async function ctSaveTitle(itemId, val) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  item.title = val;
+  await apiUpdateCustomTabItem(item);
+}
+
+// Re-render just a single item card in-place (avoids full tab re-render)
+function ctRefreshItem(item) {
+  const card = document.getElementById('ct-item-' + item.id);
+  if (!card) return;
+  const ro = isReadOnly();
+  card.outerHTML = renderCustomTabItem(item, ro);
+}
+
+async function ctAddItem(tabId, type) {
+  const tab = getCustomTabs().find(t => t.id === tabId);
+  if (!tab) return;
+  const existing = getCustomTabItems(tabId);
+  const defaultMeta = {
+    note:      {},
+    checklist: { rows: [] },
+    actions:   { rows: [] },
+    table:     { headers: ['Column 1','Column 2','Column 3'], rows: [] },
+    links:     { links: [] },
+  };
+  const item = {
+    id: uid(),
+    tabId,
+    type,
+    title: '',
+    content: '',
+    metadata: defaultMeta[type] || {},
+    sortOrder: existing.length,
+    createdAt: new Date().toISOString(),
+  };
+  if (!STATE.customTabItems) STATE.customTabItems = [];
+  STATE.customTabItems.push(item);
+  await apiAddCustomTabItem(item);
+  // Re-render the items container for this tab
+  const container = document.getElementById('ct-items-' + tabId);
+  if (container) {
+    container.innerHTML = getCustomTabItems(tabId)
+      .sort((a,b)=>a.sortOrder-b.sortOrder)
+      .map(i => renderCustomTabItem(i, false))
+      .join('');
+  }
+}
+
+async function ctDeleteItem(itemId) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  if (!confirm('Delete this item? This cannot be undone.')) return;
+  STATE.customTabItems = STATE.customTabItems.filter(i => i.id !== itemId);
+  await apiDeleteCustomTabItem(itemId);
+  const card = document.getElementById('ct-item-' + itemId);
+  if (card) card.remove();
+}
+
+// ── Custom Tab Manager Modal ───────────────────────────────────────────────
+let _ctManagerDragId = null;
+
+function openCustomTabManager() {
+  if (isReadOnly()) return;
+  renderCustomTabManager();
+}
+
+function renderCustomTabManager() {
+  const existing = document.getElementById('ct-manager-overlay');
+  if (existing) existing.remove();
+
+  const tabs = getCustomTabs().slice().sort((a,b) => a.sortOrder - b.sortOrder);
+
+  const tabRows = tabs.map(t => `
+    <div class="ct-tab-row" id="ctmgr-row-${t.id}" draggable="true"
+      ondragstart="ctMgrDragStart('${t.id}')"
+      ondragover="ctMgrDragOver(event,'${t.id}')"
+      ondrop="ctMgrDrop(event,'${t.id}')"
+      ondragleave="this.classList.remove('drag-over')"
+      ondragend="ctMgrDragEnd()">
+      <span style="color:var(--text-muted);cursor:grab;font-size:16px">⠿</span>
+      <span class="ct-tab-icon-picker" onclick="openEmojiPicker(event,'${t.id}')"
+        id="ctmgr-icon-${t.id}" title="Change icon">${t.icon}</span>
+      <input class="ct-tab-name-input" value="${esc(t.label)}"
+        placeholder="Tab name…"
+        onblur="ctMgrUpdateLabel('${t.id}',this.value)"
+        onkeydown="if(event.key==='Enter')this.blur()">
+      <span style="font:500 10px var(--font-mono);color:var(--text-muted)">${getCustomTabItems(t.id).length} items</span>
+      <button class="btn btn-secondary btn-xs" style="color:var(--blue)"
+        onclick="closeCustomTabManager();switchTab('custom_${t.id}')">→ Open</button>
+      <button class="btn btn-secondary btn-xs" style="color:var(--red)"
+        onclick="ctMgrDeleteTab('${t.id}')">✕</button>
+    </div>
+  `).join('');
+
+  const overlay = document.createElement('div');
+  overlay.className = 'ct-manager-overlay';
+  overlay.id = 'ct-manager-overlay';
+  overlay.onclick = e => { if(e.target===overlay) closeCustomTabManager(); };
+
+  overlay.innerHTML = `
+    <div class="ct-manager-modal">
+      <div class="ct-manager-header">
+        <div>
+          <div style="font:700 16px var(--font-display)">My Tabs</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Create and manage your custom tabs</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="closeCustomTabManager()">✕ Close</button>
+      </div>
+      <div class="ct-manager-body">
+        ${tabs.length
+          ? `<div style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">Drag to reorder</div>${tabRows}`
+          : `<div style="text-align:center;padding:30px;color:var(--text-muted);font-size:13px">No custom tabs yet. Create your first one below.</div>`
+        }
+      </div>
+      <div class="ct-manager-footer">
+        <button class="btn btn-primary" onclick="ctMgrAddTab()">＋ New Tab</button>
+        <button class="btn btn-secondary" onclick="closeCustomTabManager()">Done</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function closeCustomTabManager() {
+  const el = document.getElementById('ct-manager-overlay');
+  if (el) el.remove();
+  // Close any open emoji picker
+  const ep = document.getElementById('ct-emoji-picker');
+  if (ep) ep.remove();
+  renderSidebar(); // refresh sidebar in case tabs changed
+}
+
+async function ctMgrAddTab() {
+  const newTab = {
+    id: uid(),
+    label: 'New Tab',
+    icon: '📋',
+    sortOrder: (STATE.customTabs||[]).length,
+    createdAt: new Date().toISOString(),
+  };
+  if (!STATE.customTabs) STATE.customTabs = [];
+  STATE.customTabs.push(newTab);
+  await apiAddCustomTab(newTab);
+  renderCustomTabManager();
+}
+
+async function ctMgrUpdateLabel(tabId, label) {
+  const tab = (STATE.customTabs||[]).find(t => t.id === tabId);
+  if (!tab) return;
+  tab.label = label || 'New Tab';
+  await apiUpdateCustomTab(tab);
+  // Update sidebar button label in place if visible
+  renderSidebar();
+}
+
+async function ctMgrDeleteTab(tabId) {
+  const tab = (STATE.customTabs||[]).find(t => t.id === tabId);
+  if (!tab) return;
+  const itemCount = getCustomTabItems(tabId).length;
+  const msg = itemCount > 0
+    ? `Delete tab "${tab.label}" and its ${itemCount} item(s)? This cannot be undone.`
+    : `Delete tab "${tab.label}"?`;
+  if (!confirm(msg)) return;
+  STATE.customTabs = (STATE.customTabs||[]).filter(t => t.id !== tabId);
+  STATE.customTabItems = (STATE.customTabItems||[]).filter(i => i.tabId !== tabId);
+  await apiDeleteCustomTab(tabId);
+  if (activeTab === 'custom_' + tabId) switchTab('dashboard');
+  renderCustomTabManager();
+}
+
+// ── Drag & drop reorder in manager ────────────────────────────────────────
+function ctMgrDragStart(tabId) { _ctManagerDragId = tabId; }
+function ctMgrDragEnd() { _ctManagerDragId = null; document.querySelectorAll('.ct-tab-row').forEach(r=>r.classList.remove('drag-over')); }
+function ctMgrDragOver(e, tabId) { e.preventDefault(); if(_ctManagerDragId && _ctManagerDragId!==tabId) document.getElementById('ctmgr-row-'+tabId)?.classList.add('drag-over'); }
+async function ctMgrDrop(e, targetId) {
+  e.preventDefault();
+  if (!_ctManagerDragId || _ctManagerDragId === targetId) return;
+  const tabs = (STATE.customTabs||[]).slice().sort((a,b)=>a.sortOrder-b.sortOrder);
+  const fromIdx = tabs.findIndex(t=>t.id===_ctManagerDragId);
+  const toIdx   = tabs.findIndex(t=>t.id===targetId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  const [moved] = tabs.splice(fromIdx, 1);
+  tabs.splice(toIdx, 0, moved);
+  tabs.forEach((t,i)=>{ t.sortOrder=i; });
+  STATE.customTabs = tabs;
+  // Persist each reordered tab
+  await Promise.all(tabs.map(t => apiUpdateCustomTab(t)));
+  renderCustomTabManager();
+  renderSidebar();
+}
+
+// ── Emoji picker ──────────────────────────────────────────────────────────
+function openEmojiPicker(e, tabId) {
+  e.stopPropagation();
+  const existing = document.getElementById('ct-emoji-picker');
+  if (existing) { existing.remove(); return; }
+  const picker = document.createElement('div');
+  picker.id = 'ct-emoji-picker';
+  picker.className = 'ct-emoji-picker';
+  picker.innerHTML = TAB_ICONS.map(em =>
+    `<button class="ct-emoji-btn" onclick="ctPickIcon('${tabId}','${em}')">${em}</button>`
+  ).join('');
+  const rect = e.target.getBoundingClientRect();
+  picker.style.position = 'fixed';
+  picker.style.top = (rect.bottom + 4) + 'px';
+  picker.style.left = rect.left + 'px';
+  document.body.appendChild(picker);
+  // Close on click outside
+  setTimeout(() => {
+    document.addEventListener('click', function closePicker(ev) {
+      if (!picker.contains(ev.target)) {
+        picker.remove();
+        document.removeEventListener('click', closePicker);
+      }
+    });
+  }, 10);
+}
+
+async function ctPickIcon(tabId, icon) {
+  const tab = (STATE.customTabs||[]).find(t => t.id === tabId);
+  if (!tab) return;
+  tab.icon = icon;
+  await apiUpdateCustomTab(tab);
+  const iconEl = document.getElementById('ctmgr-icon-' + tabId);
+  if (iconEl) iconEl.textContent = icon;
+  const picker = document.getElementById('ct-emoji-picker');
+  if (picker) picker.remove();
+  renderSidebar();
+}
+
+// ── Initialise: merge customTabs into STATE when loaded ───────────────────
+// Patch loadState to include customTabs and customTabItems from API response
+const _origLoadState = typeof loadState === 'function' ? loadState : null;
+// The state is already loaded by the existing loadState() which now returns
+// customTabs and customTabItems from the /api/state endpoint.
+// We just need to ensure the STATE normalization covers them.
+const _origNormalizeState = function(data) {
+  if (data.customTabs)     STATE.customTabs     = data.customTabs;
+  if (data.customTabItems) STATE.customTabItems  = data.customTabItems;
+};
+
+// Hook into the existing DOMContentLoaded flow by patching render()
+// to ensure custom tab state is always initialised
+const _ctOrigRender = render;
+function render() {
+  if (!STATE.customTabs)     STATE.customTabs     = [];
+  if (!STATE.customTabItems) STATE.customTabItems = [];
+  _ctOrigRender();
+}
+
 
 </script>
 </head>
