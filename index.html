@@ -9927,7 +9927,11 @@ function renderSidebar() {
   if (!sidebar) return;
   const tabs = getCustomTabs();
   if (tabs.length === 0 && isReadOnly()) return;
+  // Remove any previously injected custom tab section to avoid duplicates
+  const existing = sidebar.querySelector('.ct-sidebar-section');
+  if (existing) existing.remove();
   const section = document.createElement('div');
+  section.className = 'ct-sidebar-section';
   section.innerHTML = `
     <div class="sidebar-section-label">
       My Tabs
@@ -10582,14 +10586,11 @@ const _origNormalizeState = function(data) {
   if (data.customTabItems) STATE.customTabItems  = data.customTabItems;
 };
 
-// Hook into the existing DOMContentLoaded flow by patching render()
-// to ensure custom tab state is always initialised
-const _ctOrigRender = render;
-function render() {
+// Ensure custom tab state is always initialised (safe version - no render override)
+(function() {
   if (!STATE.customTabs)     STATE.customTabs     = [];
   if (!STATE.customTabItems) STATE.customTabItems = [];
-  _ctOrigRender();
-}
+})();
 
 
 </script>
@@ -10597,7 +10598,7 @@ function render() {
 <body>
 
 <!-- ── PIN Overlay ── -->
-<div id="pin-overlay" style="display:none">
+<div id="pin-overlay" style="display:flex">
   <div class="pin-box">
     <div class="pin-logo">CT</div>
     <div class="pin-title">Cage Tracker</div>
