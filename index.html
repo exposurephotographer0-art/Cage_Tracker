@@ -4953,6 +4953,8 @@ let auditSort = 'date-desc'; // 'date-desc' | 'date-asc'
 // ANALYTICS
 // ═══════════════════════════════════════════════════════════════════════════════
 let _analyticsCharts = {};
+let _aiCharts = [];          // [{id, prompt, chartCfg, error, loading}]
+let _aiChartInput = '';
 
 function destroyAnalyticsCharts() {
   Object.values(_analyticsCharts).forEach(c => { try { c.destroy(); } catch(e) {} });
@@ -5193,6 +5195,32 @@ function renderAnalytics() {
     </div>
 
     <div id="analytics-data" style="display:none" data-json="${encodeURIComponent(JSON.stringify(chartData))}"></div>
+
+    <!-- AI Chart Builder -->
+    <div class="card" style="margin-top:20px">
+      <div class="card-title" style="margin-bottom:4px">🤖 AI Chart Builder</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">
+        Describe any graph you want in plain English — the AI will generate it from your facility data.
+        Try: <em>"cages stored in RMD over time"</em>, <em>"movement types by month"</em>, <em>"cages per frame width"</em>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input id="ai-chart-input" type="text" placeholder="e.g. show me cages in RMD over time, or frame utilisation by width"
+          style="flex:1;padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);font:400 13px var(--font-display);color:var(--text-primary)"
+          value="${esc(_aiChartInput)}"
+          oninput="_aiChartInput=this.value"
+          onkeydown="if(event.key==='Enter')requestAIChart()"/>
+        <button class="btn btn-primary" onclick="requestAIChart()" style="white-space:nowrap">✨ Generate Chart</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        ${['Cages in RMD over time','Movement types by month','Cages per frame width','Weight breakdown by location','Boat trip cage counts','Frames at facility vs away'].map(s =>
+          `<button class="btn btn-secondary btn-sm" style="font-size:11px" onclick="_aiChartInput='${s}';document.getElementById('ai-chart-input').value='${s}';requestAIChart()">${s}</button>`
+        ).join('')}
+      </div>
+      <div id="ai-charts-area">
+        ${_aiCharts.length === 0 ? '' : _aiCharts.map((c, i) => renderAIChartCard(c, i)).join('')}
+      </div>
+    </div>
+
   </div>`;
 }
 
@@ -5253,6 +5281,190 @@ function drawAnalyticsCharts() {
   });
 }
 
+
+// ── AI Chart Builder ─────────────────────────────────────────────────────────
+
+function renderAIChartCard(c, i) {
+  if (c.loading) {
+    return `<div class="card" style="margin-top:12px;padding:14px 16px;background:var(--bg-elevated)">
+      <div style="display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:12px">
+        <span style="animation:spin 1s linear infinite;display:inline-block">⏳</span>
+        AI is building your chart for: <em>${esc(c.prompt)}</em>
+      </div>
+    </div>`;
+  }
+  if (c.error) {
+    return `<div class="card" style="margin-top:12px;padding:14px 16px;background:var(--bg-elevated)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:4px">🤖 ${esc(c.prompt)}</div>
+          <div style="color:var(--red);font-size:12px">⚠ ${esc(c.error)}</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="_aiCharts.splice(${i},1);renderAIChartsArea()">✕</button>
+      </div>
+    </div>`;
+  }
+  return `<div class="card" style="margin-top:12px;padding:14px 16px;background:var(--bg-elevated)" id="ai-chart-card-${c.id}">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font:700 12px var(--font-mono);color:var(--accent)">🤖 ${esc(c.prompt)}</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-secondary btn-sm" onclick="rerunAIChart(${i})" title="Regenerate">↻</button>
+        <button class="btn btn-secondary btn-sm" onclick="_aiCharts.splice(${i},1);renderAIChartsArea()">✕</button>
+      </div>
+    </div>
+    ${c.insight ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;padding:8px 10px;background:var(--bg-deep);border-radius:6px;line-height:1.5">${esc(c.insight)}</div>` : ''}
+    <div style="position:relative;height:280px"><canvas id="ai-canvas-${c.id}"></canvas></div>
+  </div>`;
+}
+
+function renderAIChartsArea() {
+  const area = document.getElementById('ai-charts-area');
+  if (!area) return;
+  area.innerHTML = _aiCharts.map((c, i) => renderAIChartCard(c, i)).join('');
+  // Draw charts for non-loading, non-error entries
+  _aiCharts.forEach(c => {
+    if (!c.loading && !c.error && c.chartCfg) {
+      const canvas = document.getElementById('ai-canvas-' + c.id);
+      if (!canvas) return;
+      try { Chart.getChart(canvas)?.destroy(); } catch(e) {}
+      try { new Chart(canvas, c.chartCfg); } catch(e) {
+        console.error('AI chart render error:', e);
+      }
+    }
+  });
+}
+
+function buildFacilitySnapshot() {
+  // Build a rich but compact data snapshot for the AI to work with
+  const completedMoves = STATE.plannedMovements.filter(m => m.completed);
+
+  // Movement counts by date and type
+  const byDate = {};
+  completedMoves.forEach(m => {
+    const d = (m.completedAt || m.date || '').slice(0,10);
+    if (!d) return;
+    if (!byDate[d]) byDate[d] = {};
+    byDate[d][m.typeKey] = (byDate[d][m.typeKey] || 0) + 1;
+  });
+
+  // RMD snapshot: current occupancy per slot
+  const rmdOccupancy = STATE.rmdSlots.map(r => ({
+    number: r.number,
+    A: { cage1: !!r.A.cage1, cage2: !!r.A.cage2 },
+    B: { cage1: !!r.B.cage1, cage2: !!r.B.cage2 },
+  }));
+  const totalRmdSlots = STATE.rmdSlots.length * 4;
+  const filledRmdSlots = STATE.rmdSlots.reduce((n, r) =>
+    n + ['A','B'].reduce((nn, s) => nn + (r[s].cage1?1:0) + (r[s].cage2?1:0), 0), 0);
+
+  // Frame utilisation
+  const framesAtFacility = STATE.frames.filter(f => f.location === 'facility');
+  const frameWidthGroups = {};
+  framesAtFacility.forEach(f => {
+    const k = f.width + 'm';
+    if (!frameWidthGroups[k]) frameWidthGroups[k] = { total: 0, occupied: 0 };
+    frameWidthGroups[k].total++;
+    if (f.cages.length > 0) frameWidthGroups[k].occupied++;
+  });
+
+  // Boat trips with cage counts
+  const tripSummary = (STATE.boatTrips||[]).map(t => ({
+    label: t.label || t.id,
+    departDate: t.departDate || t.loadDate || '',
+    cagesShipped: STATE.cages.filter(c => c.proposedTripId === t.id && c.location === 'shipped').length,
+    cagesPlanned: STATE.cages.filter(c => c.proposedTripId === t.id && c.location !== 'shipped').length,
+  })).sort((a,b) => a.departDate.localeCompare(b.departDate));
+
+  // Location breakdown
+  const locationCounts = {};
+  STATE.cages.forEach(c => { locationCounts[c.location] = (locationCounts[c.location]||0)+1; });
+
+  // Weight breakdown
+  const weights = STATE.cages.map(c => c.weight).filter(Boolean);
+
+  // Movement history reconstructed: RMD count per day (approximation from location history)
+  const rmdOverTime = {};
+  STATE.cages.forEach(c => {
+    if (!c.locationHistory) return;
+    c.locationHistory.forEach((h, idx) => {
+      const d = (h.date||'').slice(0,10);
+      if (!d) return;
+      if (!rmdOverTime[d]) rmdOverTime[d] = { inRmd: 0, inFrame: 0, inFacility: 0 };
+      if (h.location === 'rmd')      rmdOverTime[d].inRmd++;
+      if (h.location === 'frame')    rmdOverTime[d].inFrame++;
+      if (h.location === 'facility') rmdOverTime[d].inFacility++;
+    });
+  });
+
+  return {
+    today: todayStr(),
+    cageCount: STATE.cages.length,
+    locationCounts,
+    weightStats: {
+      min: weights.length ? Math.min(...weights) : null,
+      max: weights.length ? Math.max(...weights) : null,
+      avg: weights.length ? +(weights.reduce((a,b)=>a+b,0)/weights.length).toFixed(2) : null,
+      heavy: STATE.cages.filter(c=>(c.weight||0)>=6.5).length,
+      light: STATE.cages.filter(c=>(c.weight||0)>0&&(c.weight||0)<6.5).length,
+    },
+    rmd: { totalSlots: totalRmdSlots, filledSlots: filledRmdSlots, slotCount: STATE.rmdSlots.length },
+    frames: { total: STATE.frames.length, atFacility: framesAtFacility.length, widthGroups: frameWidthGroups },
+    movements: {
+      total: completedMoves.length,
+      pending: STATE.plannedMovements.filter(m=>!m.completed).length,
+      byDate,
+      typeSummary: completedMoves.reduce((acc,m) => { acc[m.typeKey]=(acc[m.typeKey]||0)+1; return acc; }, {}),
+    },
+    trips: tripSummary,
+    rmdOverTime: Object.fromEntries(Object.entries(rmdOverTime).sort(([a],[b])=>a.localeCompare(b))),
+    cages: STATE.cages.map(c => ({
+      name: c.name, location: c.location, width: c.width, height: c.height,
+      weight: c.weight, locationDetail: c.locationDetail,
+    })),
+  };
+}
+
+async function requestAIChart() {
+  const prompt = _aiChartInput.trim();
+  if (!prompt) return;
+  _aiChartInput = '';
+  const inputEl = document.getElementById('ai-chart-input');
+  if (inputEl) inputEl.value = '';
+
+  const id = Date.now();
+  _aiCharts.unshift({ id, prompt, loading: true, chartCfg: null, error: null, insight: null });
+  renderAIChartsArea();
+
+  try {
+    const snapshot = buildFacilitySnapshot();
+    const res = await fetch(API_BASE + '/api/ai-chart', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': _sessionPin ? `Bearer ${_sessionPin}` : '' },
+      body: JSON.stringify({ prompt, snapshot }),
+      signal: AbortSignal.timeout(45000),
+    });
+    const data = res.ok ? await res.json() : null;
+    const idx = _aiCharts.findIndex(c => c.id === id);
+    if (idx === -1) return;
+    if (data?.ok && data.chartCfg) {
+      _aiCharts[idx] = { id, prompt, loading: false, chartCfg: data.chartCfg, insight: data.insight || null, error: null };
+    } else {
+      _aiCharts[idx] = { id, prompt, loading: false, chartCfg: null, error: data?.error || 'AI did not return a valid chart config.', insight: null };
+    }
+  } catch(e) {
+    const idx = _aiCharts.findIndex(c => c.id === id);
+    if (idx !== -1) _aiCharts[idx] = { id, prompt, loading: false, chartCfg: null, error: 'Request failed: ' + e.message, insight: null };
+  }
+  renderAIChartsArea();
+}
+
+async function rerunAIChart(i) {
+  const prompt = _aiCharts[i]?.prompt;
+  if (!prompt) return;
+  _aiCharts.splice(i, 1);
+  _aiChartInput = prompt;
+  await requestAIChart();
+}
 
 async function saveActionedLogEntry(date, field, value) {
   if (!STATE.actionedLog[date]) STATE.actionedLog[date] = {};
