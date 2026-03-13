@@ -9488,21 +9488,61 @@ async function sendAIChatMessage(overrideText) {
   msgs.scrollTop = msgs.scrollHeight;
 
   try {
-    // Build a lean context snapshot
+    // Build full context snapshot with RMD, frame, and cage detail
     const allCages = STATE.cages || [];
     const allMovements = STATE.plannedMovements || [];
+    const allFrames = STATE.frames || [];
+    const allRmd = STATE.rmdSlots || [];
+
+    // Build a cage lookup map by id
+    const cageById = {};
+    allCages.forEach(c => { cageById[c.id] = c; });
+
+    // Build enriched RMD list: each slot with cage names + dimensions
+    const rmdDetail = allRmd.map(slot => {
+      const sides = ['A', 'B'].map(side => {
+        const s = slot[side] || {};
+        const cages = [s.cage1, s.cage2, s.cage3, s.cage4]
+          .filter(Boolean)
+          .map(id => {
+            const c = cageById[id];
+            return c ? `${c.name}(${c.width}m×${c.height}m,${c.weight}t)` : id;
+          });
+        return `${side}:[${cages.join(', ') || 'empty'}]`;
+      });
+      return `RMD-${String(slot.number).padStart(2,'0')} ${sides.join(' | ')}`; 
+    });
+
+    // Build enriched frame list with cage names
+    const frameDetail = allFrames.map(f => {
+      const cageNames = (f.cages || []).map(id => {
+        const c = cageById[id];
+        return c ? `${c.name}(${c.width}m)` : id;
+      });
+      return {
+        name: f.name, width: f.width, location: f.location,
+        hasWaler: f.hasWaler, returnDate: f.returnDate || null,
+        cages: cageNames
+      };
+    });
+
     const context = {
-      cages: allCages.map(c => ({ name: c.name, width: c.width, height: c.height, weight: c.weight, location: c.location })),
-      frames: (STATE.frames || []).map(f => ({ name: f.name, width: f.width, location: f.location, hasWaler: f.hasWaler, returnDate: f.returnDate || null, cageCount: (f.cages || []).length })),
-      movements: allMovements.slice(0, 50).map(m => ({ date: m.date, description: m.description, shift: m.shift, completed: m.completed })),
-      boatTrips: (STATE.boatTrips || []).map(t => ({ label: t.label, loadDate: t.loadDate, departDate: t.departDate })),
-      stats: {
-        totalCages: allCages.length,
-        atFacility: allCages.filter(c => c.location === 'facility').length,
-        atSea: allCages.filter(c => c.location === 'sea').length,
-        pendingMovements: allMovements.filter(m => !m.completed).length,
-        completedMovements: allMovements.filter(m => m.completed).length,
-      }
+      cages: allCages.map(c => ({
+        name: c.name, width: c.width, height: c.height,
+        length: c.length, weight: c.weight,
+        location: c.location, locationDetail: c.locationDetail || null,
+        notes: c.notes || null
+      })),
+      frames: frameDetail,
+      rmd: rmdDetail,
+      movements: allMovements.slice(0, 80).map(m => ({
+        date: m.date, description: m.description,
+        shift: m.shift, completed: m.completed
+      })),
+      boatTrips: (STATE.boatTrips || []).map(t => ({
+        label: t.label, loadDate: t.loadDate,
+        departDate: t.departDate, notes: t.notes || null
+      })),
     };
 
     const res = await fetch(API_BASE + '/api/ai-chat', {
