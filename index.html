@@ -9489,13 +9489,13 @@ async function sendAIChatMessage(overrideText) {
 
   try {
     // Build a lean context snapshot
-    const allCages = state.cages || [];
-    const allMovements = state.plannedMovements || [];
+    const allCages = STATE.cages || [];
+    const allMovements = STATE.plannedMovements || [];
     const context = {
       cages: allCages.map(c => ({ name: c.name, width: c.width, height: c.height, weight: c.weight, location: c.location })),
-      frames: (state.frames || []).map(f => ({ name: f.name, width: f.width, location: f.location, hasWaler: f.hasWaler, returnDate: f.returnDate || null, cageCount: (f.cages || []).length })),
+      frames: (STATE.frames || []).map(f => ({ name: f.name, width: f.width, location: f.location, hasWaler: f.hasWaler, returnDate: f.returnDate || null, cageCount: (f.cages || []).length })),
       movements: allMovements.slice(0, 50).map(m => ({ date: m.date, description: m.description, shift: m.shift, completed: m.completed })),
-      boatTrips: (state.boatTrips || []).map(t => ({ label: t.label, loadDate: t.loadDate, departDate: t.departDate })),
+      boatTrips: (STATE.boatTrips || []).map(t => ({ label: t.label, loadDate: t.loadDate, departDate: t.departDate })),
       stats: {
         totalCages: allCages.length,
         atFacility: allCages.filter(c => c.location === 'facility').length,
