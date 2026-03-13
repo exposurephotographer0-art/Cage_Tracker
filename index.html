@@ -9806,11 +9806,17 @@ document.addEventListener("DOMContentLoaded", async function() {
     const today = new Date().toISOString().slice(0,10);
     if (cached && cached.pin && cached.date === today) {
       // Attempt silent auth with cached PIN
-      const res = await fetch(API_BASE + '/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: cached.pin })
-      });
+      const _authAbort = new AbortController();
+      const _authTimeout = setTimeout(() => _authAbort.abort(), 4000);
+      let res;
+      try {
+        res = await fetch(API_BASE + '/api/auth', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: cached.pin }),
+          signal: _authAbort.signal
+        });
+      } finally { clearTimeout(_authTimeout); }
       const data = await res.json();
       if (data.ok && (data.level === cached.level || data.level)) {
         _sessionPin = cached.pin;
@@ -9838,7 +9844,11 @@ document.addEventListener("DOMContentLoaded", async function() {
 
   // Check if IP is already locked before showing screen
   try {
-    const res = await fetch(API_BASE + '/api/lockout-status');
+    const _lockAbort = new AbortController();
+    const _lockTimeout = setTimeout(() => _lockAbort.abort(), 4000);
+    let res;
+    try { res = await fetch(API_BASE + '/api/lockout-status', { signal: _lockAbort.signal }); }
+    finally { clearTimeout(_lockTimeout); }
     const data = await res.json();
     if (data.locked) {
       showPinScreen('Too many previous attempts.', true, data.remaining);
