@@ -9235,157 +9235,7 @@ async function submitPin() {
   }
 }
 
-
-// ═══════════════════════════════════════════════════════════════════════
-// AI CHAT ASSISTANT
-// ═══════════════════════════════════════════════════════════════════════
-let _aiChatHistory = [];
-let _aiChatOpen = false;
-
-function toggleAIChat() {
-  _aiChatOpen = !_aiChatOpen;
-  const panel = document.getElementById('ai-chat-panel');
-  const fab = document.getElementById('ai-chat-fab');
-  if (_aiChatOpen) {
-    panel.classList.remove('hidden');
-    fab.classList.add('open');
-    fab.title = 'Close AI Assistant';
-    fab.innerHTML = '✕';
-    // Show greeting if empty
-    const msgs = document.getElementById('ai-chat-messages');
-    if (msgs && msgs.children.length === 0) {
-      appendAIChatMsg('assistant', "👋 Hi! I'm your Cage Tracker assistant. Ask me anything about your cage movements, frame availability, boat trips, or how to improve your planning.");
-      showAIChatSuggestions();
-    }
-    setTimeout(() => document.getElementById('ai-chat-input')?.focus(), 100);
-  } else {
-    panel.classList.add('hidden');
-    fab.classList.remove('open');
-    fab.title = 'Open AI Assistant';
-    fab.innerHTML = '🤖';
-  }
-}
-
-function appendAIChatMsg(role, text) {
-  const msgs = document.getElementById('ai-chat-messages');
-  if (!msgs) return;
-  const div = document.createElement('div');
-  div.className = `ai-chat-msg ${role}`;
-  div.textContent = text;
-  msgs.appendChild(div);
-  msgs.scrollTop = msgs.scrollHeight;
-  return div;
-}
-
-function showAIChatSuggestions() {
-  const msgs = document.getElementById('ai-chat-messages');
-  if (!msgs) return;
-  const wrap = document.createElement('div');
-  wrap.className = 'ai-chat-suggestions';
-  wrap.id = 'ai-chat-suggestions';
-  const suggestions = [
-    'How well are movements planned?',
-    'Any scheduling conflicts?',
-    'Frame availability summary',
-    'Cages ready to ship?',
-    'Suggest improvements',
-  ];
-  suggestions.forEach(s => {
-    const btn = document.createElement('button');
-    btn.className = 'ai-chat-suggestion';
-    btn.textContent = s;
-    btn.onclick = () => { sendAIChatMessage(s); wrap.remove(); };
-    wrap.appendChild(btn);
-  });
-  msgs.appendChild(wrap);
-  msgs.scrollTop = msgs.scrollHeight;
-}
-
-function removeAIChatSuggestions() {
-  document.getElementById('ai-chat-suggestions')?.remove();
-}
-
-async function sendAIChatMessage(overrideText) {
-  const input = document.getElementById('ai-chat-input');
-  const sendBtn = document.getElementById('ai-chat-send');
-  const text = (overrideText || input?.value || '').trim();
-  if (!text) return;
-
-  removeAIChatSuggestions();
-  if (input) input.value = '';
-  if (sendBtn) sendBtn.disabled = true;
-
-  appendAIChatMsg('user', text);
-  _aiChatHistory.push({ role: 'user', content: text });
-
-  // Thinking indicator
-  const thinkingDiv = document.createElement('div');
-  thinkingDiv.className = 'ai-chat-msg thinking';
-  thinkingDiv.innerHTML = 'Thinking<span class="ai-chat-thinking-dots"></span>';
-  const msgs = document.getElementById('ai-chat-messages');
-  msgs.appendChild(thinkingDiv);
-  msgs.scrollTop = msgs.scrollHeight;
-
-  try {
-    // Build context snapshot from current app state
-    const context = {
-      cages: (state.cages || []).map(c => ({
-        name: c.name, width: c.width, height: c.height, length: c.length,
-        weight: c.weight, location: c.location, locationDetail: c.locationDetail,
-        notes: c.notes, departureDate: c.departureDate
-      })),
-      frames: (state.frames || []).map(f => ({
-        name: f.name, width: f.width, location: f.location, hasWaler: f.hasWaler,
-        returnDate: f.returnDate, cages: f.cages
-      })),
-      movements: (state.plannedMovements || []).map(m => ({
-        date: m.date, description: m.description, shift: m.shift,
-        completed: m.completed, type: m.type
-      })),
-      boatTrips: (state.boatTrips || []).map(t => ({
-        label: t.label, loadDate: t.loadDate, departDate: t.departDate, notes: t.notes
-      })),
-      rmdSlots: state.rmdSlots || []
-    };
-
-    const res = await fetch(API_BASE + '/api/ai-chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + _sessionPin
-      },
-      body: JSON.stringify({
-        message: text,
-        history: _aiChatHistory.slice(-12),
-        context
-      })
-    });
-
-    thinkingDiv.remove();
-    const data = await res.json();
-
-    if (data.ok && data.reply) {
-      appendAIChatMsg('assistant', data.reply);
-      _aiChatHistory.push({ role: 'assistant', content: data.reply });
-    } else {
-      appendAIChatMsg('error', '⚠️ ' + (data.error || 'Something went wrong. Please try again.'));
-    }
-  } catch (e) {
-    thinkingDiv.remove();
-    appendAIChatMsg('error', '⚠️ Connection error. Please check your network and try again.');
-  }
-
-  if (sendBtn) sendBtn.disabled = false;
-  if (input) input.focus();
-}
-
-function aiChatKeydown(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendAIChatMessage();
-  }
-}
-
+function logout() {
   _sessionPin = null;
   _sessionLevel = null;
   try { localStorage.removeItem('ct_pin_cache'); } catch(e) {}
@@ -9545,6 +9395,158 @@ document.addEventListener("DOMContentLoaded", async function() {
 
 <!-- mobile bottom nav -->
 <nav id="mobile-nav"></nav>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// AI CHAT ASSISTANT
+// ═══════════════════════════════════════════════════════════════════════
+let _aiChatHistory = [];
+let _aiChatOpen = false;
+
+function toggleAIChat() {
+  _aiChatOpen = !_aiChatOpen;
+  const panel = document.getElementById('ai-chat-panel');
+  const fab = document.getElementById('ai-chat-fab');
+  if (_aiChatOpen) {
+    panel.classList.remove('hidden');
+    fab.classList.add('open');
+    fab.title = 'Close AI Assistant';
+    fab.innerHTML = '✕';
+    // Show greeting if empty
+    const msgs = document.getElementById('ai-chat-messages');
+    if (msgs && msgs.children.length === 0) {
+      appendAIChatMsg('assistant', "👋 Hi! I'm your Cage Tracker assistant. Ask me anything about your cage movements, frame availability, boat trips, or how to improve your planning.");
+      showAIChatSuggestions();
+    }
+    setTimeout(() => document.getElementById('ai-chat-input')?.focus(), 100);
+  } else {
+    panel.classList.add('hidden');
+    fab.classList.remove('open');
+    fab.title = 'Open AI Assistant';
+    fab.innerHTML = '🤖';
+  }
+}
+
+function appendAIChatMsg(role, text) {
+  const msgs = document.getElementById('ai-chat-messages');
+  if (!msgs) return;
+  const div = document.createElement('div');
+  div.className = `ai-chat-msg ${role}`;
+  div.textContent = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function showAIChatSuggestions() {
+  const msgs = document.getElementById('ai-chat-messages');
+  if (!msgs) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'ai-chat-suggestions';
+  wrap.id = 'ai-chat-suggestions';
+  const suggestions = [
+    'How well are movements planned?',
+    'Any scheduling conflicts?',
+    'Frame availability summary',
+    'Cages ready to ship?',
+    'Suggest improvements',
+  ];
+  suggestions.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'ai-chat-suggestion';
+    btn.textContent = s;
+    btn.onclick = () => { sendAIChatMessage(s); wrap.remove(); };
+    wrap.appendChild(btn);
+  });
+  msgs.appendChild(wrap);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function removeAIChatSuggestions() {
+  document.getElementById('ai-chat-suggestions')?.remove();
+}
+
+async function sendAIChatMessage(overrideText) {
+  const input = document.getElementById('ai-chat-input');
+  const sendBtn = document.getElementById('ai-chat-send');
+  const text = (overrideText || input?.value || '').trim();
+  if (!text) return;
+
+  removeAIChatSuggestions();
+  if (input) input.value = '';
+  if (sendBtn) sendBtn.disabled = true;
+
+  appendAIChatMsg('user', text);
+  _aiChatHistory.push({ role: 'user', content: text });
+
+  // Thinking indicator
+  const thinkingDiv = document.createElement('div');
+  thinkingDiv.className = 'ai-chat-msg thinking';
+  thinkingDiv.innerHTML = 'Thinking<span class="ai-chat-thinking-dots"></span>';
+  const msgs = document.getElementById('ai-chat-messages');
+  msgs.appendChild(thinkingDiv);
+  msgs.scrollTop = msgs.scrollHeight;
+
+  try {
+    // Build context snapshot from current app state
+    const context = {
+      cages: (state.cages || []).map(c => ({
+        name: c.name, width: c.width, height: c.height, length: c.length,
+        weight: c.weight, location: c.location, locationDetail: c.locationDetail,
+        notes: c.notes, departureDate: c.departureDate
+      })),
+      frames: (state.frames || []).map(f => ({
+        name: f.name, width: f.width, location: f.location, hasWaler: f.hasWaler,
+        returnDate: f.returnDate, cages: f.cages
+      })),
+      movements: (state.plannedMovements || []).map(m => ({
+        date: m.date, description: m.description, shift: m.shift,
+        completed: m.completed, type: m.type
+      })),
+      boatTrips: (state.boatTrips || []).map(t => ({
+        label: t.label, loadDate: t.loadDate, departDate: t.departDate, notes: t.notes
+      })),
+      rmdSlots: state.rmdSlots || []
+    };
+
+    const res = await fetch(API_BASE + '/api/ai-chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + _sessionPin
+      },
+      body: JSON.stringify({
+        message: text,
+        history: _aiChatHistory.slice(-12),
+        context
+      })
+    });
+
+    thinkingDiv.remove();
+    const data = await res.json();
+
+    if (data.ok && data.reply) {
+      appendAIChatMsg('assistant', data.reply);
+      _aiChatHistory.push({ role: 'assistant', content: data.reply });
+    } else {
+      appendAIChatMsg('error', '⚠️ ' + (data.error || 'Something went wrong. Please try again.'));
+    }
+  } catch (e) {
+    thinkingDiv.remove();
+    appendAIChatMsg('error', '⚠️ Connection error. Please check your network and try again.');
+  }
+
+  if (sendBtn) sendBtn.disabled = false;
+  if (input) input.focus();
+}
+
+function aiChatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendAIChatMessage();
+  }
+}
+</script>
 
 <!-- ── AI Chat Assistant ── -->
 <button id="ai-chat-fab" class="ai-chat-fab" onclick="toggleAIChat()" title="Open AI Assistant">🤖</button>
