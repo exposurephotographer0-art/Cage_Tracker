@@ -4374,6 +4374,7 @@ async function completeMove(id) {
         r[side][slot] = cage.id;
         cage.location = 'rmd';
         cage.locationDetail = `RMD-${rmdNum}${side}`;
+        cage.intoRmd = todayStr();
       }
     } else {
       // Can't determine RMD slot — just park at facility
@@ -4396,6 +4397,7 @@ async function completeMove(id) {
     cage.location = 'frame';
     cage.locationDetail = frame.name;
     cage.departureDate = null;
+    cage.outOfRmd = todayStr();
   }
   else if (m.typeKey === 'facility-to-rmd' && cage && m.rmdNumber != null) {
     const rmdNum = parseInt(m.rmdNumber);
@@ -4410,6 +4412,7 @@ async function completeMove(id) {
       cage.location = 'rmd';
       cage.locationDetail = `RMD-${rmdNum}${side}`;
       cage.departureDate = null;
+      cage.intoRmd = todayStr();
     }
   }
   else if (m.typeKey === 'frame-fix-shipping' && frame) {
