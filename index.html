@@ -2600,6 +2600,8 @@ function renderCages() {
         <div><label>Width (m) — max 2.5</label><input id="cf-w" type="number" step="0.1" max="2.5"/></div>
         <div><label>Length (m) — max 11.5</label><input id="cf-l" type="number" step="0.1" max="11.5"/></div>
         <div><label>Weight (t) — max 28</label><input id="cf-wt" type="number" step="0.1" max="28"/></div>
+        <div><label>Into RMD</label><input id="cf-into-rmd" type="date"/></div>
+        <div><label>Out of RMD</label><input id="cf-out-rmd" type="date"/></div>
         <div><label>Notes</label><input id="cf-notes"/></div>
       </div>
       <div class="form-actions">
@@ -2677,6 +2679,8 @@ function renderCages() {
           <td><input id="ce-wt-${c.id}" type="number" step="0.01" value="${c.weight}" style="width:70px;font-size:12px"/></td>
           <td><input id="ce-dep-${c.id}" type="date" value="${c.departureDate||''}" style="width:130px;font-size:12px"/></td>
           <td>${tripSelectHTML(c.id, c.proposedTripId||null)}</td>
+          <td><input id="ce-into-rmd-${c.id}" type="date" value="${c.intoRmd||''}" style="width:130px;font-size:12px"/></td>
+          <td><input id="ce-out-rmd-${c.id}" type="date" value="${c.outOfRmd||''}" style="width:130px;font-size:12px"/></td>
           <td><span class="badge badge-${hBadge(c.height)}">${hCat(c.height)}</span></td>
           <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
           <td style="text-align:center"><input type="checkbox" id="ce-sp-${c.id}" ${c.shippingPreference?'checked':''} style="width:15px;height:15px;accent-color:#e8b800" title="Shipping Preference"/></td>
@@ -2702,6 +2706,8 @@ function renderCages() {
         <td style="font-family:var(--font-mono)"><span class="editable-cell" onclick="startInlineEdit('${c.id}','weight',this)">${c.weight}</span></td>
         <td style="font-size:11px"><span class="editable-cell" onclick="startInlineEdit('${c.id}','departureDate',this)" title="Click to edit departure date">${c.departureDate ? fmt(c.departureDate) : '<span style="color:var(--text-muted)">—</span>'}</span> ${depBadge}</td>
         <td style="font-size:11px">${tripSelectHTML(c.id, c.proposedTripId||null)}</td>
+        <td style="font-size:11px"><span class="editable-cell" onclick="startInlineEdit('${c.id}','intoRmd',this)" title="Click to edit Into RMD date">${c.intoRmd ? fmt(c.intoRmd) : '<span style="color:var(--text-muted)">—</span>'}</span></td>
+        <td style="font-size:11px"><span class="editable-cell" onclick="startInlineEdit('${c.id}','outOfRmd',this)" title="Click to edit Out of RMD date">${c.outOfRmd ? fmt(c.outOfRmd) : '<span style="color:var(--text-muted)">—</span>'}</span></td>
         <td><span class="badge badge-${hBadge(c.height)}">${hCat(c.height)}</span></td>
         <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
         <td style="text-align:center">
@@ -2783,7 +2789,7 @@ function renderCages() {
       <table>
         <thead><tr>
           <th style="width:32px"><input type="checkbox" id="cage-select-all" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)" onchange="toggleAllCages(this.checked,${JSON.stringify(filtered.map(c=>c.id))})"/></th>
-          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Boat Trip</th><th>Category</th><th>Location</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th title="Shipping Preference 2 — highlight blue across all views">🔵 SP2</th><th>Move</th><th></th>
+          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Boat Trip</th><th>Into RMD</th><th>Out of RMD</th><th>Category</th><th>Location</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th title="Shipping Preference 2 — highlight blue across all views">🔵 SP2</th><th>Move</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -2798,8 +2804,10 @@ async function addCage() {
   const l = parseFloat(document.getElementById('cf-l').value);
   const wt = parseFloat(document.getElementById('cf-wt').value);
   const notes = document.getElementById('cf-notes').value.trim();
+  const intoRmd = document.getElementById('cf-into-rmd').value || null;
+  const outOfRmd = document.getElementById('cf-out-rmd').value || null;
   if (!name||isNaN(h)||isNaN(w)||isNaN(l)||isNaN(wt)) return alert('Please fill all required fields.');
-  const cage = {id:uid(),name,height:h,width:w,length:l,weight:wt,notes,departureDate:null,location:'facility',locationDetail:'',createdAt:new Date().toISOString()};
+  const cage = {id:uid(),name,height:h,width:w,length:l,weight:wt,notes,intoRmd,outOfRmd,departureDate:null,location:'facility',locationDetail:'',createdAt:new Date().toISOString()};
   STATE.cages.push(cage);
   cageFormOpen = false;
   render();
@@ -2905,7 +2913,7 @@ function exportMovementsCSV() {
 function startInlineEdit(cageId, field, spanEl) {
   const c = getCage(cageId);
   if (!c) return;
-  const isDate = field === 'departureDate' || field === 'proposedShipDay';
+  const isDate = field === 'departureDate' || field === 'proposedShipDay' || field === 'intoRmd' || field === 'outOfRmd';
   const isNumber = ['height','width','length','weight'].includes(field);
   const currentVal = c[field] != null ? c[field] : '';
   const input = document.createElement('input');
@@ -2942,6 +2950,8 @@ function saveCageEdit(id) {
   const l = parseFloat(document.getElementById('ce-l-'+id).value);
   const wt = parseFloat(document.getElementById('ce-wt-'+id).value);
   const dep = document.getElementById('ce-dep-'+id).value;
+  const intoRmdEl = document.getElementById('ce-into-rmd-'+id);
+  const outOfRmdEl = document.getElementById('ce-out-rmd-'+id);
   const spEl = document.getElementById('ce-sp-'+id);
   const sp2El = document.getElementById('ce-sp2-'+id);
   if (!name) return alert('Name required.');
@@ -2951,6 +2961,8 @@ function saveCageEdit(id) {
   if (!isNaN(l)) c.length = l;
   if (!isNaN(wt)) c.weight = wt;
   c.departureDate = dep || null;
+  if (intoRmdEl) c.intoRmd = intoRmdEl.value || null;
+  if (outOfRmdEl) c.outOfRmd = outOfRmdEl.value || null;
   if (spEl) c.shippingPreference = spEl.checked;
   if (sp2El) c.shippingPreference2 = sp2El.checked;
   cageEditing = null;
