@@ -1359,8 +1359,15 @@ async function saveCage(cage) {
   const { location_detail, departure_date, proposed_ship_day, proposed_trip_id,
     shipping_preference, shipping_preference2, location_history, into_rmd, out_of_rmd,
     created_at, ...clean } = cage;
-  try { await api('/api/cages', 'PUT', clean); }
-  catch(e) { showError('Failed to save cage: ' + e.message); }
+  console.log('[saveCage] sending:', JSON.stringify({id:clean.id, intoRmd:clean.intoRmd, outOfRmd:clean.outOfRmd}));
+  try {
+    const result = await api('/api/cages', 'PUT', clean);
+    console.log('[saveCage] response:', result);
+  }
+  catch(e) {
+    console.error('[saveCage] error:', e.message);
+    showError('Failed to save cage: ' + e.message);
+  }
 }
 async function addCageToAPI(cage) {
   try { await api('/api/cages', 'POST', cage); }
