@@ -9692,7 +9692,39 @@ function renderSettings() {
       <button class="btn btn-primary" onclick="applySettings()">&#128190; Save Settings</button>
       <span id="settings-saved-msg" style="font-size:12px;color:var(--green);display:none">&#10003; Saved!</span>
     </div>` : ''}
+
+    ${!ro ? `
+    <div class="card" style="max-width:620px;margin-top:18px">
+      <div class="card-title">&#128736; Database Migration</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Run this after deploying a new version of the worker to add any new database columns. Safe to run multiple times — existing data is never affected.</p>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="btn btn-secondary" id="migrate-btn" onclick="runMigration()">&#9889; Run Migration</button>
+        <span id="migrate-msg" style="font-size:12px;display:none"></span>
+      </div>
+    </div>` : ''}
   `;
+}
+
+async function runMigration() {
+  const btn = document.getElementById('migrate-btn');
+  const msg = document.getElementById('migrate-msg');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Running…'; }
+  if (msg) { msg.style.display = 'none'; }
+  try {
+    const res = await api('/api/migrate', 'POST', {});
+    if (msg) {
+      msg.style.display = 'inline';
+      msg.style.color = 'var(--green)';
+      msg.textContent = '✓ Migration complete — new columns added successfully.';
+    }
+  } catch(e) {
+    if (msg) {
+      msg.style.display = 'inline';
+      msg.style.color = 'var(--red)';
+      msg.textContent = '✗ Migration failed: ' + e.message;
+    }
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '⚡ Run Migration'; }
 }
 
 async function applyShipmentAssignment() {
