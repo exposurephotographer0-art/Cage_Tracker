@@ -1355,7 +1355,11 @@ function showSuccess(msg) {
 
 // ── Granular save helpers (called after each mutation) ────────────────────────
 async function saveCage(cage) {
-  try { await api('/api/cages', 'PUT', cage); }
+  // Strip raw DB snake_case fields that were spread onto the object — send only camelCase
+  const { location_detail, departure_date, proposed_ship_day, proposed_trip_id,
+    shipping_preference, shipping_preference2, location_history, into_rmd, out_of_rmd,
+    created_at, ...clean } = cage;
+  try { await api('/api/cages', 'PUT', clean); }
   catch(e) { showError('Failed to save cage: ' + e.message); }
 }
 async function addCageToAPI(cage) {
@@ -2926,7 +2930,10 @@ function startInlineEdit(cageId, field, spanEl) {
   spanEl.replaceWith(input);
   input.focus();
   if (!isDate) input.select();
+  let saved = false;
   const save = () => {
+    if (saved) return;
+    saved = true;
     const raw = input.value.trim();
     if (isNumber) { const n = parseFloat(raw); if (!isNaN(n)) c[field] = n; }
     else if (isDate) { c[field] = raw || null; }
@@ -2937,7 +2944,7 @@ function startInlineEdit(cageId, field, spanEl) {
   input.addEventListener('blur', save);
   input.addEventListener('keydown', e => {
     if (e.key === 'Enter') { input.blur(); }
-    if (e.key === 'Escape') { render(); }
+    if (e.key === 'Escape') { saved = true; render(); }
   });
 }
 
