@@ -3897,7 +3897,7 @@ function buildPlanFormHTML() {
   } else if (planFormType === 'frame-return-from-client') {
     // Frames currently with client or on boat
     cageOpts = '';
-    frameOpts = STATE.frames.filter(f=>f.location==='client'||f.location==='boat').sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f=>`<option value="${f.id}">${esc(f.name)} (${f.width}m — ${f.location})</option>`).join('');
+    frameOpts = STATE.frames.filter(f=>f.location==='client'||f.location==='boat').sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f=>`<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? ' 🔩' : ''} — ${f.location})</option>`).join('');
     showFrame = true;
     showRmd = false;
   }
