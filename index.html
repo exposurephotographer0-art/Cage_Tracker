@@ -6552,38 +6552,80 @@ async function generateBoatMovements() {
   // ═══════════════════════════════════════════════════════════════════════
 
   // ── Parse guidance hints ─────────────────────────────────────────────
+  // Uses token-matching rather than rigid regexes: scan each line for any
+  // known cage name and any known frame name. This handles natural language
+  // like "TF-3 for 320", "320 → TF-3", "put 320 in TF-3", "use TF-3 for cage 320", etc.
   const guidanceCageSkips    = new Set();
   const guidanceFrameForCage = {};
   const guidanceRmdForCage   = {};
+  const guidanceParseLog     = []; // human-readable log of what was/wasn't parsed
 
   if (bpGuidance && bpGuidance.trim()) {
+    // Build lookup maps: lowercased name → id, for fast token scanning
+    const cageByName  = Object.fromEntries(STATE.cages.map(c => [c.name.toLowerCase(), c]));
+    const frameByName = Object.fromEntries(STATE.frames.map(f => [f.name.toLowerCase(), f]));
+
     const gLines = bpGuidance.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
     gLines.forEach(line => {
       const lower = line.toLowerCase();
-      const skipMatch = lower.match(/skip\s+(?:cage\s+)?([\w-]+)/);
-      if (skipMatch) { guidanceCageSkips.add(skipMatch[1]); return; }
-      const frameMatch = lower.match(/(?:use\s+(tf-\w+)\s+for\s+(?:cage\s+)?([\w-]+))|(?:cage\s+([\w-]+)\s+(?:use|to|into|->|→)\s+(tf-\w+))/);
-      if (frameMatch) {
-        const frameName = (frameMatch[1] || frameMatch[4] || '').toUpperCase();
-        const cageName  = (frameMatch[2] || frameMatch[3] || '').toLowerCase();
-        const frame = STATE.frames.find(f => f.name.toLowerCase() === frameName.toLowerCase());
-        if (frame && cageName) { guidanceFrameForCage[cageName] = frame.id; return; }
+
+      // ── Skip instruction ────────────────────────────────────────────
+      const skipMatch = lower.match(/\bskip\b/);
+      if (skipMatch) {
+        // Find any cage name mentioned on this line
+        const skipped = Object.keys(cageByName).find(n => lower.includes(n));
+        if (skipped) {
+          guidanceCageSkips.add(skipped);
+          guidanceParseLog.push(`ℹ Skip: cage ${cageByName[skipped].name}`);
+        } else {
+          guidanceParseLog.push(`⚠ "skip" instruction but no matching cage found: "${line}"`);
+        }
+        return;
       }
-      const rmdMatch = lower.match(/(?:put\s+(?:cage\s+)?([\w-]+)\s+in\s+rmd-([\w]+))|(?:cage\s+([\w-]+)\s+(?:to|into|->|→|goes?\s+to)\s+rmd-([\w]+))/);
-      if (rmdMatch) {
-        const cageName = (rmdMatch[1] || rmdMatch[3] || '').toLowerCase();
-        const rmdRef   = (rmdMatch[2] || rmdMatch[4] || '').toUpperCase();
-        const rmdParts = rmdRef.match(/^(\d+)([ABab])?(?:\s+slot\s+(cage\d))?$/);
-        if (rmdParts && cageName) {
-          guidanceRmdForCage[cageName] = {
-            number: parseInt(rmdParts[1], 10),
-            side: (rmdParts[2] || 'A').toUpperCase(),
-            slot: rmdParts[3] || null,
-          };
+
+      // ── RMD instruction — check before frame (RMD slots look like "8A") ──
+      // Look for "rmd-NX" or "rmd NX" or just "NX" where N=number, X=A/B
+      const rmdTokenMatch = lower.match(/\brmd[-\s]?(\d+)\s*([ab])\b/i)
+                         || lower.match(/\b(\d{1,2})([ab])\b/i);
+      if (rmdTokenMatch) {
+        const rNum  = parseInt(rmdTokenMatch[1], 10);
+        const rSide = rmdTokenMatch[2].toUpperCase();
+        // Find cage name on this line
+        const cageName = Object.keys(cageByName).find(n => lower.includes(n));
+        if (cageName) {
+          guidanceRmdForCage[cageName] = { number: rNum, side: rSide, slot: null };
+          guidanceParseLog.push(`ℹ RMD: cage ${cageByName[cageName].name} → RMD-${rNum}${rSide}`);
+          return;
+        } else {
+          guidanceParseLog.push(`⚠ RMD slot ${rNum}${rSide} found but no matching cage on line: "${line}"`);
           return;
         }
       }
+
+      // ── Frame instruction — find any frame name on this line ────────
+      const frameName = Object.keys(frameByName).find(n => lower.includes(n));
+      if (frameName) {
+        const cageName = Object.keys(cageByName).find(n => lower.includes(n));
+        if (cageName) {
+          guidanceFrameForCage[cageName] = frameByName[frameName].id;
+          const f = frameByName[frameName];
+          const awayNote = (f.location === 'client' || f.location === 'boat')
+            ? ` (frame currently away${f.returnDate ? ', returns ' + fmt(f.returnDate) : ', no return date set'})`
+            : '';
+          guidanceParseLog.push(`ℹ Frame: cage ${cageByName[cageName].name} → ${f.name}${awayNote}`);
+          return;
+        } else {
+          guidanceParseLog.push(`⚠ Frame ${frameByName[frameName].name} found but no matching cage on line: "${line}"`);
+          return;
+        }
+      }
+
+      // ── Unrecognised line ───────────────────────────────────────────
+      guidanceParseLog.push(`⚠ Could not parse guidance line: "${line}"`);
     });
+
+    // Add parse log to warnings so user can see what was understood
+    guidanceParseLog.forEach(msg => warnings.push(msg));
   }
 
   // ── Build working-day list ────────────────────────────────────────────
@@ -7014,6 +7056,32 @@ async function generateBoatMovements() {
     return workDays.find(d => d >= start) || workDays[workDays.length - 1];
   }
 
+  // ── Helper: resolve a guided frame from guidance, with returning-frame validation ──
+  // Returns the frame object if usable, null if it can't be used.
+  // Emits warnings if the frame is away and returning late (or has no return date).
+  function resolveGuidedFrame(guidedFrameId, cageName) {
+    const f = STATE.frames.find(fr => fr.id === guidedFrameId);
+    if (!f) {
+      warnings.push(`⚠ Guidance: frame not found for cage ${cageName} — ignoring guidance`);
+      return null;
+    }
+    if (f.location === 'facility') return f; // at facility, no issues
+    if (f.location === 'client' || f.location === 'boat') {
+      if (!f.returnDate) {
+        warnings.push(`⚠ Guidance: ${f.name} is currently away (${f.location}) with no return date set — will schedule optimistically but timing may be wrong`);
+        return f; // still use it, but flag it
+      }
+      if (f.returnDate > boatDate) {
+        warnings.push(`⚠ Guidance: ${f.name} returns on ${fmt(f.returnDate)}, which is AFTER the boat date (${fmt(boatDate)}). Cannot use this frame — falling back to auto-select.`);
+        return null;
+      }
+      // Returns before boat date — valid, will be scheduled after return date
+      warnings.push(`ℹ Guidance: ${f.name} is currently away (${f.location}), returns ${fmt(f.returnDate)} — cage ${cageName} will be scheduled after that.`);
+      return f;
+    }
+    return f; // any other location — use it
+  }
+
   // ── PHASE 1: PLAN FACILITY EXIT CAGES (HIGHEST PRIORITY) ─────────────
   // For each exit cage: Facility → Frame (transit), then Frame → RMD (storage)
   // If RMD is full: cage stays in frame (frame-as-storage).
@@ -7187,7 +7255,7 @@ async function generateBoatMovements() {
         // Need to reframe
         const guidedFrameId = guidanceFrameForCage[cage.name.toLowerCase()];
         const better = guidedFrameId
-          ? STATE.frames.find(f => f.id === guidedFrameId)
+          ? resolveGuidedFrame(guidedFrameId, cage.name)
           : findBoatFrame(cage, boatDate, boatReservedFrameIds);
         if (better) {
           boatReservedFrameIds.add(better.id);
@@ -7253,7 +7321,7 @@ async function generateBoatMovements() {
 
       const guidedFrameId = guidanceFrameForCage[cage.name.toLowerCase()];
       const frame = guidedFrameId
-        ? STATE.frames.find(f => f.id === guidedFrameId)
+        ? resolveGuidedFrame(guidedFrameId, cage.name)
         : findBoatFrame(cage, boatDate, boatReservedFrameIds);
       if (frame) {
         boatReservedFrameIds.add(frame.id);
@@ -7262,7 +7330,6 @@ async function generateBoatMovements() {
         const isReturning = !!frameSim[frame.id]?.returningOn;
         if (needsWaler(cage) && !frame.hasWaler) warnings.push(`⚠ Cage ${cage.name} needs waler but ${frame.name} has none`);
         const retNote = isReturning ? ` [frame returns ${fmt(frameSim[frame.id].returningOn)}]` : '';
-        if (retNote) warnings.push(`ℹ Cage ${cage.name} assigned to ${frame.name} which returns ${fmt(frameSim[frame.id].returningOn)}`);
         // earliest date = latest of: frame return date, blocker's planned move date
         const frameReturn = frameSim[frame.id]?.returningOn || null;
         const blockerClears = cage._earliestOutDate || null;
@@ -7292,7 +7359,7 @@ async function generateBoatMovements() {
       // Cage still in facility — going direct to boat
       const guidedFrameId = guidanceFrameForCage[cage.name.toLowerCase()];
       const frame = guidedFrameId
-        ? STATE.frames.find(f => f.id === guidedFrameId)
+        ? resolveGuidedFrame(guidedFrameId, cage.name)
         : findBoatFrame(cage, boatDate, boatReservedFrameIds);
       if (frame) {
         boatReservedFrameIds.add(frame.id);
