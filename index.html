@@ -6561,7 +6561,10 @@ async function generateBoatMovements() {
   const guidanceParseLog     = []; // human-readable log of what was/wasn't parsed
 
   if (bpGuidance && bpGuidance.trim()) {
-    // Build lookup maps: lowercased name → id, for fast token scanning
+    // Build lookup maps: lowercased name → object, sorted longest-first so
+    // "tf-10" is matched before "tf-1" (prevents short names matching substrings of longer ones)
+    const cageNames  = STATE.cages.map(c => c.name.toLowerCase()).sort((a,b) => b.length - a.length);
+    const frameNames = STATE.frames.map(f => f.name.toLowerCase()).sort((a,b) => b.length - a.length);
     const cageByName  = Object.fromEntries(STATE.cages.map(c => [c.name.toLowerCase(), c]));
     const frameByName = Object.fromEntries(STATE.frames.map(f => [f.name.toLowerCase(), f]));
 
@@ -6572,8 +6575,8 @@ async function generateBoatMovements() {
       // ── Skip instruction ────────────────────────────────────────────
       const skipMatch = lower.match(/\bskip\b/);
       if (skipMatch) {
-        // Find any cage name mentioned on this line
-        const skipped = Object.keys(cageByName).find(n => lower.includes(n));
+        // Find any cage name mentioned on this line (longest-first to avoid partial matches)
+        const skipped = cageNames.find(n => lower.includes(n));
         if (skipped) {
           guidanceCageSkips.add(skipped);
           guidanceParseLog.push(`ℹ Skip: cage ${cageByName[skipped].name}`);
@@ -6590,8 +6593,8 @@ async function generateBoatMovements() {
       if (rmdTokenMatch) {
         const rNum  = parseInt(rmdTokenMatch[1], 10);
         const rSide = rmdTokenMatch[2].toUpperCase();
-        // Find cage name on this line
-        const cageName = Object.keys(cageByName).find(n => lower.includes(n));
+        // Find cage name on this line (longest-first to avoid partial matches)
+        const cageName = cageNames.find(n => lower.includes(n));
         if (cageName) {
           guidanceRmdForCage[cageName] = { number: rNum, side: rSide, slot: null };
           guidanceParseLog.push(`ℹ RMD: cage ${cageByName[cageName].name} → RMD-${rNum}${rSide}`);
@@ -6603,9 +6606,9 @@ async function generateBoatMovements() {
       }
 
       // ── Frame instruction — find any frame name on this line ────────
-      const frameName = Object.keys(frameByName).find(n => lower.includes(n));
+      const frameName = frameNames.find(n => lower.includes(n));
       if (frameName) {
-        const cageName = Object.keys(cageByName).find(n => lower.includes(n));
+        const cageName = cageNames.find(n => lower.includes(n));
         if (cageName) {
           guidanceFrameForCage[cageName] = frameByName[frameName].id;
           const f = frameByName[frameName];
@@ -6623,9 +6626,7 @@ async function generateBoatMovements() {
       // ── Unrecognised line ───────────────────────────────────────────
       guidanceParseLog.push(`⚠ Could not parse guidance line: "${line}"`);
     });
-
-    // Add parse log to warnings so user can see what was understood
-    guidanceParseLog.forEach(msg => warnings.push(msg));
+    // (guidanceParseLog is flushed into warnings[] below, after warnings is declared)
   }
 
   // ── Build working-day list ────────────────────────────────────────────
@@ -6678,6 +6679,9 @@ async function generateBoatMovements() {
 
   const warnings = [];
   const scheduledSteps = [];
+
+  // Flush guidance parse log now that warnings[] is declared
+  if (guidanceParseLog.length) guidanceParseLog.forEach(msg => warnings.push(msg));
 
   // ── SIMULATED STATE ───────────────────────────────────────────────────
   // We simulate the state of frames and RMD across the planning window.
