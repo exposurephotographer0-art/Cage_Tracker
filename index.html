@@ -8831,9 +8831,10 @@ function renderMovementsMap(dayCtx) {
   // In day view (preview), also include any non-facility frames referenced in movements
   // (e.g. returning frames assigned as boat frames by the boat planner).
   const facilityFrames = STATE.frames.filter(f=>f.location==='facility');
-  const relevantFrames = isDayView
-    ? STATE.frames.filter(f => f.location === 'facility' || activeFrames.has(f.id))
-    : facilityFrames;
+  const relevantFrames = STATE.frames.filter(f =>
+    f.location === 'facility' ||
+    activeFrames.has(f.id) ||
+    (isDayView && dayCtx.simFrameCages && (dayCtx.simFrameCages[f.id]?.length > 0)));
   const sortedFrames = [...relevantFrames].sort((a,b)=>{
     return (activeFrames.has(b.id)?1:0)-(activeFrames.has(a.id)?1:0);
   });
