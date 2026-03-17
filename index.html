@@ -6726,6 +6726,104 @@ async function generateBoatMovements() {
     });
   }
 
+  // ── LEARN FROM MOVEMENT HISTORY ──────────────────────────────────────
+  // Mine completed movements to build soft preferences for frame and RMD
+  // slot selection. These are applied as a scoring bonus — they don't
+  // override hard rules (width, waler, capacity) but do break ties in
+  // favour of historically-used assignments.
+  //
+  // Three preference signals are extracted:
+  //   1. Per-cage frame affinity   — cage X has often gone into frame F
+  //   2. Width-band frame affinity — cages ~Y metres wide usually go into Wm frames
+  //   3. Per-cage RMD slot affinity — cage X has often gone to slot NX
+  //   4. Height-category RMD affinity — Tall/Medium/Short cages tend toward certain slots
+
+  const learnedPrefs = (() => {
+    const completed = (STATE.plannedMovements || []).filter(m => m.completed);
+
+    // ── Frame preferences ─────────────────────────────────────────────
+    const frameCounts  = {};  // cageId  → { frameId: count }
+    const widthCounts  = {};  // widthBand (0.1m rounded) → { frameWidth: count }
+
+    completed
+      .filter(m => (m.typeKey === 'rmd-to-frame' || m.typeKey === 'facility-to-frame') && m.cageId && m.frameId)
+      .forEach(m => {
+        const cage  = getCage(m.cageId);
+        const frame = getFrame(m.frameId);
+        if (!cage || !frame) return;
+
+        // Per-cage: how many times did this cage go into this specific frame?
+        if (!frameCounts[m.cageId]) frameCounts[m.cageId] = {};
+        frameCounts[m.cageId][m.frameId] = (frameCounts[m.cageId][m.frameId] || 0) + 1;
+
+        // Width band: bucket cage width to nearest 0.1m, track which frame width was used
+        const band = String(Math.round(cage.width * 10) / 10);
+        if (!widthCounts[band]) widthCounts[band] = {};
+        widthCounts[band][String(frame.width)] = (widthCounts[band][String(frame.width)] || 0) + 1;
+      });
+
+    // ── RMD slot preferences ──────────────────────────────────────────
+    const rmdCageCounts   = {};  // cageId  → { rmdKey: count }
+    const rmdHeightCounts = {};  // heightCat → { rmdKey: count }
+
+    completed
+      .filter(m => (m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') && m.cageId)
+      .forEach(m => {
+        const cage = getCage(m.cageId);
+        if (!cage) return;
+        // Parse the RMD key from rmdSlot or rmdNumber+rmdSide
+        let rmdKey = null;
+        if (m.rmdNumber != null && m.rmdSide) {
+          rmdKey = `${parseInt(m.rmdNumber, 10)}${String(m.rmdSide).toUpperCase()}`;
+        } else if (m.rmdSlot) {
+          const match = String(m.rmdSlot).match(/^(\d+)\s*([ABab])/);
+          if (match) rmdKey = `${match[1]}${match[2].toUpperCase()}`;
+        }
+        if (!rmdKey) return;
+
+        if (!rmdCageCounts[m.cageId]) rmdCageCounts[m.cageId] = {};
+        rmdCageCounts[m.cageId][rmdKey] = (rmdCageCounts[m.cageId][rmdKey] || 0) + 1;
+
+        const cat = hCat(cage.height);
+        if (!rmdHeightCounts[cat]) rmdHeightCounts[cat] = {};
+        rmdHeightCounts[cat][rmdKey] = (rmdHeightCounts[cat][rmdKey] || 0) + 1;
+      });
+
+    // Helper: get the most-frequent key from a frequency map
+    function topKey(freq) {
+      if (!freq || Object.keys(freq).length === 0) return null;
+      return Object.entries(freq).sort((a, b) => b[1] - a[1])[0][0];
+    }
+
+    // Flatten to simple "best choice" lookups
+    const framePrefByCageId = Object.fromEntries(
+      Object.entries(frameCounts).map(([cid, freq]) => [cid, topKey(freq)])
+    );
+    const framePrefByWidthBand = Object.fromEntries(
+      Object.entries(widthCounts).map(([band, freq]) => [band, parseFloat(topKey(freq))])
+    );
+    const rmdPrefByCageId = Object.fromEntries(
+      Object.entries(rmdCageCounts).map(([cid, freq]) => [cid, topKey(freq)])
+    );
+    const rmdPrefByHeightCat = Object.fromEntries(
+      Object.entries(rmdHeightCounts).map(([cat, freq]) => [cat, topKey(freq)])
+    );
+
+    // Build a human-readable summary of what was learned (shown in plan output)
+    const learnedFrameCount  = Object.keys(framePrefByCageId).length;
+    const learnedWidthCount  = Object.keys(framePrefByWidthBand).length;
+    const learnedRmdCount    = Object.keys(rmdPrefByCageId).length;
+    const totalCompleted     = completed.length;
+    const summary = totalCompleted === 0
+      ? 'No completed movements yet — preferences will build as you complete moves.'
+      : `Analysed ${totalCompleted} completed movement${totalCompleted !== 1 ? 's' : ''}. ` +
+        `Frame preferences learned for ${learnedFrameCount} cage${learnedFrameCount !== 1 ? 's' : ''} ` +
+        `and ${learnedWidthCount} width band${learnedWidthCount !== 1 ? 's' : ''}. ` +
+        `RMD slot preferences learned for ${learnedRmdCount} cage${learnedRmdCount !== 1 ? 's' : ''}.`;
+
+    return { framePrefByCageId, framePrefByWidthBand, rmdPrefByCageId, rmdPrefByHeightCat, summary, totalCompleted };
+  })();
+
   // Track RMD boat-departing cages — used by Phase 2 access-order checks.
   // Do NOT pre-vacate their slots here: those cages are still physically in RMD
   // until Phase 2 actually schedules them out. Pre-vacating caused Phase 1 to
@@ -6781,37 +6879,32 @@ async function generateBoatMovements() {
     return null;
   }
 
-  // Helper: find a frame for boat loading (1 cage only, must be empty)
-  // Helper: find a frame for boat loading (1 cage only, tiered width selection)
-  // Rules: cage.width + spare → determines which frame tier is required:
-  //   < frameTierSmall → must use a frameTierSmall-width frame
-  //   < frameTierMed   → must use a frameTierMed-width frame
-  //   >= frameTierMed  → must use a 2.3m or 2.5m frame
-  // Waler: if cage needs waler, frame must have waler. If cage doesn't need waler, any frame is ok.
+  // Helper: find a frame for boat loading (1 cage only, must be empty).
+  // Selects the narrowest available frame where frame.width >= cage.width + frameSpare.
+  // Applies learned preferences (from movement history) as a soft sorting bonus so
+  // historically-used frames are preferred when multiple valid options exist.
+  // Waler: if cage needs waler, frame must have waler.
   function findBoatFrame(cage, date, reservedIds = new Set()) {
-    const s      = STATE.settings || {};
-    const spare  = s.frameSpare     !== undefined ? s.frameSpare     : FRAME_SPARE;
-    const tSmall = s.frameTierSmall !== undefined ? s.frameTierSmall : FRAME_TIER_SMALL;
-    const tMed   = s.frameTierMed   !== undefined ? s.frameTierMed   : FRAME_TIER_MED;
+    const s     = STATE.settings || {};
+    const spare = s.frameSpare !== undefined ? s.frameSpare : FRAME_SPARE;
     const needsW = needsWaler(cage);
 
-    const effective = cage.width + spare; // effective width requirement
+    const effective = cage.width + spare; // minimum frame width required
 
-    // Determine required frame tier
-    let requiredWidths;
-    if (effective < tSmall) {
-      requiredWidths = [tSmall];                     // must use 1.1m frame
-    } else if (effective < tMed) {
-      requiredWidths = [tMed];                       // must use 1.5m frame
-    } else {
-      requiredWidths = [2.3, 2.5];                   // must use 2.3m or 2.5m frame
-    }
+    // Learned preference signals for this cage
+    const prefFrameId    = learnedPrefs.framePrefByCageId[cage.id] || null;
+    const widthBand      = String(Math.round(cage.width * 10) / 10);
+    const prefFrameWidth = learnedPrefs.framePrefByWidthBand[widthBand] || null;
 
-    // Filter: empty, correct tier width, and candidate must be at facility or returning
+    // Filter: empty, wide enough, available at facility or returning by date
     const candidates = getAvailableFacilityFrames(date, reservedIds)
-      .filter(s => s.cages.length === 0 && requiredWidths.includes(s.frame.width))
+      .filter(s => s.cages.length === 0 && s.frame.width >= effective)
       .sort((a, b) => {
-        // Prefer already-at-facility over returning; then by width ascending
+        // Learned preference score: exact cage match = 2 pts, width-band match = 1 pt
+        const scoreA = (a.frame.id === prefFrameId ? 2 : 0) + (a.frame.width === prefFrameWidth ? 1 : 0);
+        const scoreB = (b.frame.id === prefFrameId ? 2 : 0) + (b.frame.width === prefFrameWidth ? 1 : 0);
+        if (scoreA !== scoreB) return scoreB - scoreA; // higher score first
+        // Tiebreak: at-facility before returning; then narrowest fit
         const aRet = a.returningOn ? 1 : 0;
         const bRet = b.returningOn ? 1 : 0;
         if (aRet !== bRet) return aRet - bRet;
@@ -6823,9 +6916,7 @@ async function generateBoatMovements() {
       if (needsW && !c.frame.hasWaler) continue;
       return c.frame;
     }
-    // Pass 2: cage doesn't need waler — waler frames are still valid, so this is same as pass 1
-    // (already covered). But if needsW was false and we skipped frames with no waler due to
-    // some other logic, re-scan without waler restriction:
+    // Pass 2: relax waler (cage doesn't need one, so any frame width is fine)
     if (!needsW) {
       for (const c of candidates) { return c.frame; }
     }
@@ -6882,8 +6973,18 @@ async function generateBoatMovements() {
 
     if (candidates.length === 0) return null;
 
-    // Prefer partial fills first (pack together), then lowest RMD number, then side
+    // Learned preference signals for this cage's RMD slot
+    const prefRmdKey = learnedPrefs.rmdPrefByCageId[cage.id]
+                    || learnedPrefs.rmdPrefByHeightCat[cageH]
+                    || null;
+
+    // Sort: learned preference first, then partial fills (pack together), then lowest slot number
     candidates.sort((a, b) => {
+      const aKey = `${a.number}${a.side}`;
+      const bKey = `${b.number}${b.side}`;
+      const aPref = aKey === prefRmdKey ? 1 : 0;
+      const bPref = bKey === prefRmdKey ? 1 : 0;
+      if (aPref !== bPref) return bPref - aPref; // preferred key first
       const ap = a.filled > 0 ? 0 : 1;
       const bp = b.filled > 0 ? 0 : 1;
       if (ap !== bp) return ap - bp;
@@ -7316,6 +7417,21 @@ async function generateBoatMovements() {
     }
   }
 
+  // ── Learning summary ─────────────────────────────────────────────────
+  // Show what the planner learned from history and which assignments were influenced
+  {
+    const appliedFramePrefs = scheduledSteps
+      .filter(s => s.frame && s.cage && learnedPrefs.framePrefByCageId[s.cage.id] === s.frame.id)
+      .map(s => `${s.cage.name}→${s.frame.name}`);
+    const appliedRmdPrefs = scheduledSteps
+      .filter(s => s.rmdSlot && s.cage && learnedPrefs.rmdPrefByCageId[s.cage.id] === `${s.rmdSlot.number}${s.rmdSlot.side}`)
+      .map(s => `${s.cage.name}→RMD-${s.rmdSlot.number}${s.rmdSlot.side}`);
+    const appliedParts = [...appliedFramePrefs, ...appliedRmdPrefs];
+    const learnDesc = learnedPrefs.summary
+      + (appliedParts.length > 0 ? ` Preferences applied: ${appliedParts.join(', ')}.` : learnedPrefs.totalCompleted > 0 ? ' No preferences matched this plan.' : '');
+    moves.push({ type: '🧠 Learning', desc: learnDesc, category: 'info' });
+  }
+
   noFrame.forEach(s => {
     moves.push({ type: '⚠ No Frame', desc: s.note, category: 'warning' });
   });
@@ -7411,6 +7527,19 @@ async function generateBoatMovements() {
         date: m.date, description: m.description, shift: m.shift, type: m.type
       })),
       previousAiInsight: bpGeneratedMovements?.aiInsight || null,
+      learnedPrefs: {
+        summary: learnedPrefs.summary,
+        completedMovements: learnedPrefs.totalCompleted,
+        framePrefsByCage: Object.entries(learnedPrefs.framePrefByCageId).map(([cid, fid]) => {
+          const c = getCage(cid), f = getFrame(fid);
+          return c && f ? `${c.name} → ${f.name}` : null;
+        }).filter(Boolean),
+        rmdPrefsByCage: Object.entries(learnedPrefs.rmdPrefByCageId).map(([cid, key]) => {
+          const c = getCage(cid);
+          return c ? `${c.name} → RMD-${key}` : null;
+        }).filter(Boolean),
+        rmdPrefsByHeightCat: learnedPrefs.rmdPrefByHeightCat,
+      },
     };
     const aiRes = await fetch(API_BASE + '/api/ai-boat-plan', {
       method: 'POST',
