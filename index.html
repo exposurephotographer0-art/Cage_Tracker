@@ -8656,8 +8656,16 @@ function renderMovementsDayView() {
     ">${label}${cnt>0?` <span style="font-size:10px;opacity:.8">${cnt}</span>`:''}</button>`;
   }).join('');
 
+  // Frames that have logically returned to facility in the simulation
+  // (pending frame-return-from-client moves dated before the viewed day)
+  const simReturnedFrameIds = new Set(
+    priorMoves
+      .filter(m => m.typeKey === 'frame-return-from-client' && m.frameId)
+      .map(m => m.frameId)
+  );
+
   // Now render the full map, passing our day-context overrides
-  return renderMovementsMap({ dayMoves, simFrameCages, simRmdState, cageLocSim, dayIdx, dates, prevDay, nextDay, dayTabsHTML });
+  return renderMovementsMap({ dayMoves, simFrameCages, simRmdState, cageLocSim, dayIdx, dates, prevDay, nextDay, dayTabsHTML, simReturnedFrameIds });
 }
 
 function renderMovementsMap(dayCtx) {
@@ -9165,7 +9173,10 @@ function renderMovementsMap(dayCtx) {
               <!-- Boat / Client divider and frames -->
               ${(() => {
                 const framesWithReturn = STATE.frames
-                  .filter(f => (f.location==='client'||f.location==='boat') && f.returnDate)
+                  .filter(f =>
+                    (f.location==='client'||f.location==='boat') &&
+                    f.returnDate &&
+                    !(isDayView && dayCtx.simReturnedFrameIds && dayCtx.simReturnedFrameIds.has(f.id)))
                   .sort((a,b) => a.returnDate.localeCompare(b.returnDate));
                 const hasAny = framesWithReturn.length > 0;
 
@@ -9228,7 +9239,7 @@ function renderMovementsMap(dayCtx) {
                   const boatPickHint = mvPick ? `<div style="font-size:9px;color:#e8a830;font-weight:600;margin-top:4px;text-align:center">▶ Move here (pre-plan)</div>` : '';
                   return `<div id="mvboat-${f.id}" style="background:${mvPick?'#1a2520':'var(--bg-card)'};${boatBorder}border-radius:8px;padding:9px 10px;min-width:100px;transition:all 0.1s" ${boatClickHandler} title="${mvPick?`Pre-plan cage ${esc(mvPick?.cageName||'')} into ${esc(f.name)} (returns ${f.returnDate||'?'})`:''}">
                     <div style="font:700 12px var(--font-mono);color:${isActive?'var(--accent)':mvPick?'#b0d890':'#0e7490'}">${esc(f.name)}</div>
-                    <div style="font-size:9px;color:var(--text-muted);margin-bottom:2px">${f.width}m · ${f.location}</div>
+                    <div style="font-size:9px;color:var(--text-muted);margin-bottom:2px">${f.width}m${f.hasWaler?' 🔩':''} · ${f.location}</div>
                     <div style="font-size:9px;color:${retCol};font-family:var(--font-mono);margin-bottom:4px">↩ ${retStr}</div>
                     ${cageHTML}
                     ${boatPickHint}
