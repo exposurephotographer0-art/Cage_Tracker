@@ -6687,34 +6687,44 @@ async function generateBoatMovements() {
     }
   });
 
-  // Replay pending planned frame-to-rmd movements into rmdSim
-  // (same problem as frameSim — STATE only reflects completed moves)
+  // Replay pending planned frame-to-rmd and facility-to-rmd movements into rmdSim.
+  // (STATE only reflects completed moves — pending movements must be replayed here.)
   // IMPORTANT: also free the transit frame — the frame returns to facility after depositing the cage.
-  STATE.plannedMovements
-    .filter(m => !m.completed && m.typeKey === 'frame-to-rmd' && m.rmdNumber != null && m.rmdSide && m.cageId)
-    .forEach(m => {
-      const key = `${m.rmdNumber}${m.rmdSide}`;
-      if (!rmdSim[key]) rmdSim[key] = { cage1: null, cage2: null };
-      const slot = m.rmdSlot || 'cage1';
-      if (!rmdSim[key][slot]) rmdSim[key][slot] = m.cageId;
-      // Free the transit frame — cage is now in RMD, frame returns to facility
-      if (m.frameId && frameSim[m.frameId]) {
-        frameSim[m.frameId].cages = frameSim[m.frameId].cages.filter(id => id !== m.cageId);
+  //
+  // NOTE: movements are saved with rmdSlot as a combined string (e.g. "8A"), NOT separate
+  // rmdNumber + rmdSide fields. Parse either form so both old and new movements are handled.
+  {
+    function parseRmdRef(m) {
+      if (m.rmdNumber != null && m.rmdSide) {
+        return { number: parseInt(m.rmdNumber, 10), side: String(m.rmdSide).toUpperCase() };
       }
-    });
-  // Also replay facility-to-rmd planned movements
-  STATE.plannedMovements
-    .filter(m => !m.completed && m.typeKey === 'facility-to-rmd' && m.rmdNumber != null && m.rmdSide && m.cageId)
-    .forEach(m => {
-      const key = `${m.rmdNumber}${m.rmdSide}`;
-      if (!rmdSim[key]) rmdSim[key] = { cage1: null, cage2: null };
-      const slot = m.rmdSlot || 'cage1';
-      if (!rmdSim[key][slot]) rmdSim[key][slot] = m.cageId;
-      // Free any transit frame if present
-      if (m.frameId && frameSim[m.frameId]) {
-        frameSim[m.frameId].cages = frameSim[m.frameId].cages.filter(id => id !== m.cageId);
+      if (m.rmdSlot) {
+        const match = String(m.rmdSlot).match(/^(\d+)\s*([ABab])/);
+        if (match) return { number: parseInt(match[1], 10), side: match[2].toUpperCase() };
       }
+      return null;
+    }
+    ['frame-to-rmd', 'facility-to-rmd'].forEach(typeKey => {
+      STATE.plannedMovements
+        .filter(m => !m.completed && m.typeKey === typeKey && m.cageId)
+        .forEach(m => {
+          const ref = parseRmdRef(m);
+          if (!ref) return;
+          const key = `${ref.number}${ref.side}`;
+          if (!rmdSim[key]) rmdSim[key] = { cage1: null, cage2: null };
+          // Assign to first available slot (cage1 first, then cage2)
+          if (!rmdSim[key].cage1) {
+            rmdSim[key].cage1 = m.cageId;
+          } else if (!rmdSim[key].cage2) {
+            rmdSim[key].cage2 = m.cageId;
+          }
+          // Free the transit frame if present — cage is now committed to RMD
+          if (m.frameId && frameSim[m.frameId]) {
+            frameSim[m.frameId].cages = frameSim[m.frameId].cages.filter(id => id !== m.cageId);
+          }
+        });
     });
+  }
 
   // Track RMD boat-departing cages — used by Phase 2 access-order checks.
   // Do NOT pre-vacate their slots here: those cages are still physically in RMD
@@ -6845,10 +6855,16 @@ async function generateBoatMovements() {
         // Try inside slot (cage1 only — first cage must go inside)
         // Only available if cage1 is empty.
         if (!s.cage1) {
-          const outsideCage = s.cage2 ? getCage(s.cage2) : null;
-          // Can go inside only if outside is empty OR the pair is compatible
-          if (!outsideCage || canPairRMD(cage, outsideCage)) {
+          if (!s.cage2) {
+            // Outside slot empty — any cage can go inside
             candidates.push({ number: r.number, side, slot: 'cage1', filled });
+          } else {
+            const outsideCage = getCage(s.cage2);
+            // If outside slot is occupied but cage can't be resolved, treat as incompatible
+            // (prevents invalid pairings like Tall+Tall when rmdSim has a pending assignment)
+            if (outsideCage && canPairRMD(cage, outsideCage)) {
+              candidates.push({ number: r.number, side, slot: 'cage1', filled });
+            }
           }
         }
 
@@ -6856,8 +6872,8 @@ async function generateBoatMovements() {
         // Tall cages cannot go outside. cage1 must already be filled before cage2 is valid.
         if (!isTall && s.cage1 && !s.cage2) {
           const insideCage = getCage(s.cage1);
-          // Can go outside only if the pair is compatible
-          if (!insideCage || canPairRMD(insideCage, cage)) {
+          // If inside cage can't be resolved, treat as incompatible (safe fallback)
+          if (insideCage && canPairRMD(insideCage, cage)) {
             candidates.push({ number: r.number, side, slot: 'cage2', filled });
           }
         }
