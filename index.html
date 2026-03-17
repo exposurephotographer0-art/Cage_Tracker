@@ -7119,14 +7119,27 @@ async function generateBoatMovements() {
           if (sd.cage1 === cage.id) mySlot = 'cage1';
           else if (sd.cage2 === cage.id) mySlot = 'cage2';
           if (mySlot === 'cage1' && sd.cage2 && !rmdBoatDeparting.has(sd.cage2)) {
-            // Check if outside cage is already being handled in THIS plan
-            const alreadyHandled = scheduledSteps.some(s =>
+            // Check if outside cage is already being handled in THIS generated plan
+            const handledInThisPlan = scheduledSteps.some(s =>
               s.cage && s.cage.id === sd.cage2 && s.action !== 'no_frame'
             );
-            if (!alreadyHandled) {
+            // Also check if outside cage has an existing manually-planned movement
+            // that will remove it from RMD before or on the boat date
+            const existingPlanForBlocker = STATE.plannedMovements.find(m =>
+              !m.completed && m.cageId === sd.cage2 &&
+              (m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-to-frame')
+            );
+            if (!handledInThisPlan && !existingPlanForBlocker) {
               const blocker = getCage(sd.cage2);
               warnings.push(`⚠ Cage ${cage.name} is in inside slot (${detail} cage1) — blocked by outside cage ${blocker ? blocker.name : sd.cage2}. Remove outside cage first.`);
               blocked = true;
+            }
+            // If the outside cage is already planned to move, record the earliest
+            // date the inside cage can be scheduled (must be after the blocker leaves)
+            if (!blocked && existingPlanForBlocker && existingPlanForBlocker.date) {
+              const blockerName = getCage(sd.cage2)?.name || sd.cage2;
+              warnings.push(`ℹ Cage ${cage.name} (inside slot) — outside cage ${blockerName} already planned to move on ${fmt(existingPlanForBlocker.date)}. Scheduling inside cage after that.`);
+              cage._earliestOutDate = existingPlanForBlocker.date;
             }
           }
         }
@@ -7149,7 +7162,10 @@ async function generateBoatMovements() {
         if (needsWaler(cage) && !frame.hasWaler) warnings.push(`⚠ Cage ${cage.name} needs waler but ${frame.name} has none`);
         const retNote = isReturning ? ` [frame returns ${fmt(frameSim[frame.id].returningOn)}]` : '';
         if (retNote) warnings.push(`ℹ Cage ${cage.name} assigned to ${frame.name} which returns ${fmt(frameSim[frame.id].returningOn)}`);
-        const earliest = frameSim[frame.id]?.returningOn || null;
+        // earliest date = latest of: frame return date, blocker's planned move date
+        const frameReturn = frameSim[frame.id]?.returningOn || null;
+        const blockerClears = cage._earliestOutDate || null;
+        const earliest = [frameReturn, blockerClears].filter(Boolean).sort().pop() || null;
         const day = latestDayByDeadline(boatDate, earliest);
         useMove(day);
         // Free RMD slot in sim — check all 4 slot positions
