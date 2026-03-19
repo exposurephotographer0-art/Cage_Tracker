@@ -4338,8 +4338,10 @@ async function completeMove(id) {
     // Clear cage from any current location
     clearCageFromCurrentLocation(cage.id);
     // Check frame capacity
-    if (frame.cages.length >= 2) { alert(`Cannot complete: ${frame.name} already has max cages.`); return; }
-    if (frame.cages.length === 1) {
+    if (frame.cages.length >= 2) {
+      const override = confirm(`⚠️ Override: ${frame.name} already has ${frame.cages.length} cage(s) (max is normally 2).\n\nClick OK to override and add a third cage anyway, or Cancel to abort.`);
+      if (!override) return;
+    } else if (frame.cages.length === 1) {
       const existing = getCage(frame.cages[0]);
       if (existing && !canFitTwo(existing, cage, frame.width)) {
         const override = confirm(`⚠️ Warning: cages don't fit together in ${frame.name}.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
@@ -4385,8 +4387,10 @@ async function completeMove(id) {
   }
   else if (m.typeKey === 'rmd-to-frame' && cage && frame) {
     clearCageFromCurrentLocation(cage.id);
-    if (frame.cages.length >= 2) { alert(`Cannot complete: ${frame.name} already has max cages.`); return; }
-    if (frame.cages.length === 1) {
+    if (frame.cages.length >= 2) {
+      const override = confirm(`⚠️ Override: ${frame.name} already has ${frame.cages.length} cage(s) (max is normally 2).\n\nClick OK to override and add a third cage anyway, or Cancel to abort.`);
+      if (!override) return;
+    } else if (frame.cages.length === 1) {
       const existing = getCage(frame.cages[0]);
       if (existing && !canFitTwo(existing, cage, frame.width)) {
         const override = confirm(`⚠️ Warning: cages don't fit together in ${frame.name}.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
@@ -4441,8 +4445,10 @@ async function completeMove(id) {
       if (srcFrame.fixedForShipping) srcFrame.fixedForShipping = false; // moving a cage un-fixes the source frame
     }
     // Check destination frame capacity
-    if (frame.cages.length >= 2) { alert(`Cannot complete: ${frame.name} already has max cages.`); return; }
-    if (frame.cages.length === 1) {
+    if (frame.cages.length >= 2) {
+      const override = confirm(`⚠️ Override: ${frame.name} already has ${frame.cages.length} cage(s) (max is normally 2).\n\nClick OK to override and add a third cage anyway, or Cancel to abort.`);
+      if (!override) return;
+    } else if (frame.cages.length === 1) {
       const existing = getCage(frame.cages[0]);
       if (existing && !canFitTwo(existing, cage, frame.width)) {
         const override = confirm(`⚠️ Warning: cages don't fit together in ${frame.name}.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
