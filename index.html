@@ -3499,6 +3499,8 @@ async function updateFrameLoc(fid,loc) {
       const c=getCage(cid);
       if(c) { c.location = loc==='boat'||loc==='client' ? 'shipped' : 'facility'; c.locationDetail = loc==='boat'?'In transit':loc==='client'?'With client':''; if (loc!=='facility') c.departureDate = null; }
     });
+  } else {
+    // Returning to facility via dropdown — cages were already cleared at markDelivered, nothing to do
   }
   render();
   await saveFrame(f);
@@ -4338,10 +4340,8 @@ async function completeMove(id) {
     // Clear cage from any current location
     clearCageFromCurrentLocation(cage.id);
     // Check frame capacity
-    if (frame.cages.length >= 2) {
-      const override = confirm(`⚠️ Override: ${frame.name} already has ${frame.cages.length} cage(s) (max is normally 2).\n\nClick OK to override and add a third cage anyway, or Cancel to abort.`);
-      if (!override) return;
-    } else if (frame.cages.length === 1) {
+    if (frame.cages.length >= 2) { alert(`Cannot complete: ${frame.name} already has max cages.`); return; }
+    if (frame.cages.length === 1) {
       const existing = getCage(frame.cages[0]);
       if (existing && !canFitTwo(existing, cage, frame.width)) {
         const override = confirm(`⚠️ Warning: cages don't fit together in ${frame.name}.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
@@ -4387,10 +4387,8 @@ async function completeMove(id) {
   }
   else if (m.typeKey === 'rmd-to-frame' && cage && frame) {
     clearCageFromCurrentLocation(cage.id);
-    if (frame.cages.length >= 2) {
-      const override = confirm(`⚠️ Override: ${frame.name} already has ${frame.cages.length} cage(s) (max is normally 2).\n\nClick OK to override and add a third cage anyway, or Cancel to abort.`);
-      if (!override) return;
-    } else if (frame.cages.length === 1) {
+    if (frame.cages.length >= 2) { alert(`Cannot complete: ${frame.name} already has max cages.`); return; }
+    if (frame.cages.length === 1) {
       const existing = getCage(frame.cages[0]);
       if (existing && !canFitTwo(existing, cage, frame.width)) {
         const override = confirm(`⚠️ Warning: cages don't fit together in ${frame.name}.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
@@ -4445,10 +4443,8 @@ async function completeMove(id) {
       if (srcFrame.fixedForShipping) srcFrame.fixedForShipping = false; // moving a cage un-fixes the source frame
     }
     // Check destination frame capacity
-    if (frame.cages.length >= 2) {
-      const override = confirm(`⚠️ Override: ${frame.name} already has ${frame.cages.length} cage(s) (max is normally 2).\n\nClick OK to override and add a third cage anyway, or Cancel to abort.`);
-      if (!override) return;
-    } else if (frame.cages.length === 1) {
+    if (frame.cages.length >= 2) { alert(`Cannot complete: ${frame.name} already has max cages.`); return; }
+    if (frame.cages.length === 1) {
       const existing = getCage(frame.cages[0]);
       if (existing && !canFitTwo(existing, cage, frame.width)) {
         const override = confirm(`⚠️ Warning: cages don't fit together in ${frame.name}.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
@@ -5038,10 +5034,25 @@ async function markDelivered(sid) {
   const sh = STATE.shipments.find(s=>s.id===sid);
   sh.status = 'delivered';
   const updatedFrames = [];
-  sh.frameIds.forEach(fid=>{ const f=getFrame(fid); if(f) { f.location='client'; updatedFrames.push(f); } });
+  const updatedCages = [];
+  sh.frameIds.forEach(fid=>{
+    const f=getFrame(fid);
+    if(f){
+      // Clear cages from the frame on delivery — they are now classed as shipped
+      f.cages.forEach(cid=>{
+        const c=getCage(cid);
+        if(c){ c.location='shipped'; c.locationDetail='Delivered'; c.departureDate=null; updatedCages.push(c); }
+      });
+      f.cages=[];
+      f.fixedForShipping=false;
+      f.location='client';
+      updatedFrames.push(f);
+    }
+  });
   render();
   await updateShipmentInAPI(sh);
   await Promise.all(updatedFrames.map(f => saveFrame(f)));
+  await Promise.all(updatedCages.map(c => saveCage(c)));
 }
 async function clearShipmentHistory() {
   const count = STATE.shipments.length;
@@ -5060,7 +5071,7 @@ async function returnFrames(sid) {
   const returnedFrameNames = [];
   sh.frameIds.forEach(fid=>{
     const f=getFrame(fid);
-    if(f){ returnedFrameNames.push(f.name + (f.width ? ` [${f.width}m]` : '')); f.location='facility'; f.cages=[]; f.fixedForShipping=false; updatedFrames.push(f); }
+    if(f){ returnedFrameNames.push(f.name + (f.width ? ` [${f.width}m]` : '')); f.location='facility'; f.fixedForShipping=false; updatedFrames.push(f); }
   });
   addAuditEvent('↩ Frame Return', `${updatedFrames.length} frame(s) returned to facility`, returnedFrameNames.join(', '), sh.frameIds);
   render();
@@ -5071,19 +5082,12 @@ async function returnFrames(sid) {
 async function returnFromClient(fid) {
   const f = getFrame(fid);
   if (!f) return;
-  const updatedCages = [];
-  const cageNames = f.cages.map(cid => getCage(cid)?.name || cid).filter(Boolean);
-  f.cages.forEach(cid => {
-    const c = getCage(cid);
-    if (c) { c.location = 'facility'; c.locationDetail = ''; c.departureDate = null; updatedCages.push(c); }
-  });
-  addAuditEvent('↩ Frame Return', `${f.name}${f.width ? ` [${f.width}m]` : ''} returned from client`, cageNames.length ? `Cages unloaded: ${cageNames.join(', ')}` : 'No cages aboard', [fid]);
-  f.cages = [];
+  addAuditEvent('↩ Frame Return', `${f.name}${f.width ? ` [${f.width}m]` : ''} returned from client`, 'Frame returned to facility', [fid]);
   f.fixedForShipping = false;
-  f.location = 'boat';
+  f.location = 'facility';
+  f.returnDate = null;
   render();
   await saveFrame(f);
-  await Promise.all(updatedCages.map(c => saveCage(c)));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
