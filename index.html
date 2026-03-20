@@ -3367,7 +3367,7 @@ function renderFrames() {
       const _nc = shipmentShadeNameColor(_shade) || shipPrefNameColor(c);
       return `<div class="frame-cage-item" style="${_bg}">
         <span style="${_nc}">${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t${needsWaler(c) ? ' <span style="color:var(--yellow);font-size:10px" title="Cage below waler length threshold — needs waler for shipping">⚠ waler req.</span>' : ''}</span>
-        <button class="remove-btn" onclick="removeCageFromFrame('${f.id}','${c.id}')" title="Remove cage from frame">×</button>
+        ${f.location==='facility'&&!f.fixedForShipping ? `<button class="remove-btn" onclick="removeCageFromFrame('${f.id}','${c.id}')">×</button>` : ''}
       </div>`;
     }).join('');
 
@@ -3526,13 +3526,7 @@ async function assignCageToFrame(fid,cid) {
 async function removeCageFromFrame(fid,cid) {
   const f=getFrame(fid), c=getCage(cid);
   f.cages=f.cages.filter(id=>id!==cid); f.fixedForShipping=false;
-  if(c) {
-    if(f.location==='boat'||f.location==='client') {
-      c.location='shipped'; c.locationDetail='Removed from '+f.name+' (away)';
-    } else {
-      c.location='facility'; c.locationDetail='';
-    }
-  }
+  if(c) { c.location='facility'; c.locationDetail=''; }
   render();
   await saveFrame(f);
   if(c) await saveCage(c);
@@ -8898,22 +8892,27 @@ function renderMovementsMap(dayCtx) {
     });
     inIds.forEach(cid=>{
       const c=getCage(cid); if(!c)return;
-      if(fCages.find(x=>x.id===cid))return; // already shown
-      if(transitIds.includes(cid))return; // will be shown as transit below
+      if(fCages.find(x=>x.id===cid))return; // already shown above in fCages block
+      const isTransit = transitIds.includes(cid); // cage passes through: facility→frame→rmd
       const _iShade = shipmentShadeClass(c, _mvShipDays);
       let iBg;
       if (_iShade === 'next') iBg = 'background:#3b1d6e;border-color:#7040c0;';
       else if (_iShade === 'second') iBg = 'background:#c8b8e8;border-color:#9070c8;';
       else if (c.shippingPreference2) iBg = 'background:#dbeafe;border-color:#3b82f6;';
       else if (c.shippingPreference) iBg = 'background:#fff8c5;border-color:#e8d850;';
+      else if (isTransit) iBg = 'background:#fff7ed;border-color:#f5a742;'; // orange tint for pass-through
       else iBg = 'background:#f0faf4;border-color:#4aad72;';
       const iNameStyle = _iShade === 'next' ? 'color:#e0ccff;' : _iShade === 'second' ? 'color:#4a2a7a;' : c.shippingPreference2 ? 'color:#1e40af;' : c.shippingPreference ? 'color:#7a5c00;' : '';
       const iDetailStyle = _iShade === 'next' ? 'color:#c0a8ee;' : _iShade === 'second' ? 'color:#6a4a9a;' : c.shippingPreference2 ? 'color:#3b82f6;' : 'color:var(--text-muted);';
       const iMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
       const iIsPickedCage = mvPick && mvPick.cageId === c.id;
       const iPickBtn = `<button onclick="event.stopPropagation();mvPickCage('${c.id}')" title="Plan movement for cage ${esc(c.name)}" style="border:none;background:${iIsPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${iIsPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${iIsPickedCage?'✓':'🏷'}</button>`;
+      // Transit: show ← (incoming from facility) and → (outgoing to RMD) together
+      const iArrow = isTransit
+        ? `<span style="color:#27a060;font-weight:800">←</span><span style="color:#c08520;font-weight:800">→</span>`
+        : `<span style="color:#27a060;font-weight:800">←</span>`;
       html+=`<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${iBg}">
-        <div style="display:flex;align-items:center;gap:2px;"><span style="color:#27a060;font-weight:800">←</span><span style="font:600 10px var(--font-mono);${iNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${esc(c.name)}${iMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${iMoveCount}</span>`:''}</span>${iPickBtn}</div>
+        <div style="display:flex;align-items:center;gap:2px;">${iArrow}<span style="font:600 10px var(--font-mono);${iNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${esc(c.name)}${iMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${iMoveCount}</span>`:''}</span>${iPickBtn}</div>
         <div style="font-size:9px;padding-left:13px;${iDetailStyle}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
       </div>`;
     });
