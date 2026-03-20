@@ -9508,10 +9508,11 @@ function mvRedraw() {
 
     } else if (m.typeKey === 'frame-to-frame') {
       // Arrow from source frame card to destination frame card
+      // Frame may be at facility (mvf-) or at boat/client (mvboat-) — try both
       const srcFk  = String(m.srcFrameId || '');
       const destFk = String(m.frameId || '');
-      const srcPos  = getPos('mvf-' + srcFk);
-      const destPos = getPos('mvf-' + destFk);
+      const srcPos  = getPos('mvf-' + srcFk) || getPos('mvboat-' + srcFk);
+      const destPos = getPos('mvf-' + destFk) || getPos('mvboat-' + destFk);
       if (!srcPos || !destPos) return;
 
       // Draw a curved arrow between the two frame cards
