@@ -5216,6 +5216,7 @@ async function clearReportMovements() {
 let auditFilter = 'all'; // 'all' | 'completed' | 'pending' | 'rmd-to-frame' | 'frame-to-rmd' | 'frame-to-frame' | 'facility-to-frame'
 let auditSearch = '';
 let auditSort = 'date-desc'; // 'date-desc' | 'date-asc'
+let auditEditId = null; // id of movement currently being inline-edited
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ANALYTICS
@@ -5869,6 +5870,12 @@ function buildActionedLogTable() {
           <span style="font:700 10px var(--font-mono);color:${color};min-width:110px;flex-shrink:0">${label}</span>
           <span style="font:600 11px var(--font-mono)">${cage ? esc(cage.name) : '?'}</span>
           <span style="font-size:10px;color:var(--text-muted)">— ${esc(m.description||label)}</span>${note}
+          <span style="margin-left:auto;display:inline-flex;gap:3px;flex-shrink:0">
+            <button onclick="auditEditId='${m.id}';switchTab('audit')" title="Edit this entry in Audit Log"
+              style="border:none;background:var(--bg-elevated);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:9px;cursor:pointer;color:var(--text-secondary)">✎</button>
+            <button onclick="deleteMovement('${m.id}')" title="Delete this movement"
+              style="border:none;background:var(--bg-elevated);border:1px solid rgba(201,48,48,0.2);border-radius:4px;padding:1px 6px;font-size:9px;cursor:pointer;color:var(--red)">✕</button>
+          </span>
         </div>`;
       }).join('');
     }).join('');
@@ -6007,9 +6014,53 @@ function renderAuditLog() {
     ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted);font-style:italic">No movements match this filter</td></tr>`
     : movements.map(m => {
         const cage = getCage(m.cageId);
-        const frame = getFrame(m.frameId);
         const col = MVCOLS[m.typeKey] || 'var(--accent)';
         const typeLabel = MVLABELS[m.typeKey] || m.type || m.typeKey;
+        const isEditing = auditEditId === m.id;
+
+        if (isEditing) {
+          // ── Inline edit row ──
+          return `<tr style="background:var(--accent-dim);outline:2px solid var(--accent);">
+            <td colspan="7" style="padding:12px 14px">
+              <div style="display:grid;grid-template-columns:160px 140px 1fr 1fr auto;gap:10px;align-items:end">
+                <div>
+                  <label style="font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;display:block">Date</label>
+                  <input type="date" id="audit-edit-date" value="${m.date||''}"
+                    style="font-size:12px;padding:5px 8px;width:100%"/>
+                </div>
+                <div>
+                  <label style="font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;display:block">Shift</label>
+                  <select id="audit-edit-shift" style="font-size:12px;padding:5px 8px;width:100%">
+                    <option value="day" ${(m.shift||'day')==='day'?'selected':''}>☀ Day</option>
+                    <option value="night" ${m.shift==='night'?'selected':''}>🌙 Night</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;display:block">Description</label>
+                  <input type="text" id="audit-edit-desc" value="${esc(m.description||'')}"
+                    style="font-size:12px;padding:5px 8px;width:100%"/>
+                </div>
+                <div>
+                  <label style="font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;display:block">Notes</label>
+                  <input type="text" id="audit-edit-notes" value="${esc(m.notes||'')}"
+                    placeholder="Optional notes…" style="font-size:12px;padding:5px 8px;width:100%"/>
+                </div>
+                <div style="display:flex;gap:6px;flex-shrink:0">
+                  <button class="btn btn-primary btn-sm" onclick="saveAuditEdit('${m.id}')">✓ Save</button>
+                  <button class="btn btn-secondary btn-sm" onclick="auditEditId=null;render()">Cancel</button>
+                  <button class="btn btn-danger btn-sm" onclick="deleteMovement('${m.id}')">🗑 Delete</button>
+                </div>
+              </div>
+              <div style="margin-top:8px;font-size:11px;color:var(--text-muted)">
+                <strong style="color:var(--text-secondary)">${esc(typeLabel)}</strong> &nbsp;·&nbsp;
+                Cage: <strong style="font-family:var(--font-mono)">${cage ? esc(cage.name) : '—'}</strong>
+                ${m.completedAt ? ` &nbsp;·&nbsp; Completed ${new Date(m.completedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}` : ''}
+              </div>
+            </td>
+          </tr>`;
+        }
+
+        // ── Normal display row ──
         const statusBadge = m.completed
           ? `<span class="badge badge-green">✅ Done</span>`
           : `<span class="badge badge-yellow">⏳ Pending</span>`;
@@ -6030,6 +6081,7 @@ function renderAuditLog() {
           <td>${statusBadge}${completedAtStr}</td>
           <td style="white-space:nowrap">
             ${!m.completed ? `<button class="btn btn-primary btn-xs" onclick="completeMove('${m.id}')">✓ Done</button>` : ''}
+            <button class="btn btn-secondary btn-xs" style="margin-left:3px" onclick="auditEditId='${m.id}';render()" title="Edit this entry">✎ Edit</button>
             <button class="btn btn-danger btn-xs" style="margin-left:3px" onclick="deleteMovement('${m.id}')">✕</button>
           </td>
         </tr>`;
@@ -6220,9 +6272,26 @@ function renderAuditLog() {
 
 async function deleteMovement(id) {
   if (!confirm('Delete this movement record? This cannot be undone.')) return;
+  if (auditEditId === id) auditEditId = null;
   STATE.plannedMovements = STATE.plannedMovements.filter(m => m.id !== id);
   render();
   await deleteMovementFromAPI(id);
+}
+
+async function saveAuditEdit(id) {
+  const m = STATE.plannedMovements.find(x => x.id === id);
+  if (!m) return;
+  const newDate  = document.getElementById('audit-edit-date')?.value  || m.date;
+  const newShift = document.getElementById('audit-edit-shift')?.value || m.shift;
+  const newDesc  = document.getElementById('audit-edit-desc')?.value  ?? m.description;
+  const newNotes = document.getElementById('audit-edit-notes')?.value ?? m.notes;
+  m.date        = newDate;
+  m.shift       = newShift;
+  m.description = newDesc;
+  m.notes       = newNotes || '';
+  auditEditId = null;
+  render();
+  await updateMovementInAPI(m);
 }
 
 function deleteAuditEvent(id) {
@@ -8893,7 +8962,7 @@ function renderMovementsMap(dayCtx) {
     inIds.forEach(cid=>{
       const c=getCage(cid); if(!c)return;
       if(fCages.find(x=>x.id===cid))return; // already shown
-      const isTransit = transitIds.includes(cid); // also exiting this frame
+      if(transitIds.includes(cid))return; // will be shown as transit below
       const _iShade = shipmentShadeClass(c, _mvShipDays);
       let iBg;
       if (_iShade === 'next') iBg = 'background:#3b1d6e;border-color:#7040c0;';
@@ -8906,11 +8975,8 @@ function renderMovementsMap(dayCtx) {
       const iMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
       const iIsPickedCage = mvPick && mvPick.cageId === c.id;
       const iPickBtn = `<button onclick="event.stopPropagation();mvPickCage('${c.id}')" title="Plan movement for cage ${esc(c.name)}" style="border:none;background:${iIsPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${iIsPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${iIsPickedCage?'✓':'🏷'}</button>`;
-      const iArrow = isTransit
-        ? '<span style="color:#27a060;font-weight:800">←</span><span style="color:#c08520;font-weight:800">→</span>'
-        : '<span style="color:#27a060;font-weight:800">←</span>';
       html+=`<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${iBg}">
-        <div style="display:flex;align-items:center;gap:2px;">${iArrow}<span style="font:600 10px var(--font-mono);${iNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${esc(c.name)}${iMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${iMoveCount}</span>`:''}</span>${iPickBtn}</div>
+        <div style="display:flex;align-items:center;gap:2px;"><span style="color:#27a060;font-weight:800">←</span><span style="font:600 10px var(--font-mono);${iNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${esc(c.name)}${iMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${iMoveCount}</span>`:''}</span>${iPickBtn}</div>
         <div style="font-size:9px;padding-left:13px;${iDetailStyle}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
       </div>`;
     });
@@ -9199,14 +9265,10 @@ function renderMovementsMap(dayCtx) {
                   const daysLeft = f.returnDate ? Math.ceil((new Date(f.returnDate+'T12:00:00') - new Date()) / 86400000) : null;
                   const retCol = daysLeft === null ? '#0e7490' : daysLeft < 0 ? 'var(--red)' : daysLeft <= 7 ? 'var(--orange)' : '#0e7490';
                   const retStr = f.returnDate ? (fmt(f.returnDate) + ` (${daysLeft < 0 ? Math.abs(daysLeft)+'d OVR' : daysLeft+'d'})`) : 'no return date';
-                  // In day view, show cages already placed into this frame by prior planned moves
-                  const simCageIds = isDayView && dayCtx.simFrameCages ? (dayCtx.simFrameCages[f.id] || []) : [];
-                  const simCages = simCageIds.map(cid => getCage(cid)).filter(Boolean);
-                  // Cages planned to go into this frame TODAY (from filtered day moves)
+                  // Cages planned to go into this frame
                   const plannedIntoCages = filtered
                     .filter(m => (m.typeKey === 'facility-to-frame' || m.typeKey === 'rmd-to-frame') && m.frameId === f.id)
-                    .map(m => getCage(m.cageId)).filter(Boolean)
-                    .filter(c => !simCages.find(s => s.id === c.id)); // don't double-show
+                    .map(m => getCage(m.cageId)).filter(Boolean);
                   // Cages planned to exit from this frame via RMD
                   const exitingCages = filtered
                     .filter(m => m.typeKey === 'frame-to-rmd' && m.frameId === f.id)
@@ -9214,22 +9276,13 @@ function renderMovementsMap(dayCtx) {
                   // Cages returning to facility
                   const returningMoves = boatMoves.filter(m => m.frameId === f.id);
                   const isReturning = returningMoves.length > 0;
-                  const hasActivity = simCages.length > 0 || plannedIntoCages.length > 0 || exitingCages.length > 0 || isReturning;
+                  const hasActivity = plannedIntoCages.length > 0 || exitingCages.length > 0 || isReturning;
                   const border = isActive
                     ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);'
                     : hasActivity
                       ? 'border:2px solid #0e7490;box-shadow:0 0 0 3px rgba(14,116,144,0.10);'
                       : 'border:1px solid #a5f3fc;';
                   let cageHTML = '';
-                  // Cages already in the frame (placed by prior planned moves — day view only)
-                  simCages.forEach(c => {
-                    const isExiting = exitingCages.find(x => x.id === c.id);
-                    const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
-                    cageHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid ${isExiting?'#c4b5fd':'#6ee7b7'};background:${isExiting?'#f5f3ff':'#f0fdf4'};margin-bottom:2px;">
-                      <div style="display:flex;align-items:center;gap:2px;">${isExiting?'<span style="color:#7040c0;font-weight:800">→RMD</span>':''}<span style="font:600 10px var(--font-mono);color:${isExiting?'#5b21b6':'#065f46'};cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
-                      <div style="font-size:9px;padding-left:${isExiting?'36':'0'}px;color:var(--text-muted)">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
-                    </div>`;
-                  });
                   // Returning to facility
                   returningMoves.forEach(m => {
                     cageHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #a5f3fc;background:#ecfeff;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
@@ -9245,8 +9298,8 @@ function renderMovementsMap(dayCtx) {
                       <div style="font-size:9px;padding-left:13px;color:var(--text-muted)">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
                     </div>`;
                   });
-                  // Exiting to RMD from this boat frame (skip those already shown in simCages)
-                  exitingCages.filter(c => !simCages.find(s => s.id === c.id)).forEach(c => {
+                  // Exiting to RMD from this boat frame
+                  exitingCages.forEach(c => {
                     const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
                     cageHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #c4b5fd;background:#f5f3ff;margin-bottom:2px;">
                       <div style="display:flex;align-items:center;gap:2px;"><span style="color:#7040c0;font-weight:800">→RMD</span><span style="font:600 10px var(--font-mono);color:#5b21b6;cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
