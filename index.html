@@ -8851,8 +8851,10 @@ function renderMovementsMap(dayCtx) {
   const facilityFrames = STATE.frames.filter(f=>f.location==='facility');
   const relevantFrames = STATE.frames.filter(f =>
     f.location === 'facility' ||
-    activeFrames.has(f.id) ||
-    (isDayView && dayCtx.simFrameCages && (dayCtx.simFrameCages[f.id]?.length > 0)));
+    // Only show non-facility frames in the facility zone if they are truly at facility
+    // (i.e. not at boat/client — those are rendered separately in the boat/client zone)
+    (activeFrames.has(f.id) && f.location !== 'client' && f.location !== 'boat') ||
+    (isDayView && dayCtx.simFrameCages && (dayCtx.simFrameCages[f.id]?.length > 0) && f.location !== 'client' && f.location !== 'boat'));
   const sortedFrames = [...relevantFrames].sort((a,b)=>{
     return (activeFrames.has(b.id)?1:0)-(activeFrames.has(a.id)?1:0);
   });
@@ -9185,9 +9187,9 @@ function renderMovementsMap(dayCtx) {
                 const framesWithReturn = STATE.frames
                   .filter(f =>
                     (f.location==='client'||f.location==='boat') &&
-                    f.returnDate &&
+                    (f.returnDate || activeFrames.has(f.id)) &&
                     !(isDayView && dayCtx.simReturnedFrameIds && dayCtx.simReturnedFrameIds.has(f.id)))
-                  .sort((a,b) => a.returnDate.localeCompare(b.returnDate));
+                  .sort((a,b) => (a.returnDate||'').localeCompare(b.returnDate||''));
                 const hasAny = framesWithReturn.length > 0;
 
                 function buildBoatFrameCard(f) {
