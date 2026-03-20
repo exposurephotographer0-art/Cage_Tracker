@@ -3367,7 +3367,7 @@ function renderFrames() {
       const _nc = shipmentShadeNameColor(_shade) || shipPrefNameColor(c);
       return `<div class="frame-cage-item" style="${_bg}">
         <span style="${_nc}">${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t${needsWaler(c) ? ' <span style="color:var(--yellow);font-size:10px" title="Cage below waler length threshold — needs waler for shipping">⚠ waler req.</span>' : ''}</span>
-        ${!f.fixedForShipping ? `<button class="remove-btn" onclick="removeCageFromFrame('${f.id}','${c.id}')" title="Remove cage from frame">×</button>` : ''}
+        <button class="remove-btn" onclick="removeCageFromFrame('${f.id}','${c.id}')" title="Remove cage from frame">×</button>
       </div>`;
     }).join('');
 
@@ -3527,7 +3527,6 @@ async function removeCageFromFrame(fid,cid) {
   const f=getFrame(fid), c=getCage(cid);
   f.cages=f.cages.filter(id=>id!==cid); f.fixedForShipping=false;
   if(c) {
-    // If frame is away (boat/client), cage stays shipped — don't silently move it back to facility
     if(f.location==='boat'||f.location==='client') {
       c.location='shipped'; c.locationDetail='Removed from '+f.name+' (away)';
     } else {
