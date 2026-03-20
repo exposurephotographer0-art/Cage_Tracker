@@ -8851,10 +8851,8 @@ function renderMovementsMap(dayCtx) {
   const facilityFrames = STATE.frames.filter(f=>f.location==='facility');
   const relevantFrames = STATE.frames.filter(f =>
     f.location === 'facility' ||
-    // Only show non-facility frames in the facility zone if they are truly at facility
-    // (i.e. not at boat/client — those are rendered separately in the boat/client zone)
-    (activeFrames.has(f.id) && f.location !== 'client' && f.location !== 'boat') ||
-    (isDayView && dayCtx.simFrameCages && (dayCtx.simFrameCages[f.id]?.length > 0) && f.location !== 'client' && f.location !== 'boat'));
+    activeFrames.has(f.id) ||
+    (isDayView && dayCtx.simFrameCages && (dayCtx.simFrameCages[f.id]?.length > 0)));
   const sortedFrames = [...relevantFrames].sort((a,b)=>{
     return (activeFrames.has(b.id)?1:0)-(activeFrames.has(a.id)?1:0);
   });
@@ -8895,7 +8893,7 @@ function renderMovementsMap(dayCtx) {
     inIds.forEach(cid=>{
       const c=getCage(cid); if(!c)return;
       if(fCages.find(x=>x.id===cid))return; // already shown
-      if(transitIds.includes(cid))return; // will be shown as transit below
+      const isTransit = transitIds.includes(cid); // also exiting this frame
       const _iShade = shipmentShadeClass(c, _mvShipDays);
       let iBg;
       if (_iShade === 'next') iBg = 'background:#3b1d6e;border-color:#7040c0;';
@@ -8908,8 +8906,11 @@ function renderMovementsMap(dayCtx) {
       const iMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
       const iIsPickedCage = mvPick && mvPick.cageId === c.id;
       const iPickBtn = `<button onclick="event.stopPropagation();mvPickCage('${c.id}')" title="Plan movement for cage ${esc(c.name)}" style="border:none;background:${iIsPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${iIsPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${iIsPickedCage?'✓':'🏷'}</button>`;
+      const iArrow = isTransit
+        ? '<span style="color:#27a060;font-weight:800">←</span><span style="color:#c08520;font-weight:800">→</span>'
+        : '<span style="color:#27a060;font-weight:800">←</span>';
       html+=`<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${iBg}">
-        <div style="display:flex;align-items:center;gap:2px;"><span style="color:#27a060;font-weight:800">←</span><span style="font:600 10px var(--font-mono);${iNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${esc(c.name)}${iMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${iMoveCount}</span>`:''}</span>${iPickBtn}</div>
+        <div style="display:flex;align-items:center;gap:2px;">${iArrow}<span style="font:600 10px var(--font-mono);${iNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${esc(c.name)}${iMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${iMoveCount}</span>`:''}</span>${iPickBtn}</div>
         <div style="font-size:9px;padding-left:13px;${iDetailStyle}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
       </div>`;
     });
@@ -9187,9 +9188,9 @@ function renderMovementsMap(dayCtx) {
                 const framesWithReturn = STATE.frames
                   .filter(f =>
                     (f.location==='client'||f.location==='boat') &&
-                    (f.returnDate || activeFrames.has(f.id)) &&
+                    f.returnDate &&
                     !(isDayView && dayCtx.simReturnedFrameIds && dayCtx.simReturnedFrameIds.has(f.id)))
-                  .sort((a,b) => (a.returnDate||'').localeCompare(b.returnDate||''));
+                  .sort((a,b) => a.returnDate.localeCompare(b.returnDate));
                 const hasAny = framesWithReturn.length > 0;
 
                 function buildBoatFrameCard(f) {
@@ -9198,10 +9199,14 @@ function renderMovementsMap(dayCtx) {
                   const daysLeft = f.returnDate ? Math.ceil((new Date(f.returnDate+'T12:00:00') - new Date()) / 86400000) : null;
                   const retCol = daysLeft === null ? '#0e7490' : daysLeft < 0 ? 'var(--red)' : daysLeft <= 7 ? 'var(--orange)' : '#0e7490';
                   const retStr = f.returnDate ? (fmt(f.returnDate) + ` (${daysLeft < 0 ? Math.abs(daysLeft)+'d OVR' : daysLeft+'d'})`) : 'no return date';
-                  // Cages planned to go into this frame
+                  // In day view, show cages already placed into this frame by prior planned moves
+                  const simCageIds = isDayView && dayCtx.simFrameCages ? (dayCtx.simFrameCages[f.id] || []) : [];
+                  const simCages = simCageIds.map(cid => getCage(cid)).filter(Boolean);
+                  // Cages planned to go into this frame TODAY (from filtered day moves)
                   const plannedIntoCages = filtered
                     .filter(m => (m.typeKey === 'facility-to-frame' || m.typeKey === 'rmd-to-frame') && m.frameId === f.id)
-                    .map(m => getCage(m.cageId)).filter(Boolean);
+                    .map(m => getCage(m.cageId)).filter(Boolean)
+                    .filter(c => !simCages.find(s => s.id === c.id)); // don't double-show
                   // Cages planned to exit from this frame via RMD
                   const exitingCages = filtered
                     .filter(m => m.typeKey === 'frame-to-rmd' && m.frameId === f.id)
@@ -9209,13 +9214,22 @@ function renderMovementsMap(dayCtx) {
                   // Cages returning to facility
                   const returningMoves = boatMoves.filter(m => m.frameId === f.id);
                   const isReturning = returningMoves.length > 0;
-                  const hasActivity = plannedIntoCages.length > 0 || exitingCages.length > 0 || isReturning;
+                  const hasActivity = simCages.length > 0 || plannedIntoCages.length > 0 || exitingCages.length > 0 || isReturning;
                   const border = isActive
                     ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);'
                     : hasActivity
                       ? 'border:2px solid #0e7490;box-shadow:0 0 0 3px rgba(14,116,144,0.10);'
                       : 'border:1px solid #a5f3fc;';
                   let cageHTML = '';
+                  // Cages already in the frame (placed by prior planned moves — day view only)
+                  simCages.forEach(c => {
+                    const isExiting = exitingCages.find(x => x.id === c.id);
+                    const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
+                    cageHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid ${isExiting?'#c4b5fd':'#6ee7b7'};background:${isExiting?'#f5f3ff':'#f0fdf4'};margin-bottom:2px;">
+                      <div style="display:flex;align-items:center;gap:2px;">${isExiting?'<span style="color:#7040c0;font-weight:800">→RMD</span>':''}<span style="font:600 10px var(--font-mono);color:${isExiting?'#5b21b6':'#065f46'};cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
+                      <div style="font-size:9px;padding-left:${isExiting?'36':'0'}px;color:var(--text-muted)">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
+                    </div>`;
+                  });
                   // Returning to facility
                   returningMoves.forEach(m => {
                     cageHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #a5f3fc;background:#ecfeff;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
@@ -9231,8 +9245,8 @@ function renderMovementsMap(dayCtx) {
                       <div style="font-size:9px;padding-left:13px;color:var(--text-muted)">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
                     </div>`;
                   });
-                  // Exiting to RMD from this boat frame
-                  exitingCages.forEach(c => {
+                  // Exiting to RMD from this boat frame (skip those already shown in simCages)
+                  exitingCages.filter(c => !simCages.find(s => s.id === c.id)).forEach(c => {
                     const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
                     cageHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #c4b5fd;background:#f5f3ff;margin-bottom:2px;">
                       <div style="display:flex;align-items:center;gap:2px;"><span style="color:#7040c0;font-weight:800">→RMD</span><span style="font:600 10px var(--font-mono);color:#5b21b6;cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
