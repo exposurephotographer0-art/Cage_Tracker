@@ -3367,7 +3367,7 @@ function renderFrames() {
       const _nc = shipmentShadeNameColor(_shade) || shipPrefNameColor(c);
       return `<div class="frame-cage-item" style="${_bg}">
         <span style="${_nc}">${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t${needsWaler(c) ? ' <span style="color:var(--yellow);font-size:10px" title="Cage below waler length threshold — needs waler for shipping">⚠ waler req.</span>' : ''}</span>
-        ${f.location==='facility'&&!f.fixedForShipping ? `<button class="remove-btn" onclick="removeCageFromFrame('${f.id}','${c.id}')">×</button>` : ''}
+        ${!f.fixedForShipping ? `<button class="remove-btn" onclick="removeCageFromFrame('${f.id}','${c.id}')" title="Remove cage from frame">×</button>` : ''}
       </div>`;
     }).join('');
 
@@ -3526,7 +3526,14 @@ async function assignCageToFrame(fid,cid) {
 async function removeCageFromFrame(fid,cid) {
   const f=getFrame(fid), c=getCage(cid);
   f.cages=f.cages.filter(id=>id!==cid); f.fixedForShipping=false;
-  if(c) { c.location='facility'; c.locationDetail=''; }
+  if(c) {
+    // If frame is away (boat/client), cage stays shipped — don't silently move it back to facility
+    if(f.location==='boat'||f.location==='client') {
+      c.location='shipped'; c.locationDetail='Removed from '+f.name+' (away)';
+    } else {
+      c.location='facility'; c.locationDetail='';
+    }
+  }
   render();
   await saveFrame(f);
   if(c) await saveCage(c);
@@ -5216,7 +5223,6 @@ async function clearReportMovements() {
 let auditFilter = 'all'; // 'all' | 'completed' | 'pending' | 'rmd-to-frame' | 'frame-to-rmd' | 'frame-to-frame' | 'facility-to-frame'
 let auditSearch = '';
 let auditSort = 'date-desc'; // 'date-desc' | 'date-asc'
-let auditEditId = null; // id of movement currently being inline-edited
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ANALYTICS
@@ -5870,12 +5876,6 @@ function buildActionedLogTable() {
           <span style="font:700 10px var(--font-mono);color:${color};min-width:110px;flex-shrink:0">${label}</span>
           <span style="font:600 11px var(--font-mono)">${cage ? esc(cage.name) : '?'}</span>
           <span style="font-size:10px;color:var(--text-muted)">— ${esc(m.description||label)}</span>${note}
-          <span style="margin-left:auto;display:inline-flex;gap:3px;flex-shrink:0">
-            <button onclick="auditEditId='${m.id}';switchTab('audit')" title="Edit this entry in Audit Log"
-              style="border:none;background:var(--bg-elevated);border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:9px;cursor:pointer;color:var(--text-secondary)">✎</button>
-            <button onclick="deleteMovement('${m.id}')" title="Delete this movement"
-              style="border:none;background:var(--bg-elevated);border:1px solid rgba(201,48,48,0.2);border-radius:4px;padding:1px 6px;font-size:9px;cursor:pointer;color:var(--red)">✕</button>
-          </span>
         </div>`;
       }).join('');
     }).join('');
@@ -6014,53 +6014,9 @@ function renderAuditLog() {
     ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted);font-style:italic">No movements match this filter</td></tr>`
     : movements.map(m => {
         const cage = getCage(m.cageId);
+        const frame = getFrame(m.frameId);
         const col = MVCOLS[m.typeKey] || 'var(--accent)';
         const typeLabel = MVLABELS[m.typeKey] || m.type || m.typeKey;
-        const isEditing = auditEditId === m.id;
-
-        if (isEditing) {
-          // ── Inline edit row ──
-          return `<tr style="background:var(--accent-dim);outline:2px solid var(--accent);">
-            <td colspan="7" style="padding:12px 14px">
-              <div style="display:grid;grid-template-columns:160px 140px 1fr 1fr auto;gap:10px;align-items:end">
-                <div>
-                  <label style="font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;display:block">Date</label>
-                  <input type="date" id="audit-edit-date" value="${m.date||''}"
-                    style="font-size:12px;padding:5px 8px;width:100%"/>
-                </div>
-                <div>
-                  <label style="font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;display:block">Shift</label>
-                  <select id="audit-edit-shift" style="font-size:12px;padding:5px 8px;width:100%">
-                    <option value="day" ${(m.shift||'day')==='day'?'selected':''}>☀ Day</option>
-                    <option value="night" ${m.shift==='night'?'selected':''}>🌙 Night</option>
-                  </select>
-                </div>
-                <div>
-                  <label style="font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;display:block">Description</label>
-                  <input type="text" id="audit-edit-desc" value="${esc(m.description||'')}"
-                    style="font-size:12px;padding:5px 8px;width:100%"/>
-                </div>
-                <div>
-                  <label style="font:600 9px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;display:block">Notes</label>
-                  <input type="text" id="audit-edit-notes" value="${esc(m.notes||'')}"
-                    placeholder="Optional notes…" style="font-size:12px;padding:5px 8px;width:100%"/>
-                </div>
-                <div style="display:flex;gap:6px;flex-shrink:0">
-                  <button class="btn btn-primary btn-sm" onclick="saveAuditEdit('${m.id}')">✓ Save</button>
-                  <button class="btn btn-secondary btn-sm" onclick="auditEditId=null;render()">Cancel</button>
-                  <button class="btn btn-danger btn-sm" onclick="deleteMovement('${m.id}')">🗑 Delete</button>
-                </div>
-              </div>
-              <div style="margin-top:8px;font-size:11px;color:var(--text-muted)">
-                <strong style="color:var(--text-secondary)">${esc(typeLabel)}</strong> &nbsp;·&nbsp;
-                Cage: <strong style="font-family:var(--font-mono)">${cage ? esc(cage.name) : '—'}</strong>
-                ${m.completedAt ? ` &nbsp;·&nbsp; Completed ${new Date(m.completedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}` : ''}
-              </div>
-            </td>
-          </tr>`;
-        }
-
-        // ── Normal display row ──
         const statusBadge = m.completed
           ? `<span class="badge badge-green">✅ Done</span>`
           : `<span class="badge badge-yellow">⏳ Pending</span>`;
@@ -6081,7 +6037,6 @@ function renderAuditLog() {
           <td>${statusBadge}${completedAtStr}</td>
           <td style="white-space:nowrap">
             ${!m.completed ? `<button class="btn btn-primary btn-xs" onclick="completeMove('${m.id}')">✓ Done</button>` : ''}
-            <button class="btn btn-secondary btn-xs" style="margin-left:3px" onclick="auditEditId='${m.id}';render()" title="Edit this entry">✎ Edit</button>
             <button class="btn btn-danger btn-xs" style="margin-left:3px" onclick="deleteMovement('${m.id}')">✕</button>
           </td>
         </tr>`;
@@ -6272,26 +6227,9 @@ function renderAuditLog() {
 
 async function deleteMovement(id) {
   if (!confirm('Delete this movement record? This cannot be undone.')) return;
-  if (auditEditId === id) auditEditId = null;
   STATE.plannedMovements = STATE.plannedMovements.filter(m => m.id !== id);
   render();
   await deleteMovementFromAPI(id);
-}
-
-async function saveAuditEdit(id) {
-  const m = STATE.plannedMovements.find(x => x.id === id);
-  if (!m) return;
-  const newDate  = document.getElementById('audit-edit-date')?.value  || m.date;
-  const newShift = document.getElementById('audit-edit-shift')?.value || m.shift;
-  const newDesc  = document.getElementById('audit-edit-desc')?.value  ?? m.description;
-  const newNotes = document.getElementById('audit-edit-notes')?.value ?? m.notes;
-  m.date        = newDate;
-  m.shift       = newShift;
-  m.description = newDesc;
-  m.notes       = newNotes || '';
-  auditEditId = null;
-  render();
-  await updateMovementInAPI(m);
 }
 
 function deleteAuditEvent(id) {
