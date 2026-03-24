@@ -4346,8 +4346,10 @@ async function completeMove(id) {
     // Clear cage from any current location
     clearCageFromCurrentLocation(cage.id);
     // Check frame capacity
-    if (frame.cages.length >= 2) { alert(`Cannot complete: ${frame.name} already has max cages.`); return; }
-    if (frame.cages.length === 1) {
+    if (frame.cages.length >= 2) {
+      const override = confirm(`⚠️ Override: ${frame.name} already has max cages.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
+      if (!override) return;
+    } else if (frame.cages.length === 1) {
       const existing = getCage(frame.cages[0]);
       if (existing && !canFitTwo(existing, cage, frame.width)) {
         const override = confirm(`⚠️ Warning: cages don't fit together in ${frame.name}.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
@@ -4377,12 +4379,22 @@ async function completeMove(id) {
         const targetSlot = (m.rmdSlot && (m.rmdSlot === 'cage1' || m.rmdSlot === 'cage2')) ? m.rmdSlot : null;
         const slot = targetSlot && !r[side][targetSlot] ? targetSlot
                    : !r[side].cage1 ? 'cage1' : !r[side].cage2 ? 'cage2' : null;
-        if (!slot) { alert(`Cannot complete: RMD-${rmdNum}${side} is full.`); return; }
+        if (!slot) {
+          const override = confirm(`⚠️ Override: RMD-${rmdNum}${side} is full.\n\nClick OK to override and place the cage anyway (will use cage1 slot), or Cancel to abort.`);
+          if (!override) return;
+          // Force into cage1, displacing whatever was there
+          clearCageFromCurrentLocation(cage.id);
+          r[side]['cage1'] = cage.id;
+          cage.location = 'rmd';
+          cage.locationDetail = `RMD-${rmdNum}${side}`;
+          cage.intoRmd = todayStr();
+        } else {
         clearCageFromCurrentLocation(cage.id);
         r[side][slot] = cage.id;
         cage.location = 'rmd';
         cage.locationDetail = `RMD-${rmdNum}${side}`;
         cage.intoRmd = todayStr();
+        }
       }
     } else {
       // Can't determine RMD slot — just park at facility
@@ -4393,8 +4405,10 @@ async function completeMove(id) {
   }
   else if (m.typeKey === 'rmd-to-frame' && cage && frame) {
     clearCageFromCurrentLocation(cage.id);
-    if (frame.cages.length >= 2) { alert(`Cannot complete: ${frame.name} already has max cages.`); return; }
-    if (frame.cages.length === 1) {
+    if (frame.cages.length >= 2) {
+      const override = confirm(`⚠️ Override: ${frame.name} already has max cages.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
+      if (!override) return;
+    } else if (frame.cages.length === 1) {
       const existing = getCage(frame.cages[0]);
       if (existing && !canFitTwo(existing, cage, frame.width)) {
         const override = confirm(`⚠️ Warning: cages don't fit together in ${frame.name}.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
@@ -4414,20 +4428,31 @@ async function completeMove(id) {
     if (rmdIdx !== -1) {
       const r = STATE.rmdSlots[rmdIdx];
       const slot = !r[side].cage1 ? 'cage1' : !r[side].cage2 ? 'cage2' : null;
-      if (!slot) { alert(`Cannot complete: RMD-${rmdNum}${side} is full.`); return; }
+      if (!slot) {
+        const override = confirm(`⚠️ Override: RMD-${rmdNum}${side} is full.\n\nClick OK to override and place the cage anyway (will use cage1 slot), or Cancel to abort.`);
+        if (!override) return;
+        clearCageFromCurrentLocation(cage.id);
+        r[side]['cage1'] = cage.id;
+        cage.location = 'rmd';
+        cage.locationDetail = `RMD-${rmdNum}${side}`;
+        cage.departureDate = null;
+        cage.intoRmd = todayStr();
+      } else {
       clearCageFromCurrentLocation(cage.id);
       r[side][slot] = cage.id;
       cage.location = 'rmd';
       cage.locationDetail = `RMD-${rmdNum}${side}`;
       cage.departureDate = null;
       cage.intoRmd = todayStr();
+      }
     }
   }
   else if (m.typeKey === 'frame-fix-shipping' && frame) {
     if (frame.cages.length === 1) {
       const c = getCage(frame.cages[0]);
       if (c && needsWaler(c) && !frame.hasWaler) {
-        alert(`Cannot complete: cage ${c.name} is ${c.length}m (below ${STATE.settings.walerLengthThreshold||6.5}m threshold) and requires a waler.`); return;
+        const override = confirm(`⚠️ Override: cage ${c.name} is ${c.length}m (below ${STATE.settings.walerLengthThreshold||6.5}m threshold) and requires a waler, but ${frame.name} has none.\n\nClick OK to override and complete anyway, or Cancel to abort.`);
+        if (!override) return;
       }
       frame.fixedForShipping = true;
     } else {
@@ -4449,8 +4474,10 @@ async function completeMove(id) {
       if (srcFrame.fixedForShipping) srcFrame.fixedForShipping = false; // moving a cage un-fixes the source frame
     }
     // Check destination frame capacity
-    if (frame.cages.length >= 2) { alert(`Cannot complete: ${frame.name} already has max cages.`); return; }
-    if (frame.cages.length === 1) {
+    if (frame.cages.length >= 2) {
+      const override = confirm(`⚠️ Override: ${frame.name} already has max cages.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
+      if (!override) return;
+    } else if (frame.cages.length === 1) {
       const existing = getCage(frame.cages[0]);
       if (existing && !canFitTwo(existing, cage, frame.width)) {
         const override = confirm(`⚠️ Warning: cages don't fit together in ${frame.name}.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
