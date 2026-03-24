@@ -1097,7 +1097,7 @@ function locLabel(c) {
   if (c.location === 'facility') return 'In Facility';
   if (c.location === 'rmd') return 'RMD ' + (c.locationDetail||'');
   if (c.location === 'frame') return 'Frame ' + (c.locationDetail||'');
-  if (c.location === 'shipped') return 'Shipped';
+  if (c.location === 'shipped' || c.location === 'sea') return 'Shipped';
   return c.location;
 }
 // canPairRMD(inside, outside) — c1 is the inside cage, c2 is the outside cage.
