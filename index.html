@@ -9233,23 +9233,59 @@ function renderMovementsMap(dayCtx) {
                   <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">🏭 Facility</div>
                   <div id="mv-facility-box" style="background:var(--bg-card);border:${facilityMoves.length?'2px solid #2563b0;box-shadow:0 0 0 3px rgba(37,99,176,0.12);':'1px solid var(--border);'}border-radius:8px;padding:12px 16px;min-width:150px;">
                     <div style="font:700 13px var(--font-mono);color:${facilityMoves.length?'#2563b0':'var(--text-muted)'};margin-bottom:8px">Facility</div>
-                    ${facilityDepartureCages.length ? facilityDepartureCages.map(c => {
-                      const hasPlan = facilityCageIdsWithPlan.has(c.id);
-                      const today = new Date(); today.setHours(0,0,0,0);
-                      const depDate = new Date(c.departureDate + 'T00:00:00');
-                      const daysLeft = Math.ceil((depDate - today) / 86400000);
-                      const isOverdue = daysLeft < 0;
-                      const datCol = isOverdue ? 'var(--red)' : daysLeft <= 3 ? 'var(--orange)' : 'var(--text-muted)';
-                      return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid ${hasPlan?'#93c5fd':'var(--border)'};background:${hasPlan?'#eff6ff':'var(--bg-input)'};margin-bottom:2px;">
-                        <div style="display:flex;align-items:center;gap:3px;">
-                          ${hasPlan ? '<span style="color:#2563b0;font-weight:800;flex-shrink:0">→</span>' : '<span style="width:9px;flex-shrink:0"></span>'}
-                          ${hDot(c.height)}<span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
-                          <span style="color:${datCol};font-size:9px;margin-left:auto;white-space:nowrap">${isOverdue ? '⚠' : ''}${fmt(c.departureDate)}</span>
-                          <button onclick="mvPickCage('${c.id}')" title="Plan movement for cage ${esc(c.name)}" style="border:none;background:${mvPick&&mvPick.cageId===c.id?'var(--accent)':'rgba(192,133,32,0.15)'};color:${mvPick&&mvPick.cageId===c.id?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;font-weight:700">${mvPick&&mvPick.cageId===c.id?'✓':'🏷'}</button>
-                        </div>
-                        <div style="font-size:9px;color:var(--text-muted);padding-left:12px">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
-                      </div>`;
-                    }).join('') : '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no departures set</div>'}
+                    ${(() => {
+                      if (!facilityDepartureCages.length) return '<div style="font-size:10px;color:var(--text-muted);font-style:italic">no departures set</div>';
+                      // Group by working week (Monday key)
+                      function _wkMon(dateStr) {
+                        const d = new Date(dateStr + 'T12:00:00');
+                        const day = d.getDay();
+                        const diff = day === 0 ? -6 : 1 - day;
+                        const m = new Date(d); m.setDate(d.getDate() + diff);
+                        return m.toISOString().slice(0,10);
+                      }
+                      function _wkFri(monStr) {
+                        const d = new Date(monStr + 'T12:00:00'); d.setDate(d.getDate() + 4);
+                        return d.toISOString().slice(0,10);
+                      }
+                      const _todayMon = _wkMon(todayStr());
+                      const _wkGroups = {}; const _wkOrder = [];
+                      facilityDepartureCages.forEach(c => {
+                        const mk = _wkMon(c.departureDate);
+                        if (!_wkGroups[mk]) { _wkGroups[mk] = []; _wkOrder.push(mk); }
+                        _wkGroups[mk].push(c);
+                      });
+                      return _wkOrder.map(mk => {
+                        const isPast = mk < _todayMon;
+                        const isCurrent = mk === _todayMon;
+                        const wkLabel = isPast ? 'Overdue' : isCurrent ? 'This Week' : 'w/c ' + fmt(mk);
+                        const hdrCol = isPast ? 'var(--red)' : isCurrent ? 'var(--orange)' : '#2563b0';
+                        const hdrBg = isPast ? 'rgba(201,48,48,0.08)' : isCurrent ? 'rgba(184,92,26,0.08)' : 'rgba(37,99,176,0.07)';
+                        const rows = _wkGroups[mk].map(c => {
+                          const hasPlan = facilityCageIdsWithPlan.has(c.id);
+                          const _now = new Date(); _now.setHours(0,0,0,0);
+                          const depDate = new Date(c.departureDate + 'T00:00:00');
+                          const daysLeft = Math.ceil((depDate - _now) / 86400000);
+                          const isOverdue = daysLeft < 0;
+                          const datCol = isOverdue ? 'var(--red)' : daysLeft <= 3 ? 'var(--orange)' : 'var(--text-muted)';
+                          return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid ${hasPlan?'#93c5fd':'var(--border)'};background:${hasPlan?'#eff6ff':'var(--bg-input)'};margin-bottom:2px;">
+                            <div style="display:flex;align-items:center;gap:3px;">
+                              ${hasPlan ? '<span style="color:#2563b0;font-weight:800;flex-shrink:0">→</span>' : '<span style="width:9px;flex-shrink:0"></span>'}
+                              ${hDot(c.height)}<span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
+                              <span style="color:${datCol};font-size:9px;margin-left:auto;white-space:nowrap">${isOverdue ? '⚠' : ''}${fmt(c.departureDate)}</span>
+                              <button onclick="mvPickCage('${c.id}')" title="Plan movement for cage ${esc(c.name)}" style="border:none;background:${mvPick&&mvPick.cageId===c.id?'var(--accent)':'rgba(192,133,32,0.15)'};color:${mvPick&&mvPick.cageId===c.id?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;font-weight:700">${mvPick&&mvPick.cageId===c.id?'✓':'🏷'}</button>
+                            </div>
+                            <div style="font-size:9px;color:var(--text-muted);padding-left:12px">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
+                          </div>`;
+                        }).join('');
+                        return `<div style="margin-bottom:6px">
+                          <div style="display:flex;align-items:center;justify-content:space-between;padding:2px 5px;background:${hdrBg};border-radius:3px;margin-bottom:3px">
+                            <span style="font:700 9px var(--font-mono);color:${hdrCol};text-transform:uppercase;letter-spacing:0.05em">${wkLabel}</span>
+                            <span style="font:600 9px var(--font-mono);color:${hdrCol}">${_wkGroups[mk].length}c</span>
+                          </div>
+                          ${rows}
+                        </div>`;
+                      }).join('');
+                    })()}
                   </div>
                 </div>
               </div>
