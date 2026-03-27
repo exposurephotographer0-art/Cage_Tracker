@@ -8164,18 +8164,65 @@ function renderBoatPlanner() {
       </div>`;
   }
 
-  // Upcoming departures panel
-  const upcomingHTML = upcoming.length > 0
-    ? upcoming.map(c => {
+  // Upcoming departures panel — grouped by working week (Mon–Fri)
+  const upcomingHTML = (() => {
+    if (upcoming.length === 0) return '<div class="empty-msg">No cages have a Leaves Facility date set.</div>';
+
+    // Helper: get the Monday (start of working week) for a given date string
+    function getWeekMonday(dateStr) {
+      const d = new Date(dateStr + 'T12:00:00');
+      const day = d.getDay(); // 0=Sun,1=Mon,...,6=Sat
+      const diff = day === 0 ? -6 : 1 - day; // shift Sunday back 6, others to Monday
+      const mon = new Date(d);
+      mon.setDate(d.getDate() + diff);
+      return mon.toISOString().slice(0,10);
+    }
+
+    function getWeekFriday(mondayStr) {
+      const d = new Date(mondayStr + 'T12:00:00');
+      d.setDate(d.getDate() + 4);
+      return d.toISOString().slice(0,10);
+    }
+
+    // Group cages by their working-week Monday key, preserving date order
+    const weekGroups = {};
+    const weekOrder = [];
+    upcoming.forEach(c => {
+      const monKey = getWeekMonday(c.departureDate);
+      if (!weekGroups[monKey]) { weekGroups[monKey] = []; weekOrder.push(monKey); }
+      weekGroups[monKey].push(c);
+    });
+
+    const todayMon = getWeekMonday(todayStr());
+
+    return weekOrder.map(monKey => {
+      const friKey = getWeekFriday(monKey);
+      const isCurrentWeek = monKey === todayMon;
+      const isPastWeek = monKey < todayMon;
+      const weekLabel = isCurrentWeek ? 'This Week' : isPastWeek ? 'Overdue / Past' : `w/c ${fmt(monKey)}`;
+      const weekColor = isPastWeek ? 'var(--red)' : isCurrentWeek ? 'var(--orange)' : 'var(--blue)';
+      const weekBg = isPastWeek ? 'rgba(201,48,48,0.07)' : isCurrentWeek ? 'rgba(184,92,26,0.07)' : 'rgba(37,99,176,0.06)';
+
+      const rows = weekGroups[monKey].map(c => {
         const daysLeft = Math.ceil((new Date(c.departureDate+'T12:00:00') - new Date()) / 86400000);
         const urgColor = daysLeft < 0 ? 'var(--red)' : daysLeft <= 7 ? 'var(--orange)' : 'var(--green)';
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
           <span style="font-weight:600">${esc(c.name)}</span>
           <span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span>
-          <span style="color:${urgColor};font-family:var(--font-mono);font-size:12px">${fmt(c.departureDate)} (${daysLeft < 0 ? 'OVERDUE' : daysLeft+'d'})</span>
+          <span style="color:${urgColor};font-family:var(--font-mono);font-size:11px">${fmt(c.departureDate)} (${daysLeft < 0 ? 'OVERDUE' : daysLeft+'d'})</span>
         </div>`;
-      }).join('')
-    : '<div class="empty-msg">No cages have a Leaves Facility date set.</div>';
+      }).join('');
+
+      return `<div style="margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:${weekBg};border-radius:5px;margin-bottom:4px">
+          <span style="font:700 10px var(--font-mono);color:${weekColor};text-transform:uppercase;letter-spacing:0.06em">${weekLabel}</span>
+          <span style="font-size:10px;color:var(--text-muted)">${fmt(monKey)} – ${fmt(friKey)}</span>
+          <span style="margin-left:auto;font:600 10px var(--font-mono);color:${weekColor}">${weekGroups[monKey].length} cage${weekGroups[monKey].length>1?'s':''}</span>
+        </div>
+        ${rows}
+      </div>`;
+    }).join('');
+  })();
 
   return `
     <h2 class="section-title" style="margin-bottom:4px">🚢 Boat Planner</h2>
