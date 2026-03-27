@@ -4013,6 +4013,18 @@ function renderPlanner() {
     if(t.returnDate) { if(!btReturnByDay[t.returnDate]) btReturnByDay[t.returnDate]=[]; btReturnByDay[t.returnDate].push(t.label); }
   });
 
+  // All movements table — hide completed by default
+  let sortedAll = [...STATE.plannedMovements].sort((a,b)=>{
+    const ao = a.sortOrder != null ? a.sortOrder : 999999;
+    const bo = b.sortOrder != null ? b.sortOrder : 999999;
+    if (ao !== bo) return ao - bo;
+    return a.date.localeCompare(b.date);
+  });
+
+  // Build a global position lookup (pending only, 1-based) used by calendar + table
+  const _plannerPosMap = {};
+  sortedAll.filter(m => !m.completed).forEach((m, i) => { _plannerPosMap[m.id] = i + 1; });
+
   function renderWeekDay(day) {
     const dayMoves = STATE.plannedMovements.filter(m=>m.date===day);
     const pending = dayMoves.filter(m=>!m.completed).length;
@@ -4027,11 +4039,13 @@ function renderPlanner() {
     const btReturns = btReturnByDay[day] || [];
     const hasMoves = dayMoves.length > 0 || departures.length > 0 || frameReturns.length > 0 || btLoads.length > 0 || btDeparts.length > 0 || btUnloads.length > 0 || btReturns.length > 0;
 
-    let movesHTML = dayMoves.map(m=>`
-      <div class="week-move-item ${m.completed?'completed':''}" title="${esc(m.notes||m.description)}" style="${m.typeKey==='frame-return-from-client'?'background:#ecfeff;border:1px solid #a5f3fc;color:#0e7490;':m.typeKey==='frame-to-frame'?'background:#fff3ee;border:1px solid #fdba74;color:#c2410c;':''}">
-        ${m.typeKey==='frame-return-from-client'?'🚢 ': m.typeKey==='frame-to-frame'?'↕ ': m.shift==='night'?'🌙 ':''}${esc(m.description.slice(0,26))}
-      </div>
-    `).join('');
+    let movesHTML = dayMoves.map(m=>{
+      const posNum = _plannerPosMap[m.id];
+      const numTag = posNum != null ? `<span style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:rgba(192,133,32,0.2);color:var(--accent);font:700 9px var(--font-mono);flex-shrink:0;margin-right:2px">${posNum}</span>` : '';
+      return `<div class="week-move-item ${m.completed?'completed':''}" title="${esc(m.notes||m.description)}" style="${m.typeKey==='frame-return-from-client'?'background:#ecfeff;border:1px solid #a5f3fc;color:#0e7490;':m.typeKey==='frame-to-frame'?'background:#fff3ee;border:1px solid #fdba74;color:#c2410c;':''}">
+        ${numTag}${m.typeKey==='frame-return-from-client'?'🚢 ': m.typeKey==='frame-to-frame'?'↕ ': m.shift==='night'?'🌙 ':''}${esc(m.description.slice(0,24))}
+      </div>`;
+    }).join('');
 
     return `<div class="week-day ${isToday?'today':''} ${isWeekend&&!hasMoves?'weekend':''} ${hasMoves?'has-moves':''}">
       <div class="week-day-hdr">${fmtShort(day)}</div>
@@ -4048,20 +4062,15 @@ function renderPlanner() {
   const week1HTML = weekDays.slice(0,7).map(renderWeekDay).join('');
   const week2HTML = weekDays.slice(7).map(renderWeekDay).join('');
 
-  // All movements table — hide completed by default
-  let sortedAll = [...STATE.plannedMovements].sort((a,b)=>{
-    const ao = a.sortOrder != null ? a.sortOrder : 999999;
-    const bo = b.sortOrder != null ? b.sortOrder : 999999;
-    if (ao !== bo) return ao - bo;
-    return a.date.localeCompare(b.date);
-  });
+
   let sorted = plannerShowCompleted ? sortedAll : sortedAll.filter(m => !m.completed);
   const completedCount = sortedAll.filter(m => m.completed).length;
   let tableRows = sorted.length === 0
-    ? '<tr><td colspan="8" class="empty-msg" style="text-align:center;padding:20px">' + (plannerShowCompleted ? 'No movements planned' : 'No pending movements — all done!') + '</td></tr>'
-    : sorted.map(m=>`
+    ? '<tr><td colspan="9" class="empty-msg" style="text-align:center;padding:20px">' + (plannerShowCompleted ? 'No movements planned' : 'No pending movements — all done!') + '</td></tr>'
+    : sorted.map((m, i)=>`
       <tr data-id="${m.id}" draggable="true" style="opacity:${m.completed?'0.5':'1'}" ondragstart="onMoveDragStart(event)" ondragover="onMoveDragOver(event)" ondrop="onMoveDrop(event)" ondragend="onMoveDragEnd(event)" ondragleave="onMoveDragLeave(event)">
         <td style="width:24px;padding:4px 2px"><span class="drag-handle" title="Drag to reorder">⠿</span></td>
+        <td style="width:28px;text-align:center;font:700 11px var(--font-mono);color:${m.completed?'var(--text-muted)':'var(--accent)'}">${i+1}</td>
         <td style="font-family:var(--font-mono)">
           ${!m.completed ? `<input type="date" value="${m.date}" title="Click to change date" style="border:none;background:transparent;font:600 12px var(--font-mono);color:var(--accent);cursor:pointer;width:130px;padding:2px 4px;border-radius:4px;border:1px solid transparent" onmouseover="this.style.borderColor='var(--border)'" onmouseout="this.style.borderColor='transparent'" onchange="rescheduleMove('${m.id}',this.value)" />` : `<span>${fmt(m.date)}</span>`}
         </td>
@@ -4179,7 +4188,7 @@ function renderPlanner() {
           </div>
           <div style="overflow-x:auto">
             <table><thead><tr>
-              <th style="width:24px"></th><th>Date</th><th>Shift</th><th>Type</th><th>Description</th><th>Notes</th><th>Status</th><th>Actions</th>
+              <th style="width:24px"></th><th style="width:28px;text-align:center">#</th><th>Date</th><th>Shift</th><th>Type</th><th>Description</th><th>Notes</th><th>Status</th><th>Actions</th>
             </tr></thead><tbody>${tableRows}</tbody></table>
           </div>
         </div>
@@ -8765,7 +8774,18 @@ function renderMovementsMap(dayCtx) {
 
   const _mvShipDays = getShipmentDays();
   // In day view: use simulated day's moves; otherwise all pending
-  const pendingMoves = isDayView ? dayCtx.dayMoves : STATE.plannedMovements.filter(m => !m.completed);
+  const pendingMoves = isDayView ? dayCtx.dayMoves : STATE.plannedMovements
+    .filter(m => !m.completed)
+    .sort((a, b) => {
+      const ao = a.sortOrder != null ? a.sortOrder : 999999;
+      const bo = b.sortOrder != null ? b.sortOrder : 999999;
+      if (ao !== bo) return ao - bo;
+      return (a.date || '').localeCompare(b.date || '');
+    });
+
+  // Build a global position index (1-based) keyed by movement id — matches planner order
+  const _mvGlobalPos = {};
+  pendingMoves.forEach((m, i) => { _mvGlobalPos[m.id] = i + 1; });
 
   // In day view: show all moves for that day (no type filter — day view is already scoped)
   const filtered = isDayView ? pendingMoves : (mvFilter === 'all' ? pendingMoves : pendingMoves.filter(m => m.typeKey === mvFilter));
@@ -9050,8 +9070,9 @@ function renderMovementsMap(dayCtx) {
               : m.typeKey==='facility-to-rmd' ? `Facility → RMD-${m.rmdNumber!=null?m.rmdNumber+(m.rmdSide||''):'?'}`
               : m.typeKey==='frame-return-from-client' ? `🚢 ${frame?frame.name:'?'} → Facility`
               : m.description;
+    const _posNum = _mvGlobalPos[m.id] != null ? _mvGlobalPos[m.id] : (i+1);
     return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-light)">
-      <div style="width:22px;height:22px;border-radius:50%;background:${col};color:#fff;font:700 11px var(--font-mono);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${i+1}</div>
+      <div style="width:22px;height:22px;border-radius:50%;background:${col};color:#fff;font:700 11px var(--font-mono);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${_posNum}</div>
       <div style="flex:1;min-width:0">
         <div style="font:700 12px var(--font-mono);color:var(--text-primary);cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${m.cageId}')" title="Click to view/edit movements">${cage?esc(cage.name):'?'}</div>
         <div style="font-size:11px;color:var(--text-muted);margin-top:1px">${dir}</div>
