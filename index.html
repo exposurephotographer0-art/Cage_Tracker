@@ -1243,6 +1243,7 @@ async function loadState() {
     auditEvents: PRELOAD_STATE.auditEvents || [],
     actionedLog: PRELOAD_STATE.actionedLog || {},
     lashingLog: PRELOAD_STATE.lashingLog || {},
+    kpiData: PRELOAD_STATE.kpiData || {},
     settings: {
         movementsPerDay: PRELOAD_STATE.settings?.movementsPerDay || MAX_MOVES,
         heightShortMax: PRELOAD_STATE.settings?.heightShortMax || H_SHORT,
@@ -1279,6 +1280,7 @@ async function loadState() {
       auditEvents: data.auditEvents || [],
       actionedLog: data.actionedLog || {},
       lashingLog: data.lashingLog || {},
+      kpiData: data.kpiData || {},
       settings: {
         movementsPerDay: parseInt(data.settings?.movementsPerDay) || MAX_MOVES,
         heightShortMax: parseFloat(data.settings?.heightShortMax) || H_SHORT,
@@ -5393,6 +5395,282 @@ function destroyAnalyticsCharts() {
   _analyticsCharts = {};
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// KPI WEEKLY REPORT TABLE
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const KPI_ROWS = [
+  { section: 'Goods In' },
+  { id: 'cagesDelivered',  label: 'Cages Delivered',   auto: false },
+  { id: 'cagesChecked',    label: 'Cages Checked',      auto: false },
+  { id: 'bdrsGI',          label: 'BDRs Raised GI',     auto: false },
+  { id: 'bdrsFac',         label: 'BDRs Raised Fac',    auto: false },
+  { id: 'rebarStock',      label: 'Rebar Stock',        auto: false, rangeTarget: true },
+  { section: 'Goods Out' },
+  { id: 'tfsReturned',     label: 'TFs Returned',       auto: true  },
+  { id: 'lashingsReturned',label: 'Lashings Returned',  auto: true  },
+  { id: 'rmdAvailable',    label: 'RMD Available ?',    auto: true  },
+  { id: 'cagesFramesSent', label: 'Cages/Frames Sent',  auto: true  },
+];
+
+// Auto-calculate actuals for the current week and last week from STATE
+function calcKpiAuto(weekKey) {
+  const mon = isoWeekMonday(weekKey);
+  const monD = new Date(mon + 'T00:00:00');
+  const sunD = new Date(monD); sunD.setDate(monD.getDate() + 6); sunD.setHours(23,59,59,999);
+
+  function inWeek(dateStr) {
+    if (!dateStr) return false;
+    const d = new Date(dateStr.slice(0,10) + 'T12:00:00');
+    return d >= monD && d <= sunD;
+  }
+
+  // TFs Returned: frames where returnedAt falls in this week
+  const tfsReturned = STATE.frames.filter(f => f.returnedAt && inWeek(f.returnedAt)).length;
+
+  // Lashings Returned: from lashingLog for this week
+  const lashingsReturned = parseInt((STATE.lashingLog || {})[weekKey]?.returned) || 0;
+
+  // RMD Available: empty RMD slot-sides (sides where both cage1 and cage2 are null) at end of week
+  // Approximation: current empty sides (live view)
+  const rmdAvailable = STATE.rmdSlots.reduce((n, r) => {
+    if (!r.A.cage1 && !r.A.cage2 && !r.A.cage3 && !r.A.cage4) n++;
+    if (!r.B.cage1 && !r.B.cage2 && !r.B.cage3 && !r.B.cage4) n++;
+    return n;
+  }, 0);
+
+  // Cages/Frames Sent: completed movements of type facility-to-frame or frame shipments in this week
+  const cagesFramesSent = STATE.plannedMovements.filter(m =>
+    m.completed &&
+    (m.typeKey === 'frame-fix-shipping' || m.typeKey === 'facility-to-frame') &&
+    inWeek(m.completedAt || m.date)
+  ).length + STATE.shipments.filter(s => inWeek(s.date)).reduce((n, s) => n + s.frameIds.length, 0);
+
+  return { tfsReturned, lashingsReturned, rmdAvailable, cagesFramesSent };
+}
+
+// Get month date range helpers
+function monthRangeForWeek(weekKey) {
+  // Returns { year, month, monthName, start (YYYY-MM-DD), end (YYYY-MM-DD) }
+  const mon = isoWeekMonday(weekKey);
+  const d = new Date(mon + 'T12:00:00');
+  const year = d.getFullYear(), month = d.getMonth(); // 0-indexed
+  const start = `${year}-${String(month+1).padStart(2,'0')}-01`;
+  const lastDay = new Date(year, month+1, 0).getDate();
+  const end = `${year}-${String(month+1).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  const monthName = d.toLocaleString('en-GB', { month: 'long' });
+  return { year, month, monthName, start, end };
+}
+
+function calcKpiAutoMtd(monthStart, monthEnd) {
+  function inMonth(dateStr) {
+    if (!dateStr) return false;
+    const d = dateStr.slice(0,10);
+    return d >= monthStart && d <= monthEnd;
+  }
+  const tfsReturned = STATE.frames.filter(f => f.returnedAt && inMonth(f.returnedAt)).length;
+  const lashingsReturned = Object.entries(STATE.lashingLog || {}).reduce((sum, [wk, e]) => {
+    const mon = isoWeekMonday(wk);
+    return (mon >= monthStart && mon <= monthEnd) ? sum + (parseInt(e.returned) || 0) : sum;
+  }, 0);
+  const rmdAvailable = STATE.rmdSlots.reduce((n, r) => {
+    if (!r.A.cage1 && !r.A.cage2 && !r.A.cage3 && !r.A.cage4) n++;
+    if (!r.B.cage1 && !r.B.cage2 && !r.B.cage3 && !r.B.cage4) n++;
+    return n;
+  }, 0);
+  const cagesFramesSent = STATE.plannedMovements.filter(m =>
+    m.completed &&
+    (m.typeKey === 'frame-fix-shipping' || m.typeKey === 'facility-to-frame') &&
+    inMonth(m.completedAt || m.date)
+  ).length + STATE.shipments.filter(s => inMonth(s.date)).reduce((n, s) => n + s.frameIds.length, 0);
+  return { tfsReturned, lashingsReturned, rmdAvailable, cagesFramesSent };
+}
+
+async function saveKpiCell(weekKey, field, valueType, value) {
+  // valueType: 'target', 'targetHi', 'actual'
+  if (!STATE.kpiData) STATE.kpiData = {};
+  if (!STATE.kpiData[weekKey]) STATE.kpiData[weekKey] = {};
+  if (!STATE.kpiData[weekKey][field]) STATE.kpiData[weekKey][field] = {};
+  STATE.kpiData[weekKey][field][valueType] = value;
+  try { await api('/api/kpi-data', 'PUT', STATE.kpiData); } catch(e) {}
+}
+
+function renderKpiTable() {
+  const thisWeek   = isoWeek();
+  const lastWeekD  = new Date(); lastWeekD.setDate(lastWeekD.getDate() - 7);
+  const lastWeek   = isoWeek(toISO(lastWeekD));
+
+  const thisMonthRange = monthRangeForWeek(thisWeek);
+  const lastMonthD = new Date(); lastMonthD.setDate(1); lastMonthD.setMonth(lastMonthD.getMonth() - 1);
+  const lastMonthRange = monthRangeForWeek(toISO(lastMonthD));
+
+  const kpi = STATE.kpiData || {};
+
+  // Auto actuals
+  const autoThis = calcKpiAuto(thisWeek);
+  const autoLast = calcKpiAuto(lastWeek);
+  const autoMtd  = calcKpiAutoMtd(thisMonthRange.start, thisMonthRange.end);
+  const autoLastMonth = calcKpiAutoMtd(lastMonthRange.start, lastMonthRange.end);
+
+  function getVal(weekKey, field, type) {
+    return kpi[weekKey]?.[field]?.[type] ?? '';
+  }
+
+  function getActual(weekKey, field, autoVal) {
+    // Use stored actual if present, else auto-calc
+    const stored = kpi[weekKey]?.[field]?.actual;
+    return (stored !== undefined && stored !== '') ? stored : (autoVal !== undefined ? autoVal : '');
+  }
+
+  function colorVal(actual, target, targetHi) {
+    if (actual === '' || actual === null || actual === undefined) return 'var(--text-muted)';
+    const a = parseFloat(actual);
+    if (isNaN(a)) return 'var(--text-primary)';
+    if (targetHi !== '' && targetHi !== undefined) {
+      // Range target
+      const lo = parseFloat(target), hi = parseFloat(targetHi);
+      return (a >= lo && a <= hi) ? 'var(--green)' : 'var(--red)';
+    }
+    if (target === '' || target === undefined) return 'var(--text-primary)';
+    return a >= parseFloat(target) ? 'var(--green)' : 'var(--red)';
+  }
+
+  function cell(val, color) {
+    if (val === '' || val === null || val === undefined) return `<td style="text-align:right;padding:7px 10px;color:var(--text-muted)">—</td>`;
+    return `<td style="text-align:right;padding:7px 10px;font:700 13px var(--font-mono);color:${color}">${esc(String(val))}</td>`;
+  }
+
+  function targetCell(weekKey, field, rangeTarget) {
+    const tgt = getVal(weekKey, field, 'target');
+    const tgtHi = rangeTarget ? getVal(weekKey, field, 'targetHi') : '';
+    const displayVal = rangeTarget && tgtHi !== '' ? `${tgt}-${tgtHi}` : tgt;
+    return `<td style="text-align:right;padding:7px 10px">
+      <span style="font:600 12px var(--font-mono);color:var(--text-secondary);cursor:pointer"
+        onclick="kpiEditTarget('${weekKey}','${field}',${rangeTarget})"
+        title="Click to edit target">${displayVal !== '' ? esc(String(displayVal)) : '<span style=\'color:var(--text-muted)\'>—</span>'}</span>
+    </td>`;
+  }
+
+  function actualCell(weekKey, field, autoVal, tgt, tgtHi) {
+    const actual = getActual(weekKey, field, autoVal);
+    const color = colorVal(actual, tgt, tgtHi);
+    const isAuto = autoVal !== undefined;
+    const title = isAuto ? 'Auto-calculated — click to override' : 'Click to enter actual';
+    return `<td style="text-align:right;padding:7px 10px">
+      <span style="font:700 13px var(--font-mono);color:${actual !== '' ? color : 'var(--text-muted)'};cursor:pointer"
+        onclick="kpiEditActual('${weekKey}','${field}')"
+        title="${title}">${actual !== '' ? esc(String(actual)) : '<span style=\'color:var(--text-muted)\'>—</span>'}</span>
+    </td>`;
+  }
+
+  function buildRow(row) {
+    if (row.section) {
+      return `<tr style="background:var(--bg-deep)">
+        <td colspan="9" style="padding:8px 12px;font:700 12px var(--font-mono);color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.06em;border-top:2px solid var(--border)">${row.section}</td>
+      </tr>`;
+    }
+    const { id, label, rangeTarget } = row;
+
+    // Last week
+    const lwTgt   = getVal(lastWeek,  id, 'target');
+    const lwTgtHi = rangeTarget ? getVal(lastWeek, id, 'targetHi') : '';
+    const lwAuto  = row.auto ? autoLast[id] : undefined;
+    const lwActual = getActual(lastWeek, id, lwAuto);
+
+    // MTD (this month)
+    const mtdTgt   = getVal(thisWeek + '_mtd', id, 'target');
+    const mtdTgtHi = rangeTarget ? getVal(thisWeek + '_mtd', id, 'targetHi') : '';
+    const mtdAuto  = row.auto ? autoMtd[id] : undefined;
+    const mtdActual = getActual(thisWeek + '_mtd', id, mtdAuto);
+
+    // Last month
+    const lmKey  = lastMonthRange.monthName.slice(0,3).toUpperCase();
+    const lmTgt   = getVal('lastmonth_' + lmKey, id, 'target');
+    const lmTgtHi = rangeTarget ? getVal('lastmonth_' + lmKey, id, 'targetHi') : '';
+    const lmAuto  = row.auto ? autoLastMonth[id] : undefined;
+    const lmActual = getActual('lastmonth_' + lmKey, id, lmAuto);
+
+    // Current week actual (manual only, no target shown)
+    const cwActual = getActual(thisWeek, id, row.auto ? autoThis[id] : undefined);
+    const cwColor  = colorVal(cwActual, '', '');
+
+    return `<tr style="border-bottom:1px solid var(--border-light)">
+      <td style="padding:7px 12px;font-size:13px;color:var(--text-primary)">${label}</td>
+      ${cell(cwActual, cwColor)}
+      ${targetCell(lastWeek, id, rangeTarget)}
+      ${actualCell(lastWeek, id, lwAuto, lwTgt, lwTgtHi)}
+      ${targetCell(thisWeek + '_mtd', id, rangeTarget)}
+      ${actualCell(thisWeek + '_mtd', id, mtdAuto, mtdTgt, mtdTgtHi)}
+      ${targetCell('lastmonth_' + lmKey, id, rangeTarget)}
+      ${actualCell('lastmonth_' + lmKey, id, lmAuto, lmTgt, lmTgtHi)}
+    </tr>`;
+  }
+
+  // Last week monday for header date
+  const lwMon = isoWeekMonday(lastWeek);
+  const lwMonFmt = new Date(lwMon + 'T12:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'numeric', year:'2-digit' });
+  const cwDate = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'2-digit', year:'numeric' });
+
+  return `<div class="card" style="margin-bottom:20px;overflow-x:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin:0">📋 Weekly KPI Report</div>
+      <div style="font-size:11px;color:var(--text-muted)">Click any target or actual to edit &nbsp;·&nbsp; Green = met/exceeded &nbsp;·&nbsp; Red = below target</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:700px">
+      <thead>
+        <tr style="background:var(--bg-deep);border-bottom:2px solid var(--border)">
+          <th style="padding:8px 12px;text-align:left;font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;min-width:160px"></th>
+          <th colspan="1" style="padding:8px 10px;text-align:center;font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;border-left:1px solid var(--border)">Current Week<br><span style="font-weight:400;font-size:10px">${cwDate}</span></th>
+          <th colspan="2" style="padding:8px 10px;text-align:center;font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;border-left:1px solid var(--border)">Last Week — ${lwMonFmt}</th>
+          <th colspan="2" style="padding:8px 10px;text-align:center;font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;border-left:1px solid var(--border)">Month to Date — ${thisMonthRange.monthName}</th>
+          <th colspan="2" style="padding:8px 10px;text-align:center;font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;border-left:1px solid var(--border)">Last Month — ${lastMonthRange.monthName}</th>
+        </tr>
+        <tr style="background:var(--bg-elevated);border-bottom:1px solid var(--border)">
+          <th style="padding:5px 12px"></th>
+          <th style="padding:5px 10px;text-align:right;font:600 10px var(--font-mono);color:var(--text-muted);border-left:1px solid var(--border)">Actual</th>
+          <th style="padding:5px 10px;text-align:right;font:600 10px var(--font-mono);color:var(--text-muted);border-left:1px solid var(--border)">Target</th>
+          <th style="padding:5px 10px;text-align:right;font:600 10px var(--font-mono);color:var(--text-muted)">Actual</th>
+          <th style="padding:5px 10px;text-align:right;font:600 10px var(--font-mono);color:var(--text-muted);border-left:1px solid var(--border)">Target</th>
+          <th style="padding:5px 10px;text-align:right;font:600 10px var(--font-mono);color:var(--text-muted)">Actual</th>
+          <th style="padding:5px 10px;text-align:right;font:600 10px var(--font-mono);color:var(--text-muted);border-left:1px solid var(--border)">Target</th>
+          <th style="padding:5px 10px;text-align:right;font:600 10px var(--font-mono);color:var(--text-muted)">Actual</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${KPI_ROWS.map(buildRow).join('')}
+      </tbody>
+    </table>
+    <div style="margin-top:10px;font-size:10px;color:var(--text-muted)">
+      ✦ TFs Returned, Lashings Returned, RMD Available and Cages/Frames Sent are auto-calculated from app data — click to override.
+    </div>
+  </div>`;
+}
+
+function kpiEditTarget(weekKey, field, isRange) {
+  const current = (STATE.kpiData || {})[weekKey]?.[field];
+  if (isRange) {
+    const lo = prompt(`Target (low) for "${field}":`, current?.target ?? '');
+    if (lo === null) return;
+    const hi = prompt(`Target (high) for "${field}":`, current?.targetHi ?? '');
+    if (hi === null) return;
+    saveKpiCell(weekKey, field, 'target', lo);
+    saveKpiCell(weekKey, field, 'targetHi', hi);
+  } else {
+    const val = prompt(`Target for "${field}":`, current?.target ?? '');
+    if (val === null) return;
+    saveKpiCell(weekKey, field, 'target', val);
+  }
+  render();
+}
+
+function kpiEditActual(weekKey, field) {
+  const current = (STATE.kpiData || {})[weekKey]?.[field];
+  const val = prompt(`Actual for "${field}" (leave blank to use auto-calculated):`, current?.actual ?? '');
+  if (val === null) return;
+  saveKpiCell(weekKey, field, 'actual', val === '' ? undefined : val);
+  render();
+}
+
 function renderAnalytics() {
   destroyAnalyticsCharts();
 
@@ -5551,6 +5829,8 @@ function renderAnalytics() {
   return `
   <div style="padding:0 0 32px">
     <h2 class="section-title" style="margin-bottom:20px">Analytics</h2>
+
+    ${renderKpiTable()}
 
     <!-- Live inventory stats row -->
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
