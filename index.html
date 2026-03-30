@@ -5840,6 +5840,16 @@ function updateAlStats() {
     </div>`;
 }
 
+async function alAddBlankDay() {
+  const dateStr = prompt('Enter date for the no-movement day (YYYY-MM-DD):',
+    new Date().toISOString().slice(0, 10));
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
+  if (!STATE.actionedLog) STATE.actionedLog = {};
+  if (!STATE.actionedLog[dateStr]) STATE.actionedLog[dateStr] = {};
+  try { await api('/api/actioned-log', 'PUT', STATE.actionedLog); } catch(e) {}
+  render();
+}
+
 function printActionedLog() {
   const fromLabel = alDateFrom ? fmt(alDateFrom) : null;
   const toLabel   = alDateTo   ? fmt(alDateTo)   : null;
@@ -5984,6 +5994,7 @@ function renderActionedLog() {
         </div>
         <button class="btn btn-primary" onclick="alApplyFilter()" style="height:36px">Apply</button>
         <button class="btn btn-secondary" onclick="alClearFilter()" style="height:36px">Show All</button>
+        <button class="btn btn-secondary" onclick="alAddBlankDay()" style="height:36px">+ Add Day</button>
         <button class="btn" onclick="printActionedLog()"
           style="height:36px;background:linear-gradient(135deg,#2563b0,#1a4a8a);color:#fff;border:none;margin-left:auto">
           🖨 Print / Export
