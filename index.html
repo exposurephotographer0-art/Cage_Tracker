@@ -1242,6 +1242,7 @@ async function loadState() {
     boatTrips: PRELOAD_STATE.boatTrips || [],
     auditEvents: PRELOAD_STATE.auditEvents || [],
     actionedLog: PRELOAD_STATE.actionedLog || {},
+    lashingLog: PRELOAD_STATE.lashingLog || {},
     settings: {
         movementsPerDay: PRELOAD_STATE.settings?.movementsPerDay || MAX_MOVES,
         heightShortMax: PRELOAD_STATE.settings?.heightShortMax || H_SHORT,
@@ -1277,6 +1278,7 @@ async function loadState() {
       boatTrips: data.boatTrips || [],
       auditEvents: data.auditEvents || [],
       actionedLog: data.actionedLog || {},
+      lashingLog: data.lashingLog || {},
       settings: {
         movementsPerDay: parseInt(data.settings?.movementsPerDay) || MAX_MOVES,
         heightShortMax: parseFloat(data.settings?.heightShortMax) || H_SHORT,
@@ -4956,6 +4958,125 @@ function renderBoatDiary() {
   `;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// LASHING LOG
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function isoWeek(dateStr) {
+  // Returns "YYYY-Www" ISO week key for a given YYYY-MM-DD string (or today)
+  const d = dateStr ? new Date(dateStr + 'T12:00:00') : new Date();
+  const jan4 = new Date(d.getFullYear(), 0, 4);
+  const startOfWeek1 = new Date(jan4);
+  startOfWeek1.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7));
+  const diffMs = d - startOfWeek1;
+  const weekNum = Math.floor(diffMs / 604800000) + 1;
+  // Handle year boundary — if weekNum < 1, it belongs to previous year's last week
+  if (weekNum < 1) {
+    const prevJan4 = new Date(d.getFullYear() - 1, 0, 4);
+    const prevStart = new Date(prevJan4);
+    prevStart.setDate(prevJan4.getDate() - ((prevJan4.getDay() + 6) % 7));
+    const prevDiff = d - prevStart;
+    const prevWeek = Math.floor(prevDiff / 604800000) + 1;
+    return `${d.getFullYear() - 1}-W${String(prevWeek).padStart(2, '0')}`;
+  }
+  return `${d.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+}
+
+function isoWeekMonday(weekKey) {
+  // Returns the Monday date of a given "YYYY-Www" week key
+  const [year, wPart] = weekKey.split('-W');
+  const w = parseInt(wPart);
+  const jan4 = new Date(parseInt(year), 0, 4);
+  const monday = new Date(jan4);
+  monday.setDate(jan4.getDate() - ((jan4.getDay() + 6) % 7) + (w - 1) * 7);
+  return toISO(monday);
+}
+
+function fmtWeekRange(weekKey) {
+  const mon = isoWeekMonday(weekKey);
+  const fri = new Date(mon + 'T12:00:00');
+  fri.setDate(fri.getDate() + 4);
+  return `${fmt(mon)} – ${fmt(toISO(fri))}`;
+}
+
+async function saveLashingEntry(weekKey, field, value) {
+  if (!STATE.lashingLog) STATE.lashingLog = {};
+  if (!STATE.lashingLog[weekKey]) STATE.lashingLog[weekKey] = {};
+  STATE.lashingLog[weekKey][field] = value;
+  try { await api('/api/lashing-log', 'PUT', STATE.lashingLog); } catch(e) {}
+}
+
+function renderLashingLog() {
+  const thisWeek = isoWeek();
+  const log = STATE.lashingLog || {};
+
+  // Collect all weeks that have data, plus the current week, sorted newest first
+  const weekSet = new Set(Object.keys(log));
+  weekSet.add(thisWeek);
+  const weeks = [...weekSet].sort((a, b) => b.localeCompare(a));
+
+  const totalReturned = Object.values(log).reduce((sum, e) => sum + (parseInt(e.returned) || 0), 0);
+
+  const rows = weeks.map(wk => {
+    const entry = log[wk] || {};
+    const returned = entry.returned !== undefined ? entry.returned : '';
+    const notes = entry.notes || '';
+    const isThisWeek = wk === thisWeek;
+    const rowBg = isThisWeek ? 'background:#fdf8ee;' : '';
+    return `<tr style="vertical-align:top;${rowBg}">
+      <td style="padding:10px 12px;white-space:nowrap">
+        <div style="font:700 12px var(--font-mono);color:${isThisWeek ? 'var(--accent)' : 'var(--text-primary)'}">${wk}${isThisWeek ? ' <span style="font-size:9px;font-weight:400;color:var(--accent)">THIS WEEK</span>' : ''}</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:1px">${fmtWeekRange(wk)}</div>
+      </td>
+      <td style="padding:10px 12px;width:120px">
+        <input type="number" min="0" value="${esc(String(returned))}"
+          placeholder="0"
+          onchange="saveLashingEntry('${wk}','returned',this.value===''?'':parseInt(this.value)||0)"
+          style="width:80px;text-align:center;font:700 16px var(--font-mono);background:var(--bg-input);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:${parseInt(returned)>0?'var(--green)':'var(--text-muted)'}"/>
+      </td>
+      <td style="padding:10px 12px;min-width:220px">
+        <input type="text" value="${esc(notes)}" placeholder="Notes (optional)…"
+          onchange="saveLashingEntry('${wk}','notes',this.value)"
+          style="width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:5px;padding:6px 8px;font-size:12px;color:var(--text-primary)"/>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `<div class="card" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin:0">🔗 Lashings Returned</div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div style="text-align:center;padding:6px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px">
+          <div style="font:700 20px var(--font-mono);color:var(--green)">${totalReturned}</div>
+          <div style="font-size:10px;color:var(--text-muted)">Total returned</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="lashingAddWeek()">+ Add week</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="border-bottom:2px solid var(--border);background:var(--bg-deep)">
+            <th style="padding:8px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Week</th>
+            <th style="padding:8px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Lashings Returned</th>
+            <th style="padding:8px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Notes</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function lashingAddWeek() {
+  const input = prompt('Enter week start date (YYYY-MM-DD) to add:', todayStr());
+  if (!input || !/^\d{4}-\d{2}-\d{2}$/.test(input)) return;
+  const wk = isoWeek(input);
+  if (!STATE.lashingLog) STATE.lashingLog = {};
+  if (!STATE.lashingLog[wk]) STATE.lashingLog[wk] = {};
+  render();
+}
+
 function renderShipping() {
   const ready = STATE.frames.filter(f=>f.fixedForShipping && f.location==='facility');
 
@@ -5012,6 +5133,7 @@ function renderShipping() {
       <h2 class="section-title" style="margin:0">Shipping Management</h2>
       <button class="btn btn-primary" onclick="shipFormOpen=!shipFormOpen;shipSelected=[];render()">+ New Shipment</button>
     </div>
+    ${renderLashingLog()}
     ${renderBoatDiary()}
     <div class="card">
       <div class="card-title">Ready to Ship (${ready.length} frames fixed)</div>
