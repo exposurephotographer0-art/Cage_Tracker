@@ -5546,7 +5546,7 @@ function renderKpiTable() {
     const displayVal = rangeTarget && tgtHi !== '' ? `${tgt}-${tgtHi}` : tgt;
     return `<td style="text-align:right;padding:7px 10px">
       <span style="font:600 12px var(--font-mono);color:var(--text-secondary);cursor:pointer"
-        onclick="kpiEditTarget('${weekKey}','${field}',${rangeTarget})"
+        onclick="kpiEditTarget('${weekKey}','${field}',${rangeTarget ? true : false})"
         title="Click to edit target">${displayVal !== '' ? esc(String(displayVal)) : '<span style=\'color:var(--text-muted)\'>—</span>'}</span>
     </td>`;
   }
