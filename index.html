@@ -5502,7 +5502,7 @@ function renderKpiTable() {
 
   const thisMonthRange = monthRangeForWeek(thisWeek);
   const lastMonthD = new Date(); lastMonthD.setDate(1); lastMonthD.setMonth(lastMonthD.getMonth() - 1);
-  const lastMonthRange = monthRangeForWeek(toISO(lastMonthD));
+  const lastMonthRange = monthRangeForWeek(isoWeek(toISO(lastMonthD)));
 
   const kpi = STATE.kpiData || {};
 
