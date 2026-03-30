@@ -5586,50 +5586,61 @@ function renderKpiTable() {
   const lwMonFmt = new Date(lwMon + 'T12:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'numeric', year:'2-digit' });
   const cwDate = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'2-digit', year:'numeric' });
 
-  const thInputBase = `background:transparent;border:1px solid transparent;border-radius:4px;padding:1px 4px;outline:none;text-align:center;width:100%;transition:border-color .12s,background .12s;font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em`;
-  const thInputFocus = `onfocus="this.style.borderColor='var(--accent)';this.style.background='var(--bg-base)'" onblur="this.style.borderColor='transparent';this.style.background='transparent'"`;
-  const thInputEnter = `onkeydown="if(event.key==='Enter'){this.blur()}"`;
+  // Shared styles for ALL header inputs
+  const thBase  = `background:transparent;border:1px solid transparent;border-radius:4px;padding:1px 4px;outline:none;width:100%;transition:border-color .12s,background .12s;cursor:text`;
+  const thFocus = `onfocus="this.style.borderColor='var(--accent)';this.style.background='var(--bg-base)'" onblur="this.style.borderColor='transparent';this.style.background='transparent'"`;
+  const thEnter = `onkeydown="if(event.key==='Enter'){this.blur()}"`;
+  // Top-row group headers (bold, centred, uppercase)
+  const thGroup = `${thBase};text-align:center;font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em`;
+  // Sub-date labels beneath group headers (lighter)
+  const thSub   = `${thBase};text-align:center;font:400 10px var(--font-mono);color:var(--text-muted)`;
+  // Second-row Target/Actual sub-headers (right-aligned)
+  const thSub2  = `${thBase};text-align:right;font:600 10px var(--font-mono);color:var(--text-muted)`;
+  // First column header
+  const thCol0  = `${thBase};text-align:left;font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em`;
 
-  const colHdrCW  = kpiGetLabel('col_currentWeek', 'Current Week');
-  const colHdrLW  = kpiGetLabel('col_lastWeek',    'Last Week');
-  const colHdrMTD = kpiGetLabel('col_mtd',         'Month to Date');
-  const colHdrLM  = kpiGetLabel('col_lastMonth',   'Last Month');
+  // Helper: render a header input
+  function thInput(key, def, style, borderLeft) {
+    const val = kpiGetLabel(key, def);
+    const bl  = borderLeft ? 'border-left:1px solid var(--border);' : '';
+    return `<input type="text" value="${esc(val)}" style="${style};${bl}" ${thFocus} ${thEnter} onchange="saveKpiLabel('${key}',this.value.trim())" />`;
+  }
 
   return `<div class="card" style="margin-bottom:20px;overflow-x:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
       <div class="card-title" style="margin:0">📋 Weekly KPI Report</div>
-      <div style="font-size:11px;color:var(--text-muted)">Click any cell or header to edit inline &nbsp;·&nbsp; Green = on target &nbsp;·&nbsp; Red = off target</div>
+      <div style="font-size:11px;color:var(--text-muted)">Click any header or cell to edit &nbsp;·&nbsp; Press Enter or click away to save &nbsp;·&nbsp; Green = on target &nbsp;·&nbsp; Red = off target</div>
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:700px">
       <thead>
         <tr style="background:var(--bg-deep);border-bottom:2px solid var(--border)">
-          <th style="padding:8px 12px;text-align:left;font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;min-width:160px"></th>
-          <th colspan="1" style="padding:6px 10px;text-align:center;border-left:1px solid var(--border)">
-            <input type="text" value="${esc(colHdrCW)}" style="${thInputBase}" ${thInputFocus} ${thInputEnter} onchange="saveKpiLabel('col_currentWeek',this.value.trim())" />
-            <br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">${cwDate}</span>
+          <th style="padding:6px 12px;min-width:160px">${thInput('col_rowLabel','KPI',thCol0,false)}</th>
+          <th colspan="1" style="padding:6px 8px">
+            ${thInput('col_currentWeek','Current Week',thGroup,true)}<br>
+            ${thInput('col_currentWeek_sub',cwDate,thSub,false)}
           </th>
-          <th colspan="2" style="padding:6px 10px;text-align:center;border-left:1px solid var(--border)">
-            <input type="text" value="${esc(colHdrLW)}" style="${thInputBase}" ${thInputFocus} ${thInputEnter} onchange="saveKpiLabel('col_lastWeek',this.value.trim())" />
-            <br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">${lwMonFmt}</span>
+          <th colspan="2" style="padding:6px 8px">
+            ${thInput('col_lastWeek','Last Week',thGroup,true)}<br>
+            ${thInput('col_lastWeek_sub',lwMonFmt,thSub,false)}
           </th>
-          <th colspan="2" style="padding:6px 10px;text-align:center;border-left:1px solid var(--border)">
-            <input type="text" value="${esc(colHdrMTD)}" style="${thInputBase}" ${thInputFocus} ${thInputEnter} onchange="saveKpiLabel('col_mtd',this.value.trim())" />
-            <br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">${thisMonthRange.monthName}</span>
+          <th colspan="2" style="padding:6px 8px">
+            ${thInput('col_mtd','Month to Date',thGroup,true)}<br>
+            ${thInput('col_mtd_sub',thisMonthRange.monthName,thSub,false)}
           </th>
-          <th colspan="2" style="padding:6px 10px;text-align:center;border-left:1px solid var(--border)">
-            <input type="text" value="${esc(colHdrLM)}" style="${thInputBase}" ${thInputFocus} ${thInputEnter} onchange="saveKpiLabel('col_lastMonth',this.value.trim())" />
-            <br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">${lastMonthRange.monthName}</span>
+          <th colspan="2" style="padding:6px 8px">
+            ${thInput('col_lastMonth','Last Month',thGroup,true)}<br>
+            ${thInput('col_lastMonth_sub',lastMonthRange.monthName,thSub,false)}
           </th>
         </tr>
         <tr style="background:var(--bg-elevated);border-bottom:1px solid var(--border)">
-          <th style="padding:5px 12px"></th>
-          <th style="padding:5px 10px;text-align:right;font:600 10px var(--font-mono);color:var(--text-muted);border-left:1px solid var(--border)">Actual</th>
-          <th style="padding:5px 10px;text-align:right;font:600 10px var(--font-mono);color:var(--text-muted);border-left:1px solid var(--border)">Target</th>
-          <th style="padding:5px 10px;text-align:right;font:600 10px var(--font-mono);color:var(--text-muted)">Actual</th>
-          <th style="padding:5px 10px;text-align:right;font:600 10px var(--font-mono);color:var(--text-muted);border-left:1px solid var(--border)">Target</th>
-          <th style="padding:5px 10px;text-align:right;font:600 10px var(--font-mono);color:var(--text-muted)">Actual</th>
-          <th style="padding:5px 10px;text-align:right;font:600 10px var(--font-mono);color:var(--text-muted);border-left:1px solid var(--border)">Target</th>
-          <th style="padding:5px 10px;text-align:right;font:600 10px var(--font-mono);color:var(--text-muted)">Actual</th>
+          <th style="padding:4px 12px"></th>
+          <th style="padding:4px 8px">${thInput('sub_cw_actual',  'Actual', thSub2, true)}</th>
+          <th style="padding:4px 8px">${thInput('sub_lw_target',  'Target', thSub2, true)}</th>
+          <th style="padding:4px 8px">${thInput('sub_lw_actual',  'Actual', thSub2, false)}</th>
+          <th style="padding:4px 8px">${thInput('sub_mtd_target', 'Target', thSub2, true)}</th>
+          <th style="padding:4px 8px">${thInput('sub_mtd_actual', 'Actual', thSub2, false)}</th>
+          <th style="padding:4px 8px">${thInput('sub_lm_target',  'Target', thSub2, true)}</th>
+          <th style="padding:4px 8px">${thInput('sub_lm_actual',  'Actual', thSub2, false)}</th>
         </tr>
       </thead>
       <tbody>
