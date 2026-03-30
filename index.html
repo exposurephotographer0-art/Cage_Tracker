@@ -5403,8 +5403,8 @@ const KPI_ROWS = [
   { section: 'GoodsIn',   defaultLabel: 'Goods In' },
   { id: 'cagesDelivered',  defaultLabel: 'Cages Delivered' },
   { id: 'cagesChecked',    defaultLabel: 'Cages Checked' },
-  { id: 'bdrsGI',          defaultLabel: 'BDRs Raised GI' },
-  { id: 'bdrsFac',         defaultLabel: 'BDRs Raised Fac' },
+  { id: 'bdrsGI',          defaultLabel: 'BDRs Raised GI',  lowerIsBetter: true },
+  { id: 'bdrsFac',         defaultLabel: 'BDRs Raised Fac', lowerIsBetter: true },
   { id: 'rebarStock',      defaultLabel: 'Rebar Stock',        rangeTarget: true },
   { section: 'GoodsOut',  defaultLabel: 'Goods Out' },
   { id: 'tfsReturned',     defaultLabel: 'TFs Returned' },
@@ -5441,15 +5441,16 @@ async function kpiCellChange(input, weekKey, field, type) {
 function kpiRefreshColors() {
   const kpi = STATE.kpiData || {};
   document.querySelectorAll('input[data-kpi-type="actual"]').forEach(inp => {
-    const wk   = inp.dataset.kpiWeek;
-    const fld  = inp.dataset.kpiField;
-    const tgt  = kpi[wk]?.[fld]?.target   ?? '';
-    const tgtHi= kpi[wk]?.[fld]?.targetHi ?? '';
-    inp.style.color = kpiColorVal(inp.value, tgt, tgtHi);
+    const wk    = inp.dataset.kpiWeek;
+    const fld   = inp.dataset.kpiField;
+    const lower = inp.dataset.kpiLower === 'true';
+    const tgt   = kpi[wk]?.[fld]?.target   ?? '';
+    const tgtHi = kpi[wk]?.[fld]?.targetHi ?? '';
+    inp.style.color = kpiColorVal(inp.value, tgt, tgtHi, lower);
   });
 }
 
-function kpiColorVal(actual, target, targetHi) {
+function kpiColorVal(actual, target, targetHi, lowerIsBetter) {
   if (actual === '' || actual === null || actual === undefined) return 'var(--text-muted)';
   const a = parseFloat(actual);
   if (isNaN(a)) return 'var(--text-primary)';
@@ -5458,7 +5459,9 @@ function kpiColorVal(actual, target, targetHi) {
     return (a >= lo && a <= hi) ? 'var(--green)' : 'var(--red)';
   }
   if (target === '' || target === undefined) return 'var(--text-primary)';
-  return a >= parseFloat(target) ? 'var(--green)' : 'var(--red)';
+  const t = parseFloat(target);
+  if (lowerIsBetter) return a <= t ? 'var(--green)' : 'var(--red)';
+  return a >= t ? 'var(--green)' : 'var(--red)';
 }
 
 function monthRangeForWeek(weekKey) {
@@ -5493,25 +5496,25 @@ function renderKpiTable() {
   const inputEnter = `onkeydown="if(event.key==='Enter'){this.blur()}"`;
 
   // Single data cell (target or actual)
-  function dataInput(wk, field, type) {
+  function dataInput(wk, field, type, lowerIsBetter) {
     const val = getVal(wk, field, type);
     const isActual = type === 'actual';
     const tgt   = getVal(wk, field, 'target');
     const tgtHi = getVal(wk, field, 'targetHi');
-    const color = isActual ? kpiColorVal(val, tgt, tgtHi) : 'var(--text-secondary)';
+    const color = isActual ? kpiColorVal(val, tgt, tgtHi, lowerIsBetter) : 'var(--text-secondary)';
     const fw = isActual ? '700' : '600';
     return `<input type="text"
       value="${esc(String(val))}" placeholder="—"
-      data-kpi-type="${type}" data-kpi-week="${wk}" data-kpi-field="${field}"
+      data-kpi-type="${type}" data-kpi-week="${wk}" data-kpi-field="${field}" data-kpi-lower="${lowerIsBetter ? 'true' : 'false'}"
       style="${inputBase};width:64px;text-align:right;font:${fw} 13px var(--font-mono);color:${color}"
       ${inputFocus} ${inputEnter}
       onchange="kpiCellChange(this,'${wk}','${field}','${type}')"
     />`;
   }
 
-  function singleCell(wk, field, type, borderLeft) {
+  function singleCell(wk, field, type, borderLeft, lowerIsBetter) {
     return `<td style="padding:4px 6px;text-align:right${borderLeft ? ';border-left:1px solid var(--border)' : ''}">
-      ${dataInput(wk, field, type)}
+      ${dataInput(wk, field, type, lowerIsBetter)}
     </td>`;
   }
 
@@ -5562,20 +5565,20 @@ function renderKpiTable() {
         </td>
       </tr>`;
     }
-    const { id, rangeTarget, defaultLabel } = row;
+    const { id, rangeTarget, defaultLabel, lowerIsBetter } = row;
     const cwKey  = thisWeek;
     const lwKey  = lastWeek;
     const mtdKey = thisWeek + '_mtd';
 
     return `<tr style="border-bottom:1px solid var(--border-light)">
       ${labelCell(id, defaultLabel)}
-      ${singleCell(cwKey,  id, 'actual',  true)}
-      ${rangeTarget ? rangeTargetCell(lwKey,  id, true)  : singleCell(lwKey,  id, 'target', true)}
-      ${singleCell(lwKey,  id, 'actual',  false)}
-      ${rangeTarget ? rangeTargetCell(mtdKey, id, true)  : singleCell(mtdKey, id, 'target', true)}
-      ${singleCell(mtdKey, id, 'actual',  false)}
-      ${rangeTarget ? rangeTargetCell(lmKey,  id, true)  : singleCell(lmKey,  id, 'target', true)}
-      ${singleCell(lmKey,  id, 'actual',  false)}
+      ${singleCell(cwKey,  id, 'actual',  true,  lowerIsBetter)}
+      ${rangeTarget ? rangeTargetCell(lwKey,  id, true)  : singleCell(lwKey,  id, 'target', true,  false)}
+      ${singleCell(lwKey,  id, 'actual',  false, lowerIsBetter)}
+      ${rangeTarget ? rangeTargetCell(mtdKey, id, true)  : singleCell(mtdKey, id, 'target', true,  false)}
+      ${singleCell(mtdKey, id, 'actual',  false, lowerIsBetter)}
+      ${rangeTarget ? rangeTargetCell(lmKey,  id, true)  : singleCell(lmKey,  id, 'target', true,  false)}
+      ${singleCell(lmKey,  id, 'actual',  false, lowerIsBetter)}
     </tr>`;
   }
 
@@ -5583,19 +5586,40 @@ function renderKpiTable() {
   const lwMonFmt = new Date(lwMon + 'T12:00:00').toLocaleDateString('en-GB', { day:'numeric', month:'numeric', year:'2-digit' });
   const cwDate = new Date().toLocaleDateString('en-GB', { day:'numeric', month:'2-digit', year:'numeric' });
 
+  const thInputBase = `background:transparent;border:1px solid transparent;border-radius:4px;padding:1px 4px;outline:none;text-align:center;width:100%;transition:border-color .12s,background .12s;font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em`;
+  const thInputFocus = `onfocus="this.style.borderColor='var(--accent)';this.style.background='var(--bg-base)'" onblur="this.style.borderColor='transparent';this.style.background='transparent'"`;
+  const thInputEnter = `onkeydown="if(event.key==='Enter'){this.blur()}"`;
+
+  const colHdrCW  = kpiGetLabel('col_currentWeek', 'Current Week');
+  const colHdrLW  = kpiGetLabel('col_lastWeek',    'Last Week');
+  const colHdrMTD = kpiGetLabel('col_mtd',         'Month to Date');
+  const colHdrLM  = kpiGetLabel('col_lastMonth',   'Last Month');
+
   return `<div class="card" style="margin-bottom:20px;overflow-x:auto">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
       <div class="card-title" style="margin:0">📋 Weekly KPI Report</div>
-      <div style="font-size:11px;color:var(--text-muted)">Click any cell to edit inline &nbsp;·&nbsp; Row labels can also be renamed &nbsp;·&nbsp; Green = met/exceeded &nbsp;·&nbsp; Red = below target</div>
+      <div style="font-size:11px;color:var(--text-muted)">Click any cell or header to edit inline &nbsp;·&nbsp; Green = on target &nbsp;·&nbsp; Red = off target</div>
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:13px;min-width:700px">
       <thead>
         <tr style="background:var(--bg-deep);border-bottom:2px solid var(--border)">
           <th style="padding:8px 12px;text-align:left;font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;min-width:160px"></th>
-          <th colspan="1" style="padding:8px 10px;text-align:center;font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;border-left:1px solid var(--border)">Current Week<br><span style="font-weight:400;font-size:10px">${cwDate}</span></th>
-          <th colspan="2" style="padding:8px 10px;text-align:center;font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;border-left:1px solid var(--border)">Last Week — ${lwMonFmt}</th>
-          <th colspan="2" style="padding:8px 10px;text-align:center;font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;border-left:1px solid var(--border)">Month to Date — ${thisMonthRange.monthName}</th>
-          <th colspan="2" style="padding:8px 10px;text-align:center;font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;border-left:1px solid var(--border)">Last Month — ${lastMonthRange.monthName}</th>
+          <th colspan="1" style="padding:6px 10px;text-align:center;border-left:1px solid var(--border)">
+            <input type="text" value="${esc(colHdrCW)}" style="${thInputBase}" ${thInputFocus} ${thInputEnter} onchange="saveKpiLabel('col_currentWeek',this.value.trim())" />
+            <br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">${cwDate}</span>
+          </th>
+          <th colspan="2" style="padding:6px 10px;text-align:center;border-left:1px solid var(--border)">
+            <input type="text" value="${esc(colHdrLW)}" style="${thInputBase}" ${thInputFocus} ${thInputEnter} onchange="saveKpiLabel('col_lastWeek',this.value.trim())" />
+            <br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">${lwMonFmt}</span>
+          </th>
+          <th colspan="2" style="padding:6px 10px;text-align:center;border-left:1px solid var(--border)">
+            <input type="text" value="${esc(colHdrMTD)}" style="${thInputBase}" ${thInputFocus} ${thInputEnter} onchange="saveKpiLabel('col_mtd',this.value.trim())" />
+            <br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">${thisMonthRange.monthName}</span>
+          </th>
+          <th colspan="2" style="padding:6px 10px;text-align:center;border-left:1px solid var(--border)">
+            <input type="text" value="${esc(colHdrLM)}" style="${thInputBase}" ${thInputFocus} ${thInputEnter} onchange="saveKpiLabel('col_lastMonth',this.value.trim())" />
+            <br><span style="font-weight:400;font-size:10px;color:var(--text-muted)">${lastMonthRange.monthName}</span>
+          </th>
         </tr>
         <tr style="background:var(--bg-elevated);border-bottom:1px solid var(--border)">
           <th style="padding:5px 12px"></th>
@@ -5613,7 +5637,7 @@ function renderKpiTable() {
       </tbody>
     </table>
     <div style="margin-top:10px;font-size:10px;color:var(--text-muted)">
-      ✦ All values are manual entry — click any cell to type directly. Press Enter or click away to save. Rebar Stock target accepts a low–high range.
+      ✦ All values are manual entry — click any cell to type directly. Press Enter or click away to save. Column headers and row labels are also editable. BDRs Raised: lower = green. Rebar Stock target accepts a low–high range.
     </div>
   </div>`;
 }
