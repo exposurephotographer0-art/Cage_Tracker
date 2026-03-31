@@ -975,21 +975,48 @@ tr.dragging { opacity: 0.4; }
 
 /* ── Table type ── */
 .ct-table-wrapper { overflow-x: auto; }
-.ct-data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ct-data-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
 .ct-data-table th {
   background: var(--bg-elevated); padding: 6px 10px;
   font: 600 10px var(--font-mono); text-transform: uppercase;
   letter-spacing: 0.06em; color: var(--text-muted);
   border-bottom: 2px solid var(--border);
+  position: relative; user-select: none; overflow: hidden;
 }
+.ct-data-table th input {
+  width: 100%; border: none; background: none;
+  font: 600 10px var(--font-mono); text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-muted);
+  padding: 0; padding-right: 8px;
+}
+.ct-data-table th input:focus { outline: none; }
+.ct-col-resize-handle {
+  position: absolute; top: 0; right: 0; width: 6px; height: 100%;
+  cursor: col-resize; z-index: 2;
+  background: transparent; transition: background 0.1s;
+}
+.ct-col-resize-handle:hover { background: var(--accent); opacity: 0.5; }
+.ct-col-resize-handle.resizing { background: var(--accent); opacity: 0.7; }
 .ct-data-table td {
-  padding: 7px 10px; border-bottom: 1px solid var(--border-light);
+  padding: 0; border-bottom: 1px solid var(--border-light);
+  position: relative; overflow: hidden;
+  vertical-align: top;
 }
-.ct-data-table td input {
-  width: 100%; border: none; background: none; font-size: 12px;
-  padding: 2px 4px; color: var(--text-primary);
+.ct-data-table td textarea {
+  width: 100%; border: none; background: none;
+  font: 400 12px var(--font-display); color: var(--text-primary);
+  padding: 7px 10px; resize: none; overflow: hidden;
+  min-height: 34px; line-height: 1.45;
+  white-space: pre-wrap; word-break: break-word;
+  display: block; box-sizing: border-box;
 }
-.ct-data-table td input:focus { outline: none; background: var(--bg-input); border-radius: 3px; }
+.ct-data-table td textarea:focus { outline: none; background: var(--bg-input); }
+.ct-row-resize-handle {
+  position: absolute; bottom: 0; left: 0; right: 0; height: 5px;
+  cursor: row-resize; z-index: 2; background: transparent; transition: background 0.1s;
+}
+.ct-row-resize-handle:hover { background: var(--accent); opacity: 0.4; }
+.ct-row-resize-handle.resizing { background: var(--accent); opacity: 0.6; }
 
 /* ── Link type ── */
 .ct-link-item {
@@ -10821,6 +10848,11 @@ function renderCustomTab(tab) {
         <div style="font-size:12px">Add a note, checklist, action list, table, or links below.</div>
       </div>`;
 
+  // Schedule textarea auto-height init for any table items
+  setTimeout(() => {
+    items.filter(i => i.type === 'table').forEach(i => ctTableInitResize(i.id));
+  }, 50);
+
   return `
     <div class="section-title">${tab.icon} ${esc(tab.label)}</div>
     ${!ro ? `
@@ -11028,45 +11060,139 @@ async function ctActionDelete(itemId, idx) {
 
 // ── Table ─────────────────────────────────────────────────────────────────
 function ctRenderTable(item, ro) {
-  const headers = item.metadata.headers || ['Column 1', 'Column 2', 'Column 3'];
-  const rows    = item.metadata.rows || [];
-  const hCols   = headers.length;
+  const headers   = item.metadata.headers   || ['Column 1', 'Column 2', 'Column 3'];
+  const rows      = item.metadata.rows      || [];
+  const colWidths = item.metadata.colWidths || [];
+  const rowHeights= item.metadata.rowHeights|| [];
+  const hCols     = headers.length;
 
-  const headerCells = headers.map((h, hi) => `
-    <th>
-      <input style="width:100%;border:none;background:none;font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em"
-        value="${esc(h)}" ${ro ? 'disabled' : `onblur="ctTableEditHeader('${item.id}',${hi},this.value)"`}
-        onkeydown="if(event.key==='Enter')this.blur()">
-    </th>
-  `).join('');
+  const headerCells = headers.map((h, hi) => {
+    const wStyle = colWidths[hi] ? `width:${colWidths[hi]}px;min-width:${colWidths[hi]}px;max-width:${colWidths[hi]}px;` : 'min-width:80px;';
+    return `<th style="${wStyle}">
+      <input value="${esc(h)}"
+        ${ro ? 'disabled' : `onblur="ctTableEditHeader('${item.id}',${hi},this.value)"`}
+        onkeydown="if(event.key==='Enter')this.blur()" title="${esc(h)}">
+      ${!ro ? `<div class="ct-col-resize-handle" onmousedown="ctColResizeStart(event,'${item.id}',${hi})" title="Drag to resize column"></div>` : ''}
+    </th>`;
+  }).join('');
 
-  const dataRows = rows.map((row, ri) => `
-    <tr>
-      ${headers.map((_,ci) => `
-        <td><input value="${esc(row[ci]||'')}" placeholder="—"
+  const dataRows = rows.map((row, ri) => {
+    const minH = rowHeights[ri] ? `min-height:${rowHeights[ri]}px;` : '';
+    const cells = headers.map((_,ci) => {
+      const cellVal = esc(row[ci]||'');
+      const taMinH  = rowHeights[ri] ? `min-height:${Math.max(34, rowHeights[ri] - 14)}px;` : '';
+      return `<td>
+        <textarea
           ${ro ? 'disabled' : `onblur="ctTableEditCell('${item.id}',${ri},${ci},this.value)"`}
-          onkeydown="if(event.key==='Enter')this.blur()">
-        </td>
-      `).join('')}
-      ${!ro ? `<td style="width:28px"><button class="btn btn-secondary btn-xs" style="color:var(--red)" onclick="ctTableDeleteRow('${item.id}',${ri})">✕</button></td>` : ''}
-    </tr>
-  `).join('');
+          oninput="ctTableTAResize(this)"
+          style="${taMinH}"
+          placeholder="—">${cellVal}</textarea>
+        ${!ro && ci === 0 ? `<div class="ct-row-resize-handle" onmousedown="ctRowResizeStart(event,'${item.id}',${ri})" title="Drag to resize row"></div>` : ''}
+      </td>`;
+    }).join('');
+    return `<tr style="${minH}">${cells}${!ro ? `<td style="width:28px;padding:6px 4px;vertical-align:top"><button class="btn btn-secondary btn-xs" style="color:var(--red)" onclick="ctTableDeleteRow('${item.id}',${ri})">✕</button></td>` : ''}</tr>`;
+  }).join('');
 
   return `
     <div class="ct-table-wrapper">
-      <table class="ct-data-table">
+      <table class="ct-data-table" id="ct-tbl-${item.id}">
         <thead><tr>${headerCells}${!ro ? '<th style="width:28px"></th>' : ''}</tr></thead>
         <tbody>${dataRows}</tbody>
       </table>
     </div>
     ${!ro ? `
-    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-secondary btn-sm" onclick="ctTableAddRow('${item.id}')">＋ Row</button>
       <button class="btn btn-secondary btn-sm" onclick="ctTableAddCol('${item.id}')">＋ Column</button>
       ${hCols > 1 ? `<button class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="ctTableRemoveCol('${item.id}')">− Column</button>` : ''}
+      <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="ctTableResetLayout('${item.id}')" title="Reset all column widths and row heights">↺ Reset layout</button>
     </div>
     ` : ''}
   `;
+}
+
+// Auto-resize textarea to fit content
+function ctTableTAResize(ta) {
+  ta.style.height = 'auto';
+  ta.style.height = ta.scrollHeight + 'px';
+}
+
+// Initialise textarea heights after render (called after DOM is ready)
+function ctTableInitResize(tableId) {
+  const tbl = document.getElementById('ct-tbl-' + tableId);
+  if (!tbl) return;
+  tbl.querySelectorAll('td textarea').forEach(ta => ctTableTAResize(ta));
+}
+
+// Column resize drag
+function ctColResizeStart(e, itemId, colIdx) {
+  e.preventDefault();
+  const startX = e.clientX;
+  const th = e.target.closest('th');
+  const startW = th.offsetWidth;
+  const handle = e.target;
+  handle.classList.add('resizing');
+
+  const onMove = (ev) => {
+    const newW = Math.max(60, startW + ev.clientX - startX);
+    th.style.width = newW + 'px';
+    th.style.minWidth = newW + 'px';
+    th.style.maxWidth = newW + 'px';
+  };
+  const onUp = async () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    handle.classList.remove('resizing');
+    const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+    if (!item) return;
+    if (!item.metadata.colWidths) item.metadata.colWidths = [];
+    item.metadata.colWidths[colIdx] = th.offsetWidth;
+    await apiUpdateCustomTabItem(item);
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+// Row resize drag
+function ctRowResizeStart(e, itemId, rowIdx) {
+  e.preventDefault();
+  const startY = e.clientY;
+  const tr = e.target.closest('tr');
+  const startH = tr.offsetHeight;
+  const handle = e.target;
+  handle.classList.add('resizing');
+
+  const onMove = (ev) => {
+    const newH = Math.max(34, startH + ev.clientY - startY);
+    tr.style.minHeight = newH + 'px';
+    tr.querySelectorAll('textarea').forEach(ta => {
+      ta.style.minHeight = Math.max(20, newH - 14) + 'px';
+      ta.style.height = Math.max(20, newH - 14) + 'px';
+    });
+  };
+  const onUp = async () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    handle.classList.remove('resizing');
+    const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+    if (!item) return;
+    if (!item.metadata.rowHeights) item.metadata.rowHeights = [];
+    item.metadata.rowHeights[rowIdx] = tr.offsetHeight;
+    await apiUpdateCustomTabItem(item);
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+// Reset all column widths and row heights
+async function ctTableResetLayout(itemId) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  item.metadata.colWidths = [];
+  item.metadata.rowHeights = [];
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+  setTimeout(() => ctTableInitResize(itemId), 50);
 }
 
 async function ctTableEditHeader(itemId, idx, val) {
@@ -11196,6 +11322,7 @@ function ctRefreshItem(item) {
   if (!card) return;
   const ro = isReadOnly();
   card.outerHTML = renderCustomTabItem(item, ro);
+  if (item.type === 'table') setTimeout(() => ctTableInitResize(item.id), 30);
 }
 
 async function ctAddItem(tabId, type) {
@@ -11230,6 +11357,8 @@ async function ctAddItem(tabId, type) {
       .map(i => renderCustomTabItem(i, false))
       .join('');
   }
+  // Init textarea auto-heights for any table items
+  if (type === 'table') setTimeout(() => ctTableInitResize(item.id), 30);
 }
 
 async function ctDeleteItem(itemId) {
