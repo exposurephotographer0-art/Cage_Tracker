@@ -1018,6 +1018,50 @@ tr.dragging { opacity: 0.4; }
 .ct-row-resize-handle:hover { background: var(--accent); opacity: 0.4; }
 .ct-row-resize-handle.resizing { background: var(--accent); opacity: 0.6; }
 
+/* ── Table Snapshots ── */
+.ct-snap-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  z-index: 2100; display: flex; align-items: center; justify-content: center;
+}
+.ct-snap-modal {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); width: 680px; max-width: calc(100vw - 32px);
+  max-height: 85vh; display: flex; flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.22);
+}
+.ct-snap-modal-hdr {
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+}
+.ct-snap-modal-title { font: 700 15px var(--font-display); flex: 1; }
+.ct-snap-modal-body { flex: 1; overflow-y: auto; padding: 16px 18px; }
+.ct-snap-modal-footer { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; flex-shrink: 0; }
+.ct-snap-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius); margin-bottom: 8px; background: var(--bg-elevated);
+  transition: box-shadow 0.1s;
+}
+.ct-snap-row:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+.ct-snap-row-icon { font-size: 20px; flex-shrink: 0; }
+.ct-snap-row-info { flex: 1; min-width: 0; }
+.ct-snap-row-label { font: 600 13px var(--font-display); color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ct-snap-row-meta { font: 400 11px var(--font-mono); color: var(--text-muted); margin-top: 2px; }
+.ct-snap-row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.ct-snap-view-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ct-snap-view-table th {
+  background: var(--bg-elevated); padding: 6px 10px;
+  font: 600 10px var(--font-mono); text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-muted);
+  border-bottom: 2px solid var(--border); text-align: left;
+}
+.ct-snap-view-table td {
+  padding: 7px 10px; border-bottom: 1px solid var(--border-light);
+  vertical-align: top; white-space: pre-wrap; word-break: break-word;
+  font-size: 12px; color: var(--text-primary);
+}
+.ct-snap-empty { text-align: center; padding: 32px 20px; color: var(--text-muted); font-size: 13px; }
+
 /* ── Link type ── */
 .ct-link-item {
   display: flex; align-items: center; gap: 10px;
@@ -11105,9 +11149,18 @@ function ctRenderTable(item, ro) {
       <button class="btn btn-secondary btn-sm" onclick="ctTableAddRow('${item.id}')">＋ Row</button>
       <button class="btn btn-secondary btn-sm" onclick="ctTableAddCol('${item.id}')">＋ Column</button>
       ${hCols > 1 ? `<button class="btn btn-secondary btn-sm" style="color:var(--red)" onclick="ctTableRemoveCol('${item.id}')">− Column</button>` : ''}
-      <button class="btn btn-secondary btn-sm" style="margin-left:auto" onclick="ctTableResetLayout('${item.id}')" title="Reset all column widths and row heights">↺ Reset layout</button>
+      <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+        ${(item.metadata.snapshots||[]).length > 0 ? `<span style="font:600 10px var(--font-mono);color:var(--text-muted)">${(item.metadata.snapshots||[]).length} snapshot${(item.metadata.snapshots||[]).length===1?'':'s'}</span>` : ''}
+        <button class="btn btn-secondary btn-sm" onclick="ctTableSaveSnapshot('${item.id}')" title="Save a named snapshot of this table">📸 Snapshot</button>
+        <button class="btn btn-secondary btn-sm" onclick="ctTableShowHistory('${item.id}')" title="View saved snapshots">🕐 History</button>
+        <button class="btn btn-secondary btn-sm" onclick="ctTableResetLayout('${item.id}')" title="Reset column widths and row heights">↺ Layout</button>
+      </div>
     </div>
-    ` : ''}
+    ` : `
+    <div style="display:flex;gap:8px;margin-top:8px">
+      ${(item.metadata.snapshots||[]).length > 0 ? `<button class="btn btn-secondary btn-sm" onclick="ctTableShowHistory('${item.id}')">🕐 History (${(item.metadata.snapshots||[]).length})</button>` : ''}
+    </div>
+    `}
   `;
 }
 
@@ -11193,6 +11246,188 @@ async function ctTableResetLayout(itemId) {
   await apiUpdateCustomTabItem(item);
   ctRefreshItem(item);
   setTimeout(() => ctTableInitResize(itemId), 50);
+}
+
+
+// ── Table Snapshots ───────────────────────────────────────────────────────
+
+// Save a named snapshot of the current table state
+async function ctTableSaveSnapshot(itemId) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+
+  const label = prompt('Name this snapshot (e.g. "Week 12 meeting"):');
+  if (!label || !label.trim()) return;
+
+  const snap = {
+    id: uid(),
+    label: label.trim(),
+    savedAt: new Date().toISOString(),
+    headers:    JSON.parse(JSON.stringify(item.metadata.headers   || [])),
+    rows:       JSON.parse(JSON.stringify(item.metadata.rows      || [])),
+    colWidths:  JSON.parse(JSON.stringify(item.metadata.colWidths || [])),
+    rowHeights: JSON.parse(JSON.stringify(item.metadata.rowHeights|| [])),
+  };
+
+  if (!item.metadata.snapshots) item.metadata.snapshots = [];
+  item.metadata.snapshots.push(snap);
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+  setTimeout(() => ctTableInitResize(itemId), 30);
+  showToast('Snapshot "' + snap.label + '" saved');
+}
+
+// Show history modal listing all snapshots
+function ctTableShowHistory(itemId) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  const snaps = (item.metadata.snapshots || []).slice().reverse(); // newest first
+
+  const rows = snaps.length ? snaps.map((s, ri) => {
+    const realIdx = (item.metadata.snapshots.length - 1) - ri;
+    const d = new Date(s.savedAt);
+    const dateStr = d.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
+    const timeStr = d.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
+    const dims = `${(s.headers||[]).length} col × ${(s.rows||[]).length} row`;
+    return `
+      <div class="ct-snap-row">
+        <div class="ct-snap-row-icon">📋</div>
+        <div class="ct-snap-row-info">
+          <div class="ct-snap-row-label">${esc(s.label)}</div>
+          <div class="ct-snap-row-meta">${dateStr} ${timeStr} &nbsp;·&nbsp; ${dims}</div>
+        </div>
+        <div class="ct-snap-row-actions">
+          <button class="btn btn-secondary btn-xs" onclick="ctTableViewSnapshot('${itemId}',${realIdx})" title="View this snapshot">👁 View</button>
+          <button class="btn btn-primary btn-xs" onclick="ctTableRestoreSnapshot('${itemId}',${realIdx})" title="Restore this snapshot to the live table">↩ Restore</button>
+          <button class="btn btn-secondary btn-xs" style="color:var(--red)" onclick="ctTableDeleteSnapshot('${itemId}',${realIdx})" title="Delete this snapshot">✕</button>
+        </div>
+      </div>`;
+  }).join('') : `<div class="ct-snap-empty">📭 No snapshots yet.<br><span style="font-size:11px">Use <strong>📸 Snapshot</strong> on the table to save one.</span></div>`;
+
+  const html = `
+    <div class="ct-snap-overlay" id="ct-snap-history-overlay" onclick="if(event.target===this)this.remove()">
+      <div class="ct-snap-modal">
+        <div class="ct-snap-modal-hdr">
+          <span style="font-size:20px">🕐</span>
+          <div class="ct-snap-modal-title">Snapshot History — ${esc(item.title||'Table')}</div>
+          <button class="btn btn-secondary btn-xs" onclick="document.getElementById('ct-snap-history-overlay').remove()">✕ Close</button>
+        </div>
+        <div class="ct-snap-modal-body">${rows}</div>
+        <div class="ct-snap-modal-footer">
+          <span style="font:400 11px var(--font-mono);color:var(--text-muted)">${snaps.length} snapshot${snaps.length===1?'':'s'} stored</span>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('ct-snap-history-overlay')?.remove();
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+// View a snapshot read-only in a modal
+function ctTableViewSnapshot(itemId, snapIdx) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  const snap = (item.metadata.snapshots||[])[snapIdx];
+  if (!snap) return;
+
+  const headers = snap.headers || [];
+  const rows    = snap.rows    || [];
+  const d = new Date(snap.savedAt);
+  const dateStr = d.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+
+  const thead = `<tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>`;
+  const tbody = rows.map(row=>`<tr>${headers.map((_,ci)=>`<td>${esc(row[ci]||'')}</td>`).join('')}</tr>`).join('');
+
+  const html = `
+    <div class="ct-snap-overlay" id="ct-snap-view-overlay" onclick="if(event.target===this)this.remove()">
+      <div class="ct-snap-modal" style="width:760px">
+        <div class="ct-snap-modal-hdr">
+          <span style="font-size:20px">📋</span>
+          <div>
+            <div class="ct-snap-modal-title">${esc(snap.label)}</div>
+            <div style="font:400 11px var(--font-mono);color:var(--text-muted)">Saved ${dateStr}</div>
+          </div>
+          <button class="btn btn-secondary btn-xs" style="margin-left:auto" onclick="document.getElementById('ct-snap-view-overlay').remove()">✕ Close</button>
+        </div>
+        <div class="ct-snap-modal-body" style="overflow-x:auto">
+          ${rows.length ? `<table class="ct-snap-view-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`
+            : '<div class="ct-snap-empty">This snapshot has no rows.</div>'}
+        </div>
+        <div class="ct-snap-modal-footer">
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('ct-snap-view-overlay').remove()">Close</button>
+          <button class="btn btn-primary btn-sm" onclick="document.getElementById('ct-snap-view-overlay').remove();ctTableRestoreSnapshot('${itemId}',${snapIdx})">↩ Restore this version</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('ct-snap-view-overlay')?.remove();
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+// Restore a snapshot back to the live table (with confirmation)
+async function ctTableRestoreSnapshot(itemId, snapIdx) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  const snap = (item.metadata.snapshots||[])[snapIdx];
+  if (!snap) return;
+
+  const d = new Date(snap.savedAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  if (!confirm(`Restore snapshot "${snap.label}" (${d})?
+
+This will overwrite the live table with the saved version. The current live table will be saved as a new snapshot first so you don't lose anything.`)) return;
+
+  // Auto-save current state as a snapshot before restoring
+  const autoSnap = {
+    id: uid(),
+    label: 'Auto-save before restore (' + new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short'}) + ')',
+    savedAt: new Date().toISOString(),
+    headers:    JSON.parse(JSON.stringify(item.metadata.headers   || [])),
+    rows:       JSON.parse(JSON.stringify(item.metadata.rows      || [])),
+    colWidths:  JSON.parse(JSON.stringify(item.metadata.colWidths || [])),
+    rowHeights: JSON.parse(JSON.stringify(item.metadata.rowHeights|| [])),
+  };
+  if (!item.metadata.snapshots) item.metadata.snapshots = [];
+  item.metadata.snapshots.push(autoSnap);
+
+  // Copy snapshot data into live table
+  item.metadata.headers    = JSON.parse(JSON.stringify(snap.headers   || []));
+  item.metadata.rows       = JSON.parse(JSON.stringify(snap.rows      || []));
+  item.metadata.colWidths  = JSON.parse(JSON.stringify(snap.colWidths || []));
+  item.metadata.rowHeights = JSON.parse(JSON.stringify(snap.rowHeights|| []));
+
+  await apiUpdateCustomTabItem(item);
+  document.getElementById('ct-snap-history-overlay')?.remove();
+  document.getElementById('ct-snap-view-overlay')?.remove();
+  ctRefreshItem(item);
+  setTimeout(() => ctTableInitResize(itemId), 30);
+  showToast('Restored "' + snap.label + '"');
+}
+
+// Delete a snapshot
+async function ctTableDeleteSnapshot(itemId, snapIdx) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item || !item.metadata.snapshots) return;
+  const snap = item.metadata.snapshots[snapIdx];
+  if (!confirm('Delete snapshot "' + (snap?.label||'') + '"? This cannot be undone.')) return;
+  item.metadata.snapshots.splice(snapIdx, 1);
+  await apiUpdateCustomTabItem(item);
+  document.getElementById('ct-snap-history-overlay')?.remove();
+  ctTableShowHistory(itemId);
+  ctRefreshItem(item);
+  setTimeout(() => ctTableInitResize(itemId), 30);
+}
+
+// Simple toast notification
+function showToast(msg) {
+  const existing = document.getElementById('ct-toast');
+  if (existing) existing.remove();
+  const t = document.createElement('div');
+  t.id = 'ct-toast';
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1a2235;color:#fff;padding:10px 20px;border-radius:8px;font:600 13px var(--font-display);z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,0.25);opacity:0;transition:opacity 0.2s';
+  document.body.appendChild(t);
+  requestAnimationFrame(() => { t.style.opacity = '1'; });
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(()=>t.remove(), 200); }, 2400);
 }
 
 async function ctTableEditHeader(itemId, idx, val) {
