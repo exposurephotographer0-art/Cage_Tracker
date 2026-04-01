@@ -974,8 +974,17 @@ tr.dragging { opacity: 0.4; }
 .ct-action-date { font: 600 10px var(--font-mono); color: var(--text-muted); }
 
 /* ── Table type ── */
-.ct-table-wrapper { overflow-x: auto; }
-.ct-data-table { width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
+.ct-table-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  cursor: default;
+}
+.ct-table-wrapper::-webkit-scrollbar { height: 8px; }
+.ct-table-wrapper::-webkit-scrollbar-track { background: var(--bg-elevated); border-radius: 4px; }
+.ct-table-wrapper::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.ct-table-wrapper::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+.ct-data-table { width: max-content; min-width: 100%; border-collapse: collapse; font-size: 12px; table-layout: fixed; }
 .ct-data-table th {
   background: var(--bg-elevated); padding: 6px 10px;
   font: 600 10px var(--font-mono); text-transform: uppercase;
