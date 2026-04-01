@@ -999,7 +999,15 @@ tr.dragging { opacity: 0.4; }
   padding: 0; padding-right: 8px;
 }
 .ct-data-table th input:focus { outline: none; }
-.ct-col-resize-handle {
+.ct-col-drag-handle {
+  position: absolute; top: 0; left: 0; width: 10px; height: 100%;
+  cursor: grab; z-index: 3; background: transparent;
+  display: flex; align-items: center; justify-content: center;
+}
+.ct-col-drag-handle:hover { background: rgba(192,133,32,0.15); }
+.ct-col-drag-handle:active { cursor: grabbing; }
+.ct-data-table th.ct-col-dragging { opacity: 0.4; background: var(--accent-dim); }
+.ct-data-table th.ct-col-drag-over { box-shadow: -3px 0 0 0 var(--accent) inset; background: rgba(192,133,32,0.08); }
   position: absolute; top: 0; right: 0; width: 6px; height: 100%;
   cursor: col-resize; z-index: 2;
   background: transparent; transition: background 0.1s;
@@ -5922,8 +5930,6 @@ function renderAnalytics() {
   return `
   <div style="padding:0 0 32px">
     <h2 class="section-title" style="margin-bottom:20px">Analytics</h2>
-
-    ${renderKpiTable()}
 
     <!-- Live inventory stats row -->
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
@@ -11152,10 +11158,12 @@ function ctRenderTable(item, ro) {
 
   const headerCells = headers.map((h, hi) => {
     const wStyle = colWidths[hi] ? `width:${colWidths[hi]}px;min-width:${colWidths[hi]}px;max-width:${colWidths[hi]}px;` : 'min-width:80px;';
-    return `<th style="${wStyle}">
+    return `<th style="${wStyle}" data-col-idx="${hi}" data-item-id="${item.id}">
+      ${!ro ? `<div class="ct-col-drag-handle" onmousedown="ctColDragStart(event,'${item.id}',${hi})" title="Drag to reorder column">⠿</div>` : ''}
       <input value="${esc(h)}"
         ${ro ? 'disabled' : `onblur="ctTableEditHeader('${item.id}',${hi},this.value)"`}
-        onkeydown="if(event.key==='Enter')this.blur()" title="${esc(h)}">
+        onkeydown="if(event.key==='Enter')this.blur()" title="${esc(h)}"
+        style="${!ro ? 'padding-left:14px;' : ''}">
       ${!ro ? `<div class="ct-col-resize-handle" onmousedown="ctColResizeStart(event,'${item.id}',${hi})" title="Drag to resize column"></div>` : ''}
     </th>`;
   }).join('');
@@ -11218,6 +11226,85 @@ function ctTableInitResize(tableId) {
 }
 
 // Column resize drag
+// Column drag-to-reorder
+let _ctColDrag = null;
+
+function ctColDragStart(e, itemId, colIdx) {
+  e.preventDefault();
+  e.stopPropagation();
+  const th = e.target.closest('th');
+  const table = th.closest('table');
+  _ctColDrag = { itemId, colIdx, th, table, overIdx: null };
+  th.classList.add('ct-col-dragging');
+
+  const onMove = (ev) => {
+    if (!_ctColDrag) return;
+    // Find which th we're over
+    const ths = Array.from(table.querySelectorAll('thead tr th'));
+    let targetIdx = null;
+    for (let i = 0; i < ths.length; i++) {
+      const rect = ths[i].getBoundingClientRect();
+      if (ev.clientX >= rect.left && ev.clientX <= rect.right) {
+        targetIdx = i;
+        break;
+      }
+    }
+    // Clear previous highlights
+    ths.forEach(t => t.classList.remove('ct-col-drag-over'));
+    if (targetIdx !== null && targetIdx !== colIdx) {
+      ths[targetIdx].classList.add('ct-col-drag-over');
+      _ctColDrag.overIdx = targetIdx;
+    } else {
+      _ctColDrag.overIdx = null;
+    }
+  };
+
+  const onUp = async () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    if (!_ctColDrag) return;
+    const { itemId, colIdx, th, table, overIdx } = _ctColDrag;
+    _ctColDrag = null;
+    th.classList.remove('ct-col-dragging');
+    table.querySelectorAll('thead tr th').forEach(t => t.classList.remove('ct-col-drag-over'));
+
+    if (overIdx === null || overIdx === colIdx) return;
+
+    const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+    if (!item) return;
+
+    // Reorder headers
+    const headers = [...(item.metadata.headers || [])];
+    const [movedHeader] = headers.splice(colIdx, 1);
+    headers.splice(overIdx, 0, movedHeader);
+    item.metadata.headers = headers;
+
+    // Reorder colWidths
+    if (item.metadata.colWidths && item.metadata.colWidths.length) {
+      const cw = [...item.metadata.colWidths];
+      const [movedW] = cw.splice(colIdx, 1);
+      cw.splice(overIdx, 0, movedW);
+      item.metadata.colWidths = cw;
+    }
+
+    // Reorder cell data in each row
+    if (item.metadata.rows) {
+      item.metadata.rows = item.metadata.rows.map(row => {
+        const newRow = [...row];
+        const [movedCell] = newRow.splice(colIdx, 1);
+        newRow.splice(overIdx, 0, movedCell);
+        return newRow;
+      });
+    }
+
+    await apiUpdateCustomTabItem(item);
+    ctRefreshItem(item);
+  };
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
 function ctColResizeStart(e, itemId, colIdx) {
   e.preventDefault();
   const startX = e.clientX;
