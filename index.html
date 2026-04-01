@@ -6152,7 +6152,7 @@ function buildFacilitySnapshot() {
   // Movement counts by date and type
   const byDate = {};
   completedMoves.forEach(m => {
-    const d = (m.completedAt || m.date || '').slice(0,10);
+    const d = (m.date || '').slice(0,10);
     if (!d) return;
     if (!byDate[d]) byDate[d] = {};
     byDate[d][m.typeKey] = (byDate[d][m.typeKey] || 0) + 1;
@@ -6306,7 +6306,7 @@ function alClearFilter() {
 
 function getAlDates() {
   const completed = STATE.plannedMovements.filter(m => m.completed);
-  const dateSet = new Set(completed.map(m => (m.completedAt||m.date||'').slice(0,10)).filter(Boolean));
+  const dateSet = new Set(completed.map(m => (m.date||'').slice(0,10)).filter(Boolean));
   Object.keys(STATE.actionedLog || {}).forEach(d => dateSet.add(d));
   let dates = [...dateSet].sort((a,b) => b.localeCompare(a));
   if (alDateFrom) dates = dates.filter(d => d >= alDateFrom);
@@ -6318,7 +6318,7 @@ function updateAlStats() {
   const completed = STATE.plannedMovements.filter(m => m.completed);
   const RMD_TYPES = new Set(['rmd-to-frame','frame-to-rmd','facility-to-rmd']);
   const dates = getAlDates();
-  const filteredMoves = completed.filter(m => dates.includes((m.completedAt||m.date||'').slice(0,10)));
+  const filteredMoves = completed.filter(m => dates.includes((m.date||'').slice(0,10)));
   const filteredRmd = filteredMoves.filter(m => RMD_TYPES.has(m.typeKey)).length;
   const el = document.getElementById('al-stats');
   if (!el) return;
@@ -6404,7 +6404,7 @@ function buildActionedLogTable() {
     return `<div style="padding:24px;color:var(--text-muted);font-style:italic;font-size:13px">No entries for the selected date range.</div>`;
   }
   const rowsHTML = dates.map(date => {
-    const dayMoves = completed.filter(m => (m.completedAt||m.date||'').slice(0,10) === date);
+    const dayMoves = completed.filter(m => (m.date||'').slice(0,10) === date);
     const logEntry = (STATE.actionedLog || {})[date] || {};
     const downtimeNotes = logEntry.downtimeNotes || '';
     const dayShiftAlloc = logEntry.dayShiftAlloc || '';
@@ -6470,7 +6470,7 @@ function buildActionedLogTable() {
 
 function renderActionedLog() {
   const completed = STATE.plannedMovements.filter(m => m.completed);
-  const allDateSet = new Set(completed.map(m => (m.completedAt||m.date||'').slice(0,10)).filter(Boolean));
+  const allDateSet = new Set(completed.map(m => (m.date||'').slice(0,10)).filter(Boolean));
   Object.keys(STATE.actionedLog || {}).forEach(d => allDateSet.add(d));
   if (allDateSet.size === 0) {
     return `<div class="card"><h2 class="card-title">Actioned Log</h2><div class="empty-msg">No completed movements yet. Complete movements from the Planner tab to populate this log.</div></div>`;
