@@ -5067,9 +5067,9 @@ function isoWeekMonday(weekKey) {
 
 function fmtWeekRange(weekKey) {
   const mon = isoWeekMonday(weekKey);
-  const fri = new Date(mon + 'T12:00:00');
-  fri.setDate(fri.getDate() + 4);
-  return `${fmt(mon)} – ${fmt(toISO(fri))}`;
+  const sun = new Date(mon + 'T12:00:00');
+  sun.setDate(sun.getDate() + 6);
+  return `${fmt(mon)} – ${fmt(toISO(sun))}`;
 }
 
 async function saveLashingEntry(weekKey, field, value) {
@@ -5089,10 +5089,13 @@ function renderLashingLog() {
   const weeks = [...weekSet].sort((a, b) => b.localeCompare(a));
 
   const totalReturned = Object.values(log).reduce((sum, e) => sum + (parseInt(e.returned) || 0), 0);
+  const totalUsed = Object.values(log).reduce((sum, e) => sum + (parseInt(e.used) || 0), 0);
+  const inSystem = totalReturned - totalUsed;
 
   const rows = weeks.map(wk => {
     const entry = log[wk] || {};
     const returned = entry.returned !== undefined ? entry.returned : '';
+    const used = entry.used !== undefined ? entry.used : '';
     const notes = entry.notes || '';
     const isThisWeek = wk === thisWeek;
     const rowBg = isThisWeek ? 'background:#fdf8ee;' : '';
@@ -5107,6 +5110,12 @@ function renderLashingLog() {
           onchange="saveLashingEntry('${wk}','returned',this.value===''?'':parseInt(this.value)||0)"
           style="width:80px;text-align:center;font:700 16px var(--font-mono);background:var(--bg-input);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:${parseInt(returned)>0?'var(--green)':'var(--text-muted)'}"/>
       </td>
+      <td style="padding:10px 12px;width:120px">
+        <input type="number" min="0" value="${esc(String(used))}"
+          placeholder="0"
+          onchange="saveLashingEntry('${wk}','used',this.value===''?'':parseInt(this.value)||0)"
+          style="width:80px;text-align:center;font:700 16px var(--font-mono);background:var(--bg-input);border:1px solid var(--border);border-radius:5px;padding:5px 8px;color:${parseInt(used)>0?'var(--orange)':'var(--text-muted)'}"/>
+      </td>
       <td style="padding:10px 12px;min-width:220px">
         <input type="text" value="${esc(notes)}" placeholder="Notes (optional)…"
           onchange="saveLashingEntry('${wk}','notes',this.value)"
@@ -5117,11 +5126,19 @@ function renderLashingLog() {
 
   return `<div class="card" style="margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-      <div class="card-title" style="margin:0">🔗 Lashings Returned</div>
+      <div class="card-title" style="margin:0">🔗 Lashings</div>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div style="text-align:center;padding:6px 14px;background:var(--bg-elevated);border:2px solid ${inSystem>=0?'var(--green)':'var(--red)'};border-radius:8px">
+          <div style="font:700 20px var(--font-mono);color:${inSystem>=0?'var(--green)':'var(--red)'}">${inSystem}</div>
+          <div style="font-size:10px;color:var(--text-muted);font-weight:600">In system</div>
+        </div>
         <div style="text-align:center;padding:6px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px">
           <div style="font:700 20px var(--font-mono);color:var(--green)">${totalReturned}</div>
           <div style="font-size:10px;color:var(--text-muted)">Total returned</div>
+        </div>
+        <div style="text-align:center;padding:6px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px">
+          <div style="font:700 20px var(--font-mono);color:var(--orange)">${totalUsed}</div>
+          <div style="font-size:10px;color:var(--text-muted)">Total used</div>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="lashingAddWeek()">+ Add week</button>
       </div>
@@ -5130,8 +5147,9 @@ function renderLashingLog() {
       <table style="width:100%;border-collapse:collapse">
         <thead>
           <tr style="border-bottom:2px solid var(--border);background:var(--bg-deep)">
-            <th style="padding:8px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Week</th>
-            <th style="padding:8px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Lashings Returned</th>
+            <th style="padding:8px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Week (Mon – Sun)</th>
+            <th style="padding:8px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--green);text-transform:uppercase;letter-spacing:.06em">Returned</th>
+            <th style="padding:8px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--orange);text-transform:uppercase;letter-spacing:.06em">Used</th>
             <th style="padding:8px 12px;text-align:left;font:700 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Notes</th>
           </tr>
         </thead>
