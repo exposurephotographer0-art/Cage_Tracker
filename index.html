@@ -5100,7 +5100,8 @@ async function saveLashingEntry(weekKey, field, value) {
   if (!STATE.lashingLog) STATE.lashingLog = {};
   if (!STATE.lashingLog[weekKey]) STATE.lashingLog[weekKey] = {};
   STATE.lashingLog[weekKey][field] = value;
-  try { await api('/api/lashing-log', 'PUT', STATE.lashingLog); } catch(e) {}
+  try { await api('/api/lashing-log', 'PUT', STATE.lashingLog); }
+  catch(e) { showError('Failed to save lashing entry: ' + e.message); }
 }
 
 function renderLashingLog() {
@@ -5200,7 +5201,8 @@ async function deleteLashingWeek(weekKey) {
   if (!confirm(`Delete lashing entry for ${weekKey}?`)) return;
   if (STATE.lashingLog && STATE.lashingLog[weekKey]) {
     delete STATE.lashingLog[weekKey];
-    try { await api('/api/lashing-log', 'PUT', STATE.lashingLog); } catch(e) {}
+    try { await api('/api/lashing-log', 'PUT', STATE.lashingLog); }
+    catch(e) { showError('Failed to delete lashing entry: ' + e.message); }
   }
   render();
 }
