@@ -1275,15 +1275,16 @@ const API_BASE = 'https://cage-tracker-api.exposurephotographer0.workers.dev';
 
 // ── PIN Auth ─────────────────────────────────────────────────────────
 let _sessionPin = null;
-let _sessionLevel = null; // 'read' or 'write'
-let _tabUnlocked = new Set(); // tabs unlocked by per-tab password (read sessions only)
+let _sessionLevel = null; // 'read', 'write', or 'ship'
+
 
 function getSessionPin() { return _sessionPin; }
 function getAccessLevel() { return _sessionLevel; }
-// isReadOnly returns true only when the session is read-level AND this specific tab has not been unlocked
+// isReadOnly: false for write level always; false for ship level when on the shipping tab; true otherwise for restricted levels
 function isReadOnly() {
-  if (_sessionLevel !== 'read') return false;
-  return !_tabUnlocked.has(activeTab);
+  if (_sessionLevel === 'write') return false;
+  if (_sessionLevel === 'ship' && activeTab === 'shipping') return false;
+  return _sessionLevel === 'read' || _sessionLevel === 'ship';
 }
 
 async function api(path, method = 'GET', body = null) {
@@ -1390,9 +1391,6 @@ async function loadState() {
     };
     STATE.customTabs     = data.customTabs     || [];
     STATE.customTabItems = data.customTabItems  || [];
-    // Load per-tab passwords (stored as JSON in the settings kv store)
-    const tabPwRaw = data.settings && data.settings['tab_passwords'];
-    STATE.tabPasswords = tabPwRaw ? JSON.parse(tabPwRaw) : {};
     console.log('[CageTracker] State synced from API:', STATE.cages.length, 'cages');
     render();
   } catch(e) {
@@ -1709,10 +1707,9 @@ function renderSidebar() {
     `;
   }
   document.getElementById('sidebar').innerHTML = TABS.map(t=>{
-    const hasTabPw = _sessionLevel === 'read' && (STATE.tabPasswords || {})[t.id] && !_tabUnlocked.has(t.id);
     return `
     <button class="sidebar-btn ${activeTab===t.id?'active':''}" onclick="switchTab('${t.id}')">
-      <span class="sidebar-icon">${t.icon}</span><span>${t.label}</span>${hasTabPw ? ' <span style="font-size:10px;opacity:0.6">🔒</span>' : ''}
+      <span class="sidebar-icon">${t.icon}</span><span>${t.label}</span>
     </button>`;
   }).join('') + customHtml;
   renderMobileNav();
@@ -1733,25 +1730,9 @@ function switchTab(id) {
 
 function renderMain() {
   const el = document.getElementById('main-content');
-  // Per-tab lock banner: show when session is read-level, tab has a password, and hasn't been unlocked yet
-  let lockBanner = '';
-  if (_sessionLevel === 'read' && !_tabUnlocked.has(activeTab)) {
-    const pw = (STATE.tabPasswords || {})[activeTab];
-    if (pw) {
-      lockBanner = `
-        <div id="tab-lock-banner" style="display:flex;align-items:center;gap:12px;background:#fef0e6;border:1px solid #e8c8a0;border-radius:8px;padding:12px 16px;margin-bottom:16px">
-          <span style="font-size:18px">🔒</span>
-          <div style="flex:1">
-            <div style="font-weight:600;font-size:13px;color:var(--orange)">This tab is write-protected</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:2px">Enter the tab password to enable editing on this tab.</div>
-          </div>
-          <button class="btn btn-secondary" style="flex-shrink:0" onclick="showTabUnlockModal('${activeTab}')">🔑 Unlock Tab</button>
-        </div>`;
-    }
-  }
   el.innerHTML = `
     <div class="tab-content active" id="tab-${activeTab}">
-      ${lockBanner}${renderTab(activeTab)}
+      ${renderTab(activeTab)}
     </div>
   `;
   // Schedule arrow draw after DOM settles when on movements tab
@@ -10655,31 +10636,6 @@ function renderSettings() {
 
     ${!ro ? `
     <div class="card" style="max-width:620px;margin-top:18px">
-      <div class="card-title">&#128272; Per-Tab Write Passwords</div>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
-        Set a password on any tab to require read-only users to enter it before they can make edits on that tab.
-        Write-PIN users always have full access regardless. Passwords are stored in the database and apply to all devices.
-      </p>
-      <div id="tab-pw-rows">
-        ${TABS.filter(t => t.id !== 'settings').map(t => {
-          const pw = (STATE.tabPasswords || {})[t.id] || '';
-          return `
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-            <span style="width:130px;font-size:13px;font-weight:500">${t.icon} ${t.label}</span>
-            <input type="text" id="tabpw-${t.id}" value="${esc(pw)}" placeholder="No password (open)"
-              style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;background:var(--bg-input);color:var(--text-primary);font-family:var(--font-display)">
-            <button class="btn btn-secondary btn-sm" onclick="clearTabPassword('${t.id}')" title="Remove password" ${pw ? '' : 'disabled style="opacity:0.4"'}>✕ Clear</button>
-          </div>`;
-        }).join('')}
-      </div>
-      <div style="display:flex;gap:10px;align-items:center;margin-top:6px">
-        <button class="btn btn-primary" onclick="applyTabPasswords()">&#128190; Save Tab Passwords</button>
-        <span id="tabpw-saved-msg" style="font-size:12px;color:var(--green);display:none">&#10003; Saved!</span>
-      </div>
-    </div>` : ''}
-
-    ${!ro ? `
-    <div class="card" style="max-width:620px;margin-top:18px">
       <div class="card-title">&#128736; Database Migration</div>
       <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Run this after deploying a new version of the worker to add any new database columns. Safe to run multiple times — existing data is never affected.</p>
       <div style="display:flex;gap:10px;align-items:center">
@@ -10710,33 +10666,6 @@ async function runMigration() {
     }
   }
   if (btn) { btn.disabled = false; btn.textContent = '⚡ Run Migration'; }
-}
-
-async function applyTabPasswords() {
-  if (!STATE.tabPasswords) STATE.tabPasswords = {};
-  TABS.filter(t => t.id !== 'settings').forEach(t => {
-    const inp = document.getElementById('tabpw-' + t.id);
-    if (!inp) return;
-    const val = inp.value.trim();
-    if (val) {
-      STATE.tabPasswords[t.id] = val;
-    } else {
-      delete STATE.tabPasswords[t.id];
-    }
-  });
-  await saveTabPasswords();
-  const msg = document.getElementById('tabpw-saved-msg');
-  if (msg) { msg.style.display = 'inline'; setTimeout(() => { msg.style.display = 'none'; }, 2500); }
-  // Refresh the settings tab so Clear buttons update
-  renderMain();
-}
-
-async function clearTabPassword(tabId) {
-  if (!STATE.tabPasswords) return;
-  delete STATE.tabPasswords[tabId];
-  _tabUnlocked.delete(tabId); // revoke any active unlock for this tab
-  await saveTabPasswords();
-  renderMain();
 }
 
 async function applyShipmentAssignment() {
@@ -10801,8 +10730,13 @@ function hidePinScreen() {
   });
   const badge = document.getElementById('access-badge');
   if (badge) {
-    badge.textContent = isReadOnly() ? '👁 READ ONLY' : '✏ READ & WRITE';
-    badge.style.background = isReadOnly() ? '#2563b0' : '#1a8a4a';
+    if (_sessionLevel === 'ship') {
+      badge.textContent = '⛴ SHIPPING';
+      badge.style.background = '#7040c0';
+    } else {
+      badge.textContent = isReadOnly() ? '👁 READ ONLY' : '✏ READ & WRITE';
+      badge.style.background = isReadOnly() ? '#2563b0' : '#1a8a4a';
+    }
   }
   // Initialise mobile nav visibility
   renderMobileNav();
@@ -10879,7 +10813,6 @@ async function submitPin() {
 function logout() {
   _sessionPin = null;
   _sessionLevel = null;
-  _tabUnlocked = new Set(); // clear any per-tab unlocks
   try { localStorage.removeItem('ct_pin_cache'); } catch(e) {}
   document.getElementById('pin-overlay').style.display = 'flex';
   document.getElementById('app-wrapper').style.display = 'none';
@@ -10889,58 +10822,7 @@ function logout() {
   if (errEl) { errEl.style.display = 'none'; }
 }
 
-// ── Per-tab password unlock modal ────────────────────────────────────────────
-function showTabUnlockModal(tabId) {
-  const existing = document.getElementById('tab-unlock-overlay');
-  if (existing) existing.remove();
-  const tab = TABS.find(t => t.id === tabId) || { label: tabId, icon: '🔒' };
-  const overlay = document.createElement('div');
-  overlay.id = 'tab-unlock-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(26,34,53,0.65);display:flex;align-items:center;justify-content:center;z-index:8000;';
-  overlay.innerHTML = `
-    <div style="background:var(--bg-base);border-radius:var(--radius-lg);padding:28px 32px;width:340px;max-width:90vw;box-shadow:0 8px 40px rgba(0,0,0,0.18);">
-      <div style="font-size:22px;margin-bottom:6px;text-align:center">${tab.icon}</div>
-      <div style="font-weight:700;font-size:16px;text-align:center;margin-bottom:4px">Unlock ${esc(tab.label)}</div>
-      <div style="font-size:12px;color:var(--text-muted);text-align:center;margin-bottom:20px">Enter the tab password to enable write access on this tab for this session.</div>
-      <input type="password" id="tab-unlock-input" placeholder="Tab password…"
-        style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:14px;font-family:var(--font-display);background:var(--bg-input);color:var(--text-primary);outline:none;margin-bottom:10px"
-        onkeydown="if(event.key==='Enter')submitTabPassword('${tabId}')">
-      <div id="tab-unlock-error" style="display:none;color:var(--red);font-size:12px;margin-bottom:10px;text-align:center"></div>
-      <div style="display:flex;gap:10px">
-        <button class="btn btn-secondary" style="flex:1" onclick="document.getElementById('tab-unlock-overlay').remove()">Cancel</button>
-        <button class="btn btn-primary" style="flex:1" onclick="submitTabPassword('${tabId}')">🔓 Unlock</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  setTimeout(() => { const inp = document.getElementById('tab-unlock-input'); if (inp) inp.focus(); }, 80);
-}
-
-function submitTabPassword(tabId) {
-  const inp = document.getElementById('tab-unlock-input');
-  const errEl = document.getElementById('tab-unlock-error');
-  if (!inp) return;
-  const entered = inp.value;
-  const correct = (STATE.tabPasswords || {})[tabId];
-  if (!correct) { document.getElementById('tab-unlock-overlay').remove(); return; }
-  if (entered === correct) {
-    _tabUnlocked.add(tabId);
-    document.getElementById('tab-unlock-overlay').remove();
-    renderSidebar();
-    renderMain();
-  } else {
-    if (errEl) { errEl.textContent = '✗ Incorrect password. Try again.'; errEl.style.display = 'block'; }
-    inp.value = '';
-    inp.focus();
-  }
-}
-
-// ── Save tab passwords to D1 (write users only) ───────────────────────────────
-async function saveTabPasswords() {
-  if (!STATE.tabPasswords) STATE.tabPasswords = {};
-  try {
-    await api('/api/settings', 'PUT', { tab_passwords: JSON.stringify(STATE.tabPasswords) });
-  } catch(e) { showError('Failed to save tab passwords: ' + e.message); }
-}
+// Tab passwords removed — access is controlled by PIN level (write / read / ship)
 
 document.addEventListener("DOMContentLoaded", async function() {
   // Restore last active tab from session
