@@ -1,4 +1,4 @@
-<!-- CT v4 patched build 20260407_notes_pin -->
+<!-- CT v4 patched build 20260407_copy_to_tab -->
 <!DOCTYPE html>
 
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
@@ -920,6 +920,13 @@ tr.dragging { opacity: 0.4; }
 .ct-item-title-input:focus { border-bottom-color: var(--accent); }
 .ct-item-body { padding: 12px 14px; }
 .ct-item-actions { padding: 8px 14px; border-top: 1px solid var(--border-light); display: flex; gap: 6px; align-items: center; }
+.ct-copy-picker-btn {
+  display: block; width: 100%; text-align: left;
+  background: none; border: none; padding: 7px 10px; border-radius: 6px;
+  font: 500 13px var(--font-display); color: var(--text-primary);
+  cursor: pointer; transition: background 0.1s;
+}
+.ct-copy-picker-btn:hover { background: var(--bg-elevated); }
 
 /* ── Note type ── */
 .ct-note-textarea {
@@ -1275,18 +1282,16 @@ const API_BASE = 'https://cage-tracker-api.exposurephotographer0.workers.dev';
 
 // ── PIN Auth ─────────────────────────────────────────────────────────
 let _sessionPin = null;
-let _sessionLevel = null; // 'read', 'write', 'ship', or 'notes'
+let _sessionLevel = null; // 'read', 'write', or 'ship'
 
 
 function getSessionPin() { return _sessionPin; }
 function getAccessLevel() { return _sessionLevel; }
-// isReadOnly: false for write level always; false for ship level when on the shipping tab;
-// false for notes level when on a custom (My Tabs) tab; true otherwise for restricted levels
+// isReadOnly: false for write level always; false for ship level when on the shipping tab; true otherwise for restricted levels
 function isReadOnly() {
   if (_sessionLevel === 'write') return false;
   if (_sessionLevel === 'ship' && activeTab === 'shipping') return false;
-  if (_sessionLevel === 'notes' && typeof activeTab === 'string' && activeTab.startsWith('custom_')) return false;
-  return _sessionLevel === 'read' || _sessionLevel === 'ship' || _sessionLevel === 'notes';
+  return _sessionLevel === 'read' || _sessionLevel === 'ship';
 }
 
 async function api(path, method = 'GET', body = null) {
@@ -10718,9 +10723,6 @@ function hidePinScreen() {
     if (_sessionLevel === 'ship') {
       badge.textContent = '⛴ SHIPPING';
       badge.style.background = '#7040c0';
-    } else if (_sessionLevel === 'notes') {
-      badge.textContent = '📝 MY TABS';
-      badge.style.background = '#c08520';
     } else {
       badge.textContent = isReadOnly() ? '👁 READ ONLY' : '✏ READ & WRITE';
       badge.style.background = isReadOnly() ? '#2563b0' : '#1a8a4a';
@@ -10978,6 +10980,8 @@ function renderCustomTabItem(item, ro) {
           ${ro ? 'disabled' : `onblur="ctSaveTitle('${item.id}',this.value)"`}
           onkeydown="if(event.key==='Enter')this.blur()">
         ${!ro ? `
+        <button class="btn btn-secondary btn-xs" onclick="ctCopyItemPicker(event,'${item.id}')"
+          style="flex-shrink:0" title="Copy to another tab">⎘ Copy to…</button>
         <button class="btn btn-secondary btn-xs" onclick="ctDeleteItem('${item.id}')"
           style="color:var(--red);flex-shrink:0" title="Delete">✕</button>
         ` : ''}
@@ -11733,6 +11737,103 @@ async function ctDeleteItem(itemId) {
   await apiDeleteCustomTabItem(itemId);
   const card = document.getElementById('ct-item-' + itemId);
   if (card) card.remove();
+}
+
+// ── Copy item to another tab ──────────────────────────────────────────────
+function ctCopyItemPicker(e, itemId) {
+  e.stopPropagation();
+  // Remove any existing picker
+  document.querySelectorAll('.ct-copy-picker').forEach(p => p.remove());
+
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+
+  // Other tabs (not the current one)
+  const otherTabs = (STATE.customTabs||[])
+    .slice().sort((a,b) => a.sortOrder - b.sortOrder)
+    .filter(t => t.id !== item.tabId);
+
+  if (!otherTabs.length) {
+    showError('No other tabs to copy to. Create another tab first.');
+    return;
+  }
+
+  const btn = e.currentTarget;
+  const picker = document.createElement('div');
+  picker.className = 'ct-copy-picker';
+  picker.innerHTML = `
+    <div style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Copy to tab…</div>
+    ${otherTabs.map(t => `
+      <button class="ct-copy-picker-btn" onclick="ctCopyItemToTab('${itemId}','${t.id}',this)">
+        ${t.icon} ${esc(t.label)}
+      </button>
+    `).join('')}
+  `;
+
+  // Position below the button
+  const rect = btn.getBoundingClientRect();
+  picker.style.cssText = `
+    position:fixed;z-index:9999;
+    top:${rect.bottom + 4}px;left:${rect.left}px;
+    background:var(--bg-card);border:1px solid var(--border);
+    border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,0.12);
+    padding:10px;min-width:180px;
+  `;
+
+  document.body.appendChild(picker);
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', function handler(ev) {
+      if (!picker.contains(ev.target) && ev.target !== btn) {
+        picker.remove();
+        document.removeEventListener('click', handler);
+      }
+    });
+  }, 0);
+}
+
+async function ctCopyItemToTab(itemId, destTabId, btnEl) {
+  const src = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  const destTab = (STATE.customTabs||[]).find(t => t.id === destTabId);
+  if (!src || !destTab) return;
+
+  // Show feedback on button
+  const origText = btnEl.textContent;
+  btnEl.textContent = 'Copying…';
+  btnEl.disabled = true;
+
+  // Deep-clone the item with a new id and new tabId
+  const existing = getCustomTabItems(destTabId);
+  const copy = {
+    id: uid(),
+    tabId: destTabId,
+    type: src.type,
+    title: src.title ? src.title + ' (copy)' : '',
+    content: src.content || '',
+    metadata: JSON.parse(JSON.stringify(src.metadata || {})),
+    // Reset checklist / action done-states so it's a fresh copy
+    sortOrder: existing.length,
+    createdAt: new Date().toISOString(),
+  };
+
+  if (!STATE.customTabItems) STATE.customTabItems = [];
+  STATE.customTabItems.push(copy);
+  await apiAddCustomTabItem(copy);
+
+  // Close picker
+  document.querySelectorAll('.ct-copy-picker').forEach(p => p.remove());
+
+  // Confirm with a brief toast-style message on the button's card, then offer to navigate
+  const card = document.getElementById('ct-item-' + itemId);
+  if (card) {
+    const toast = document.createElement('div');
+    toast.style.cssText = 'position:absolute;bottom:8px;right:8px;background:#1a8a4a;color:#fff;font:600 11px var(--font-mono);padding:4px 10px;border-radius:6px;z-index:100;pointer-events:none';
+    toast.textContent = `✓ Copied to "${destTab.label}"`;
+    card.style.position = 'relative';
+    card.appendChild(toast);
+    setTimeout(() => toast.remove(), 2500);
+  }
 }
 
 // ── Custom Tab Manager Modal ───────────────────────────────────────────────
