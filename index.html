@@ -1,4 +1,4 @@
-<!-- CT v4 patched build 20260313_145834 -->
+<!-- CT v4 patched build 20260407_notes_pin -->
 <!DOCTYPE html>
 
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
@@ -1275,16 +1275,18 @@ const API_BASE = 'https://cage-tracker-api.exposurephotographer0.workers.dev';
 
 // ── PIN Auth ─────────────────────────────────────────────────────────
 let _sessionPin = null;
-let _sessionLevel = null; // 'read', 'write', or 'ship'
+let _sessionLevel = null; // 'read', 'write', 'ship', or 'notes'
 
 
 function getSessionPin() { return _sessionPin; }
 function getAccessLevel() { return _sessionLevel; }
-// isReadOnly: false for write level always; false for ship level when on the shipping tab; true otherwise for restricted levels
+// isReadOnly: false for write level always; false for ship level when on the shipping tab;
+// false for notes level when on a custom (My Tabs) tab; true otherwise for restricted levels
 function isReadOnly() {
   if (_sessionLevel === 'write') return false;
   if (_sessionLevel === 'ship' && activeTab === 'shipping') return false;
-  return _sessionLevel === 'read' || _sessionLevel === 'ship';
+  if (_sessionLevel === 'notes' && typeof activeTab === 'string' && activeTab.startsWith('custom_')) return false;
+  return _sessionLevel === 'read' || _sessionLevel === 'ship' || _sessionLevel === 'notes';
 }
 
 async function api(path, method = 'GET', body = null) {
@@ -10716,6 +10718,9 @@ function hidePinScreen() {
     if (_sessionLevel === 'ship') {
       badge.textContent = '⛴ SHIPPING';
       badge.style.background = '#7040c0';
+    } else if (_sessionLevel === 'notes') {
+      badge.textContent = '📝 MY TABS';
+      badge.style.background = '#c08520';
     } else {
       badge.textContent = isReadOnly() ? '👁 READ ONLY' : '✏ READ & WRITE';
       badge.style.background = isReadOnly() ? '#2563b0' : '#1a8a4a';
