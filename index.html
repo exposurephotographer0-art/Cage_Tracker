@@ -6427,10 +6427,21 @@ function buildActionedLogTable() {
       return moves.map(m => {
         const cage = getCage(m.cageId);
         const note = m.completionNote ? ` <span style="color:var(--text-muted);font-style:italic">— "${esc(m.completionNote)}"</span>` : '';
+        let daysInRmdHTML = '';
+        if (tk === 'rmd-to-frame' && cage && cage.intoRmd) {
+          const exitDate = m.completedAt ? new Date(m.completedAt) : (m.date ? new Date(m.date + 'T12:00:00') : null);
+          if (exitDate) {
+            const entryDate = new Date(cage.intoRmd + 'T12:00:00');
+            const daysInRmd = Math.round((exitDate - entryDate) / 86400000);
+            if (daysInRmd >= 0) {
+              daysInRmdHTML = ` <span style="font-size:9px;padding:1px 5px;background:#e6f5ec;color:var(--green);border:1px solid #b0dcc0;border-radius:10px;font-family:var(--font-mono);font-weight:600;margin-left:4px">${daysInRmd}d in RMD</span>`;
+            }
+          }
+        }
         return `<div style="display:flex;align-items:baseline;gap:4px;padding:1px 0">
           <span style="font:700 10px var(--font-mono);color:${color};min-width:110px;flex-shrink:0">${label}</span>
           <span style="font:600 11px var(--font-mono)">${cage ? esc(cage.name) : '?'}</span>
-          <span style="font-size:10px;color:var(--text-muted)">— ${esc(m.description||label)}</span>${note}
+          <span style="font-size:10px;color:var(--text-muted)">— ${esc(m.description||label)}</span>${note}${daysInRmdHTML}
         </div>`;
       }).join('');
     }).join('');
@@ -9958,36 +9969,6 @@ function renderMovementsMap(dayCtx) {
               </div>
             </div>
             ${planFormOpen ? buildPlanFormHTML() : ''}
-            ${(() => {
-              const leavingCages = STATE.cages
-                .filter(c => c.departureDate && (c.location === 'facility' || c.location === 'rmd' || c.location === 'frame'))
-                .sort((a, b) => a.departureDate.localeCompare(b.departureDate));
-              if (!leavingCages.length) return `<div class="card"><div class="card-title">🚚 Cages Leaving Facility</div><div class="empty-msg">No cages with a departure date set</div></div>`;
-              const cageRows = leavingCages.map(c => {
-                const daysLeft = Math.ceil((new Date(c.departureDate + 'T12:00:00') - new Date()) / 86400000);
-                const urgency = daysLeft < 0 ? 'color:var(--red)' : daysLeft <= 3 ? 'color:var(--orange)' : daysLeft <= 7 ? 'color:var(--yellow)' : 'color:var(--green)';
-                const dayLabel = daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue` : daysLeft === 0 ? 'today' : `${daysLeft}d`;
-                const locLabel = c.location === 'rmd' ? c.locationDetail || 'RMD' : c.location === 'frame' ? c.locationDetail || 'Frame' : 'Facility';
-                const hasDims = c.width > 0 || c.height > 0 || c.length > 0;
-                return `<div style="padding:7px 8px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;margin-bottom:5px">
-                  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${hasDims?'4':'0'}px">
-                    <span style="font:700 12px var(--font-mono);color:var(--text-primary)">Cage ${esc(c.name)}</span>
-                    <span style="font-size:10px;padding:2px 7px;background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;border-radius:10px;font-family:var(--font-mono);font-weight:600">${fmt(c.departureDate)}</span>
-                  </div>
-                  ${hasDims ? `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-                    ${c.width > 0 ? `<span style="font-size:10px;padding:1px 5px;background:#e0f2fe;color:#075985;border:1px solid #7dd3fc;border-radius:4px;font-family:var(--font-mono)">W ${c.width}m</span>` : ''}
-                    ${c.height > 0 ? `<span style="font-size:10px;padding:1px 5px;background:#f0fdf4;color:#166534;border:1px solid #86efac;border-radius:4px;font-family:var(--font-mono)">H ${c.height}m</span>` : ''}
-                    ${c.length > 0 ? `<span style="font-size:10px;padding:1px 5px;background:#fdf4ff;color:#7e22ce;border:1px solid #e9d5ff;border-radius:4px;font-family:var(--font-mono)">L ${c.length}m</span>` : ''}
-                    <span style="font-size:10px;color:var(--text-muted);margin-left:auto">${locLabel}</span>
-                    <span style="font-size:10px;font-weight:700;font-family:var(--font-mono);${urgency}">${dayLabel}</span>
-                  </div>` : `<div style="display:flex;justify-content:space-between;font-size:10px"><span style="color:var(--text-muted)">${locLabel}</span><span style="font-weight:700;font-family:var(--font-mono);${urgency}">${dayLabel}</span></div>`}
-                </div>`;
-              }).join('');
-              return `<div class="card">
-                <div class="card-title">🚚 Cages Leaving Facility <span style="font-weight:400;font-size:11px;color:var(--text-muted)">(${leavingCages.length})</span></div>
-                ${cageRows}
-              </div>`;
-            })()}
           </div>
         </div>
       </div>
