@@ -9252,6 +9252,17 @@ function renderMovementsDayView() {
 
   // Sorted unique dates across ALL movements (pending + completed) for navigation
   const dates = [...new Set(STATE.plannedMovements.map(m => m.date).filter(Boolean))].sort();
+  // Always append the next working day after the latest planned date so the user
+  // can see the full simulation state even with no movements on that day.
+  if (dates.length > 0) {
+    const lastDate = dates[dates.length - 1];
+    const nextWD = (() => {
+      const d = new Date(lastDate + 'T12:00:00');
+      do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
+      return d.toISOString().slice(0, 10);
+    })();
+    if (!dates.includes(nextWD)) dates.push(nextWD);
+  }
   if (dates.length === 0) {
     return `<div class="card" style="text-align:center;padding:40px">
       <div style="font-size:32px;margin-bottom:10px">✅</div>
@@ -9413,18 +9424,25 @@ function renderMovementsDayView() {
   });
 
   // Day tab strip
+  const lastPlannedDate = dates.length > 1 ? dates[dates.length - 2] : null; // second-to-last = last with actual moves
+  const ghostDay = dates[dates.length - 1]; // the appended next-working-day
   const dayTabsHTML = dates.map(d => {
     const cnt = allPending.filter(m => m.date === d).length;
     const isActive = d === mvDayDate;
     const isTod = d === today;
+    const isGhost = d === ghostDay && cnt === 0; // simulation-only day with no planned moves
     const label = isTod ? `Today` : fmtShort(d);
+    const borderCol = isActive ? 'var(--accent)' : isTod ? 'var(--blue)' : isGhost ? '#9bb8c8' : 'var(--border)';
+    const bgCol = isActive ? 'var(--accent)' : isGhost && !isActive ? '#eef4f7' : 'var(--bg-elevated)';
+    const textCol = isActive ? '#fff' : isTod ? 'var(--blue)' : isGhost ? '#5a8090' : 'var(--text-secondary)';
+    const ghostHint = isGhost ? ` <span style="font-size:9px;opacity:.7;font-style:italic">sim</span>` : '';
     return `<button onclick="mvDayDate='${d}';render()" style="
       padding:5px 12px;border-radius:20px;font-size:11px;font-weight:${isActive?700:500};
-      border:2px solid ${isActive?'var(--accent)':isTod?'var(--blue)':'var(--border)'};
-      background:${isActive?'var(--accent)':'var(--bg-elevated)'};
-      color:${isActive?'#fff':isTod?'var(--blue)':'var(--text-secondary)'};
+      border:2px ${isGhost&&!isActive?'dashed':'solid'} ${borderCol};
+      background:${bgCol};
+      color:${textCol};
       cursor:pointer;white-space:nowrap;transition:all .15s
-    ">${label}${cnt>0?` <span style="font-size:10px;opacity:.8">${cnt}</span>`:''}</button>`;
+    ">${label}${cnt>0?` <span style="font-size:10px;opacity:.8">${cnt}</span>`:''}${ghostHint}</button>`;
   }).join('');
 
   // Frames that have logically returned to facility in the simulation
@@ -9860,7 +9878,18 @@ function renderMovementsMap(dayCtx) {
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid var(--border);overflow-x:auto">
       ${dayCtx.dayTabsHTML}
     </div>
-    ${pendingMoves.length === 0 ? `<div class="card" style="text-align:center;padding:32px;color:var(--text-muted);font-style:italic">No movements scheduled for ${mvDayDate === todayStr() ? 'today' : fmt(mvDayDate)}.</div>` : ''}
+    ${(() => {
+      if (pendingMoves.length > 0) return '';
+      const isGhostDay = mvDayDate === dayCtx.dates[dayCtx.dates.length - 1] &&
+        !STATE.plannedMovements.filter(m=>!m.completed).some(m=>m.date===mvDayDate);
+      return isGhostDay
+        ? `<div class="card" style="text-align:center;padding:20px 32px;color:#5a8090;background:#eef4f7;border:2px dashed #9bb8c8;">
+            <div style="font-size:18px;margin-bottom:6px">🔭</div>
+            <div style="font-weight:600;font-size:13px">Simulation view — no moves planned for ${fmt(mvDayDate)}</div>
+            <div style="font-size:11px;margin-top:4px;opacity:.8">This shows where everything will be after all prior planned moves are completed.</div>
+          </div>`
+        : `<div class="card" style="text-align:center;padding:32px;color:var(--text-muted);font-style:italic">No movements scheduled for ${mvDayDate === todayStr() ? 'today' : fmt(mvDayDate)}.</div>`;
+    })()}
     ` : `
     <!-- Normal map header -->
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px;flex-wrap:wrap">
