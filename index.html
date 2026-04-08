@@ -9252,6 +9252,10 @@ function renderMovementsDayView() {
 
   // Sorted unique dates across ALL movements (pending + completed) for navigation
   const dates = [...new Set(STATE.plannedMovements.map(m => m.date).filter(Boolean))].sort();
+  // Always include today so the user can see the current simulation state even
+  // if no movements are planned today.
+  const _today = todayStr();
+  if (!dates.includes(_today)) { dates.push(_today); dates.sort(); }
   // Always append the next working day after the latest planned date so the user
   // can see the full simulation state even with no movements on that day.
   if (dates.length > 0) {
@@ -9275,7 +9279,7 @@ function renderMovementsDayView() {
   const today = todayStr();
   const pendingDates = [...new Set(allPending.map(m => m.date).filter(Boolean))].sort();
   if (!mvDayDate || !dates.includes(mvDayDate)) {
-    mvDayDate = pendingDates.includes(today) ? today : (pendingDates[0] || dates[0]);
+    mvDayDate = today; // today is always in dates; prefer it as the default
   }
 
   const dayIdx  = dates.indexOf(mvDayDate);
