@@ -12521,7 +12521,7 @@ function dd_openModal() {
   dd_setPushBtns(true);
   setTimeout(()=>document.getElementById('dd_pin').focus(),80);
 }
-function dd_closeModal() { document.getElementById('dd_modalBackdrop').classList.remove('open'); }
+function dd_closeModal() { document.getElementById('dd_modalBackdrop').classList.remove('open'); renderMain(); }
 function dd_setPushBtns(enabled) {
   document.getElementById('dd_confirmBtn').disabled=!enabled;
   document.getElementById('dd_cancelBtn').textContent=enabled?'Cancel':'Close';
@@ -12615,6 +12615,7 @@ async function dd_confirmPush() {
   dd_showModalSummary(type,`${icon} Push complete — ${parts.join(' · ')}`);
   dd_setPushBtns(false);
   dd_tabsVisible=true;
+  dd_innerTab='changes';
   // Refresh Changes/Skipped tab content (modal stays open for review; re-render on close)
 }
 function dd_showModalSummary(type,msg) {
