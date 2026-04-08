@@ -10023,7 +10023,15 @@ function renderMovementsMap(dayCtx) {
                   // Cages returning to facility
                   const returningMoves = boatMoves.filter(m => m.frameId === f.id);
                   const isReturning = returningMoves.length > 0;
-                  const hasActivity = plannedIntoCages.length > 0 || exitingCages.length > 0 || isReturning;
+                  // Cages already in this frame from prior-day moves (simulated occupancy)
+                  const simResidentCageIds = isDayView && dayCtx.simFrameCages
+                    ? (dayCtx.simFrameCages[f.id] || []) : [];
+                  const plannedIntoIds = new Set(plannedIntoCages.map(c => c.id));
+                  const exitingIds = new Set(exitingCages.map(c => c.id));
+                  const simResidentCages = simResidentCageIds
+                    .filter(cid => !plannedIntoIds.has(cid) && !exitingIds.has(cid))
+                    .map(cid => getCage(cid)).filter(Boolean);
+                  const hasActivity = plannedIntoCages.length > 0 || exitingCages.length > 0 || isReturning || simResidentCages.length > 0;
                   const border = isActive
                     ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);'
                     : hasActivity
@@ -10065,6 +10073,21 @@ function renderMovementsMap(dayCtx) {
                     cageHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${bg}">
                       <div style="display:flex;align-items:center;gap:2px;"><span style="color:#7040c0;font-weight:800">→RMD</span><span style="font:600 10px var(--font-mono);${nameCol}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
                       <div style="font-size:9px;padding-left:30px;${detailCol}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
+                    </div>`;
+                  });
+                  // Already-resident cages (placed here on a prior day)
+                  simResidentCages.forEach(c => {
+                    const _shade = shipmentShadeClass(c, _mvShipDays);
+                    let bg, nameCol, detailCol;
+                    if (_shade === 'next')        { bg = 'background:#3b1d6e;border-color:#7040c0;'; nameCol = 'color:#e0ccff;'; detailCol = 'color:#c0a8ee;'; }
+                    else if (_shade === 'second') { bg = 'background:#c8b8e8;border-color:#9070c8;'; nameCol = 'color:#4a2a7a;'; detailCol = 'color:#6a4a9a;'; }
+                    else if (c.shippingPreference2) { bg = 'background:#dbeafe;border-color:#3b82f6;'; nameCol = 'color:#1e40af;'; detailCol = 'color:#3b82f6;'; }
+                    else if (c.shippingPreference)  { bg = 'background:#fff8c5;border-color:#e8d850;'; nameCol = 'color:#7a5c00;'; detailCol = 'color:var(--text-muted);'; }
+                    else { bg = 'background:#fffbeb;border-color:#fbbf24;'; nameCol = 'color:#92400e;'; detailCol = 'color:var(--text-muted);'; }
+                    const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
+                    cageHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${bg}">
+                      <div style="display:flex;align-items:center;gap:2px;"><span style="font:600 10px var(--font-mono);${nameCol}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
+                      <div style="font-size:9px;padding-left:4px;${detailCol}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
                     </div>`;
                   });
                   if (!cageHTML) cageHTML = '<div style="font-size:10px;color:var(--text-muted);font-style:italic">away</div>';
