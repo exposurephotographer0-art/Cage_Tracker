@@ -9624,7 +9624,7 @@ function renderMovementsMap(dayCtx) {
   const relevantFrames = STATE.frames.filter(f =>
     f.location === 'facility' ||
     (activeFrames.has(f.id) && f.location !== 'client' && f.location !== 'boat') ||
-    (isDayView && dayCtx.simFrameCages && (dayCtx.simFrameCages[f.id]?.length > 0) && f.location !== 'client' && f.location !== 'boat'));
+    (isDayView && dayCtx.simFrameCages && (dayCtx.simFrameCages[f.id]?.length > 0) && f.location !== 'client'));
   const sortedFrames = [...relevantFrames].sort((a,b)=>{
     return (activeFrames.has(b.id)?1:0)-(activeFrames.has(a.id)?1:0);
   });
