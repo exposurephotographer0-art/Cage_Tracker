@@ -1157,6 +1157,99 @@ tr.dragging { opacity: 0.4; }
 }
 .sidebar-manage-btn:hover { color: var(--accent); background: var(--accent-dim); }
 
+/* ═══ Departure Dashboard Tab ═══════════════════════════════════════════════ */
+.dd-wrap { display:flex; height:calc(100vh - 56px); overflow:hidden; }
+.dd-left { width:340px; min-width:260px; background:var(--bg-card); border-right:1px solid var(--border); display:flex; flex-direction:column; padding:16px; gap:10px; overflow-y:auto; }
+.dd-left h2 { font-size:0.78rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em; margin:0; }
+.dd-instructions { background:var(--bg-main); border-radius:8px; padding:10px 12px; font-size:0.75rem; color:var(--text-muted); line-height:1.6; }
+.dd-instructions strong { color:var(--text); }
+.dd-paste { flex:1; min-height:140px; background:var(--bg-main); border:2px dashed var(--border); border-radius:8px; padding:10px; font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted); resize:none; outline:none; transition:border-color 0.2s; }
+.dd-paste:focus { border-color:var(--accent); }
+.dd-paste::placeholder { color:var(--border); }
+.dd-btn-parse { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:10px; font-size:0.85rem; font-weight:600; cursor:pointer; transition:background 0.2s; }
+.dd-btn-parse:hover { opacity:0.88; }
+.dd-btn-push { background:#1a6a30; color:#fff; border:none; border-radius:8px; padding:9px; font-size:0.82rem; font-weight:600; cursor:pointer; transition:background 0.2s; display:none; }
+.dd-btn-push:hover { background:#228040; }
+.dd-btn-push.visible { display:block; }
+.dd-btn-push:disabled { background:#0d3a1a; color:#4caf80; cursor:not-allowed; }
+.dd-status { font-size:0.75rem; padding:8px 10px; border-radius:6px; display:none; line-height:1.5; white-space:pre-wrap; }
+.dd-status.success { background:#0d3a1a; color:#4caf80; border:1px solid #1a5c30; display:block; }
+.dd-status.error   { background:#3a0d0d; color:#f07070; border:1px solid #5c1a1a; display:block; }
+.dd-push-summary { font-size:0.75rem; padding:8px 10px; border-radius:6px; display:none; line-height:1.5; }
+.dd-push-summary.success { background:#0d3a1a; color:#4caf80; border:1px solid #1a5c30; display:block; }
+.dd-push-summary.warn    { background:#2a2000; color:#e8b840; border:1px solid #5a4a00; display:block; }
+.dd-push-summary.error   { background:#3a0d0d; color:#f07070; border:1px solid #5c1a1a; display:block; }
+.dd-right-wrap { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.dd-inner-tabbar { display:flex; gap:6px; padding:12px 16px 0; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+.dd-itab { background:var(--bg-card); border:1px solid var(--border); border-bottom:none; color:var(--text-muted); border-radius:6px 6px 0 0; padding:7px 14px; font-size:0.78rem; font-weight:600; cursor:pointer; transition:all 0.15s; position:relative; top:1px; }
+.dd-itab:hover { color:var(--text); border-color:var(--accent); }
+.dd-itab.active { background:var(--bg-main); border-color:var(--accent); color:var(--accent); border-bottom:1px solid var(--bg-main); z-index:2; }
+.dd-itab .dd-badge { display:inline-block; margin-left:5px; background:var(--bg-main); color:var(--text-muted); border-radius:10px; padding:1px 7px; font-size:0.67rem; font-weight:700; }
+.dd-itab.active .dd-badge { background:var(--accent-dim); color:var(--accent); }
+.dd-badge.dd-badge-warn { background:#2a2000; color:#e8b840; }
+.dd-badge.dd-badge-err  { background:#3a0d0d; color:#f07070; }
+.dd-panel { display:none; flex:1; flex-direction:column; min-height:0; overflow:hidden; }
+.dd-panel.active { display:flex; }
+.dd-scroll { flex:1; overflow-y:auto; padding:16px 20px; display:flex; flex-direction:column; gap:16px; }
+.dd-stats-row { display:flex; gap:10px; flex-wrap:wrap; }
+.dd-stat { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:14px 18px; flex:1; min-width:110px; }
+.dd-stat .dd-stat-label { font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.07em; }
+.dd-stat .dd-stat-value { font-size:1.7rem; font-weight:700; color:var(--text); margin-top:4px; }
+.dd-stat .dd-stat-sub   { font-size:0.7rem; color:var(--text-muted); margin-top:2px; }
+.dd-filters { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.dd-fbtn { background:var(--bg-card); border:1px solid var(--border); color:var(--text-muted); border-radius:6px; padding:5px 12px; font-size:0.77rem; cursor:pointer; transition:all 0.15s; }
+.dd-fbtn:hover { border-color:var(--accent); color:var(--text); }
+.dd-fbtn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+.dd-search { background:var(--bg-card); border:1px solid var(--border); color:var(--text); border-radius:6px; padding:5px 10px; font-size:0.77rem; outline:none; width:150px; transition:border-color 0.2s; }
+.dd-search:focus { border-color:var(--accent); }
+.dd-section-title { font-size:0.72rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em; }
+.dd-week-hdr { background:var(--accent-dim); border:1px solid var(--accent); border-radius:8px; color:var(--accent); font-weight:700; font-size:0.85rem; padding:8px 14px; display:flex; align-items:center; gap:8px; }
+.dd-week-count { background:var(--bg-card); color:var(--text-muted); font-size:0.7rem; font-weight:600; border-radius:10px; padding:2px 10px; margin-left:auto; }
+.dd-tbl { width:100%; border-collapse:collapse; font-size:0.8rem; }
+.dd-tbl th { background:var(--bg-card); color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; font-size:0.68rem; font-weight:600; padding:8px 12px; text-align:left; border-bottom:2px solid var(--border); position:sticky; top:0; z-index:2; }
+.dd-tbl td { padding:8px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.dd-tbl tr:hover td { background:var(--bg-card); }
+.dd-tbl .dd-date-grp td { background:var(--bg-main); color:var(--accent); font-weight:600; font-size:0.8rem; padding:6px 12px; border-top:1px solid var(--border); }
+.dd-cage-badge { display:inline-flex; align-items:center; background:var(--accent-dim); border:1px solid var(--accent); color:var(--accent); border-radius:5px; padding:2px 9px; font-weight:600; font-size:0.8rem; font-family:var(--font-mono); letter-spacing:0.04em; }
+.dd-shift { display:inline-block; border-radius:4px; padding:2px 8px; font-size:0.7rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; }
+.dd-shift-AM  { background:#1a3a10; color:#7dd860; border:1px solid #2a6a18; }
+.dd-shift-MID { background:#2a2a10; color:#e8d060; border:1px solid #6a5c10; }
+.dd-shift-PM  { background:#1a2a40; color:#60a8f0; border:1px solid #1a4a80; }
+.dd-shift-N   { background:#2a1a3a; color:#c080f0; border:1px solid #5a2a80; }
+.dd-vst-badge { background:var(--bg-main); border:1px solid var(--border); color:var(--text-muted); border-radius:4px; padding:2px 7px; font-size:0.7rem; font-family:var(--font-mono); }
+.dd-today-pill { display:inline-block; background:#3a0a0a; color:#f08080; border:1px solid #6a1a1a; font-size:0.62rem; border-radius:4px; padding:1px 6px; margin-left:8px; font-weight:600; text-transform:uppercase; }
+.dd-empty { text-align:center; padding:48px 20px; color:var(--text-muted); }
+.dd-empty .dd-empty-icon { font-size:2.5rem; margin-bottom:12px; }
+.dd-empty h3 { font-size:1rem; color:var(--text-muted); margin-bottom:6px; }
+.dd-empty p { font-size:0.78rem; line-height:1.6; }
+.dd-date-old { color:#f07070; text-decoration:line-through; font-family:var(--font-mono); font-size:0.78rem; }
+.dd-date-new { color:#4caf80; font-family:var(--font-mono); font-size:0.78rem; font-weight:700; }
+.dd-date-arrow { color:var(--text-muted); margin:0 5px; }
+.dd-date-none  { color:var(--text-muted); font-style:italic; font-size:0.73rem; }
+.dd-section-pill { display:inline-block; background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:3px 10px; font-size:0.7rem; color:var(--text-muted); margin-bottom:8px; }
+/* Push modal */
+.dd-modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:1000; align-items:center; justify-content:center; }
+.dd-modal-backdrop.open { display:flex; }
+.dd-modal { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:22px; width:400px; max-width:95vw; display:flex; flex-direction:column; gap:12px; }
+.dd-modal h3 { font-size:0.95rem; color:var(--text); font-weight:700; }
+.dd-modal p  { font-size:0.77rem; color:var(--text-muted); line-height:1.6; }
+.dd-modal input { background:var(--bg-main); border:1px solid var(--border); border-radius:6px; padding:8px 11px; color:var(--text); font-size:0.83rem; outline:none; width:100%; transition:border-color 0.2s; font-family:var(--font-mono); letter-spacing:0.15em; }
+.dd-modal input:focus { border-color:var(--accent); }
+.dd-modal-btns { display:flex; gap:8px; }
+.dd-modal-btns button { flex:1; border:none; border-radius:7px; padding:9px; font-size:0.83rem; font-weight:600; cursor:pointer; transition:background 0.15s; }
+.dd-modal-confirm { background:#1a6a30; color:#fff; }
+.dd-modal-confirm:hover { background:#228040; }
+.dd-modal-confirm:disabled { background:#0d3a1a; color:#4caf80; cursor:not-allowed; }
+.dd-modal-cancel  { background:var(--bg-main); color:var(--text-muted); }
+.dd-modal-cancel:hover  { background:var(--border); }
+.dd-push-progress { font-size:0.73rem; color:var(--text-muted); font-family:var(--font-mono); }
+.dd-bar-wrap { background:var(--bg-main); border-radius:4px; height:5px; overflow:hidden; margin-top:4px; }
+.dd-bar { background:#1a6a30; height:5px; width:0%; transition:width 0.2s; border-radius:4px; }
+.dd-push-results { background:var(--bg-main); border:1px solid var(--border); border-radius:8px; padding:10px; font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted); max-height:200px; overflow-y:auto; line-height:1.8; display:none; }
+.dd-push-results.visible { display:block; }
+.dd-result-ok   { color:#4caf80; }
+.dd-result-skip { color:#e8a830; }
+.dd-result-err  { color:#f07070; }
 
 </style>
 <script>
@@ -1192,6 +1285,7 @@ const TABS = [
   {id:'actionedlog', label:'Actioned Log', icon:'✓'},
   {id:'audit', label:'Audit Log', icon:'📋'},
   {id:'settings', label:'Settings', icon:'⚙'},
+  {id:'departuredash', label:'Departure Dashboard', icon:'📦'},
 ];
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
@@ -1815,6 +1909,7 @@ function renderTab(id) {
     case 'actionedlog': return renderActionedLog();
     case 'audit': return renderAuditLog();
     case 'settings': return renderSettings();
+    case 'departuredash': return renderDepartureDashTab();
     default: return '';
   }
 }
@@ -12063,6 +12158,470 @@ async function ctPickIcon(tabId, icon) {
   renderSidebar();
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// DEPARTURE DASHBOARD TAB
+// ═══════════════════════════════════════════════════════════════════════════════
+let dd_allDepartures   = [];
+let dd_filterShift     = 'ALL';
+let dd_searchTerm      = '';
+let dd_pushLogChanges  = [];
+let dd_pushLogSkipped  = [];
+let dd_pasteContent    = '';
+let dd_innerTab        = 'schedule'; // 'schedule' | 'changes' | 'skipped'
+let dd_tabsVisible     = false;
+const DD_SHIFT_ORDER   = { AM:0, MID:1, PM:2, N:3 };
+const DD_API           = 'https://cage-tracker-api.exposurephotographer0.workers.dev';
+
+function renderDepartureDashTab() {
+  const schedHtml = dd_allDepartures.length ? dd_buildScheduleHtml() : `<div class="dd-empty"><div class="dd-empty-icon">📦</div><h3>No data loaded yet</h3><p>Paste your Live Program sheet on the left and click <strong>Parse Data</strong>.</p></div>`;
+  const changesHtml = dd_buildChangesHtml();
+  const skippedHtml = dd_buildSkippedHtml();
+  const tabBarStyle = dd_tabsVisible ? '' : 'display:none';
+
+  const pushBtnStyle = dd_allDepartures.length ? 'class="dd-btn-push visible"' : 'class="dd-btn-push"';
+  const upcoming = dd_allDepartures.filter(d => { const t=new Date(); t.setHours(0,0,0,0); return d.date && d.date >= t; }).length;
+  const pushBtnText = dd_allDepartures.length ? `🔄 Push ${upcoming} Departures to Tracker` : '🔄 Push Departures to Tracker';
+
+  const errCount = dd_pushLogSkipped.filter(s => s.type === 'err').length;
+  const skBadgeCls = errCount > 0 ? 'dd-badge dd-badge-err' : dd_pushLogSkipped.length > 0 ? 'dd-badge dd-badge-warn' : 'dd-badge';
+
+  return `
+<div class="dd-wrap">
+  <!-- Left panel -->
+  <div class="dd-left">
+    <h2>📋 Paste Excel Data</h2>
+    <div class="dd-instructions">
+      <strong>How to use:</strong><br>
+      1. Open the <strong>Live Program</strong> tab in SharePoint<br>
+      2. Click any cell → <strong>Ctrl+A</strong> → <strong>Ctrl+C</strong><br>
+      3. Click the box below → <strong>Ctrl+V</strong><br>
+      4. Click <strong>Parse Data</strong>
+    </div>
+    <textarea class="dd-paste" id="dd_paste" oninput="dd_savePaste(this.value)" placeholder="Paste your Live Program sheet here…
+
+The app finds Shift, VST 110, VST 120, VST 130, VST 140 columns automatically.">${dd_esc(dd_pasteContent)}</textarea>
+    <div class="dd-status" id="dd_status"></div>
+    <button class="dd-btn-parse" onclick="dd_parseData()">⚡ Parse Data</button>
+    <button id="dd_btnPush" ${pushBtnStyle} onclick="dd_openModal()">${pushBtnText}</button>
+    <div class="dd-push-summary" id="dd_pushSummary"></div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="dd-right-wrap">
+    <div class="dd-inner-tabbar" style="${tabBarStyle}" id="dd_tabbar">
+      <button class="dd-itab ${dd_innerTab==='schedule'?'active':''}" onclick="dd_switchInner('schedule')">📦 Departure Schedule</button>
+      <button class="dd-itab ${dd_innerTab==='changes'?'active':''}" onclick="dd_switchInner('changes')">🔀 Changes Made <span class="dd-badge" id="dd_badgeChanges">${dd_pushLogChanges.length}</span></button>
+      <button class="dd-itab ${dd_innerTab==='skipped'?'active':''}" onclick="dd_switchInner('skipped')">⚠️ Already Set / Errors <span class="${skBadgeCls}" id="dd_badgeSkipped">${dd_pushLogSkipped.length}</span></button>
+    </div>
+
+    <div class="dd-panel ${dd_innerTab==='schedule'?'active':''}" id="dd_panelSchedule">
+      <div class="dd-scroll" id="dd_scheduleContent">${schedHtml}</div>
+    </div>
+    <div class="dd-panel ${dd_innerTab==='changes'?'active':''}" id="dd_panelChanges">
+      <div class="dd-scroll">${changesHtml}</div>
+    </div>
+    <div class="dd-panel ${dd_innerTab==='skipped'?'active':''}" id="dd_panelSkipped">
+      <div class="dd-scroll">${skippedHtml}</div>
+    </div>
+  </div>
+</div>
+
+<!-- Push modal -->
+<div class="dd-modal-backdrop" id="dd_modalBackdrop">
+  <div class="dd-modal">
+    <h3>🔄 Push Departure Dates to Tracker</h3>
+    <p>This will update the <strong>Leaves Facility</strong> date for each matched cage in the D1 database. Only cages found in both will be updated — no data is deleted.</p>
+    <div>
+      <label style="color:var(--text-muted);font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;display:block">Tracker PIN</label>
+      <input type="password" id="dd_pin" placeholder="Enter your Tracker PIN…" onkeydown="if(event.key==='Enter')dd_confirmPush()" />
+    </div>
+    <div class="dd-push-progress" id="dd_progress" style="display:none">
+      <span id="dd_progressText">Preparing…</span>
+      <div class="dd-bar-wrap"><div class="dd-bar" id="dd_bar"></div></div>
+    </div>
+    <div class="dd-push-results" id="dd_results"></div>
+    <div class="dd-modal-btns">
+      <button class="dd-modal-cancel" id="dd_cancelBtn" onclick="dd_closeModal()">Cancel</button>
+      <button class="dd-modal-confirm" id="dd_confirmBtn" onclick="dd_confirmPush()">✓ Push Updates</button>
+    </div>
+  </div>
+</div>`;
+}
+
+function dd_esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function dd_savePaste(v) { dd_pasteContent = v; }
+
+function dd_switchInner(name) {
+  dd_innerTab = name;
+  ['schedule','changes','skipped'].forEach(t => {
+    const panel = document.getElementById('dd_panel' + t.charAt(0).toUpperCase() + t.slice(1));
+    const tab   = document.querySelector(`.dd-itab:nth-child(${t==='schedule'?1:t==='changes'?2:3})`);
+    if (panel) panel.classList.toggle('active', t === name);
+  });
+  // Re-render to update active classes properly (simplest approach)
+  renderMain();
+}
+
+function dd_parseData() {
+  const raw = (document.getElementById('dd_paste') || {}).value || dd_pasteContent;
+  dd_pasteContent = raw;
+  if (!raw.trim()) { dd_showStatus('Please paste your Excel data first.', 'error'); return; }
+
+  const lines = raw.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  const rows  = lines.map(l => l.split('\t').map(c => c.trim()));
+
+  let headerIdx=-1, colShift=-1, colDate=-1, colAS=-1, colAT=-1, colAU=-1, colAV=-1;
+  outer:
+  for (let i=0; i<Math.min(20,rows.length); i++) {
+    for (let j=0; j<rows[i].length; j++) {
+      if (rows[i][j].toLowerCase() === 'shift') {
+        headerIdx=i; colShift=j;
+        for (let k=0; k<rows[i].length; k++) {
+          const h=rows[i][k].toLowerCase().replace(/\s+/g,' ').trim();
+          if (h==='date')    colDate=k;
+          if (h==='vst 110') colAS=k;
+          if (h==='vst 120') colAT=k;
+          if (h==='vst 130') colAU=k;
+          if (h==='vst 140') colAV=k;
+        }
+        break outer;
+      }
+    }
+  }
+  if (headerIdx < 0) { colDate=0; colShift=43; colAS=44; colAT=45; colAU=46; colAV=47; }
+
+  const missing=[];
+  if (colShift<0) missing.push('Shift');
+  if (colAS<0) missing.push('VST 110');
+  if (colAT<0) missing.push('VST 120');
+  if (colAU<0) missing.push('VST 130');
+  if (colAV<0) missing.push('VST 140');
+  if (missing.length) { dd_showStatus(`Columns not found: ${missing.join(', ')}\n\nEnsure the header row includes Shift, VST 110, VST 120, VST 130, VST 140.`, 'error'); return; }
+
+  const vstCols = [
+    {key:'VST110',label:'VST 110'},{key:'VST120',label:'VST 120'},
+    {key:'VST130',label:'VST 130'},{key:'VST140',label:'VST 140'},
+  ];
+  const SHIFT_KW = new Set(['AM','MID','PM','N','NIGHTS','NIGHT']);
+  let currentDate=null;
+  const rowsData=[];
+  for (let i=headerIdx+1; i<rows.length; i++) {
+    const row=rows[i];
+    if (!row||row.every(c=>!c)) continue;
+    const rawDate=row[colDate>=0?colDate:0]||row[0]||'';
+    if (rawDate) { const p=dd_parseDate(rawDate); if (p) currentDate=p; }
+    let shiftIdx=-1;
+    const hc=(row[colShift]||'').trim().toUpperCase();
+    if (SHIFT_KW.has(hc)) { shiftIdx=colShift; }
+    else { for (let k=row.length-1;k>=0;k--) { if (SHIFT_KW.has((row[k]||'').trim().toUpperCase())) { shiftIdx=k; break; } } }
+    if (shiftIdx<0) continue;
+    let shift=row[shiftIdx].trim().toUpperCase();
+    if (shift==='NIGHTS'||shift==='NIGHT') shift='N';
+    if (!['AM','MID','PM','N'].includes(shift)) continue;
+    const entry={date:currentDate,shift};
+    entry['VST110']=(row[shiftIdx+1]||'').trim();
+    entry['VST120']=(row[shiftIdx+2]||'').trim();
+    entry['VST130']=(row[shiftIdx+3]||'').trim();
+    entry['VST140']=(row[shiftIdx+4]||'').trim();
+    rowsData.push(entry);
+  }
+  if (!rowsData.length) { dd_showStatus('No shift rows found (AM / MID / PM / N).', 'error'); return; }
+
+  dd_allDepartures = dd_findDepartures(rowsData, vstCols);
+  dd_showStatus(`✓ ${rowsData.length} shift rows · ${dd_allDepartures.length} cage departures found`, 'success');
+  renderMain();
+}
+
+function dd_parseDate(val) {
+  if (!val) return null;
+  const num=parseFloat(val);
+  if (!isNaN(num)&&num>40000&&num<70000) {
+    const d=new Date(Math.round((num-25569)*86400000));
+    if (!isNaN(d)) return new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  }
+  if (/^(AM|PM|N|MID|NIGHTS?|[A-Z]{1,6})$/i.test(val.trim())) return null;
+  const m=val.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+  if (m) { const yr=m[3].length===2?2000+parseInt(m[3]):parseInt(m[3]); return new Date(yr,parseInt(m[2])-1,parseInt(m[1])); }
+  const d=new Date(val);
+  if (!isNaN(d)&&d.getFullYear()>2000) return new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  return null;
+}
+
+function dd_extractCage(val) {
+  if (!val||val==='-') return null;
+  const s=val.trim();
+  const mC=s.match(/^[Cc](\d+)/); if (mC) return mC[1];
+  const mL=s.match(/^([A-BD-Za-bd-z]\d+)/i); if (mL) return mL[1].toUpperCase();
+  const mN=s.match(/^(\d+)/); if (mN) return mN[1];
+  return null;
+}
+
+function dd_findDepartures(rowsData, vstCols) {
+  const deps=[];
+  for (const vst of vstCols) {
+    let prev=null, prevRow=null;
+    for (const r of rowsData) {
+      const cage=dd_extractCage(r[vst.key]);
+      if (cage!==prev&&prev!==null&&prevRow) {
+        deps.push({date:prevRow.date,shift:prevRow.shift,cage:prev,vst:vst.key,vstLabel:vst.label,rawVal:prevRow[vst.key]});
+      }
+      prev=cage; prevRow=r;
+    }
+  }
+  const cageMap=new Map();
+  for (const dep of deps) {
+    const ex=cageMap.get(dep.cage);
+    if (!ex) { cageMap.set(dep.cage,dep); continue; }
+    const ed=ex.date?ex.date.getTime():-Infinity, nd=dep.date?dep.date.getTime():-Infinity;
+    if (nd>ed) { cageMap.set(dep.cage,dep); }
+    else if (nd===ed && (DD_SHIFT_ORDER[dep.shift]??99)>(DD_SHIFT_ORDER[ex.shift]??99)) { cageMap.set(dep.cage,dep); }
+  }
+  return Array.from(cageMap.values()).sort((a,b)=>{
+    if (!a.date&&!b.date) return 0; if (!a.date) return 1; if (!b.date) return -1;
+    const d=a.date-b.date; return d!==0?d:(DD_SHIFT_ORDER[a.shift]??99)-(DD_SHIFT_ORDER[b.shift]??99);
+  });
+}
+
+function dd_getWeekMonday(d) {
+  const t=new Date(d); const day=t.getDay(); t.setDate(t.getDate()+(day===0?-6:1-day)); t.setHours(0,0,0,0); return t;
+}
+function dd_weekLabel(mon) {
+  const fri=new Date(mon); fri.setDate(mon.getDate()+4);
+  const fmt=dt=>dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+  return `w/c ${fmt(mon)} – ${fmt(fri)}`;
+}
+function dd_fmtDateDisplay(dateStr) {
+  if (!dateStr||dateStr==='(none)') return null;
+  const [y,m,d]=dateStr.split('-');
+  if (!y) return dateStr;
+  return new Date(parseInt(y),parseInt(m)-1,parseInt(d)).toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+}
+
+function dd_buildScheduleHtml() {
+  const today=new Date(); today.setHours(0,0,0,0);
+  const filtered=dd_allDepartures.filter(d=>
+    (d.date&&d.date>=today) &&
+    (dd_filterShift==='ALL'||d.shift===dd_filterShift) &&
+    (!dd_searchTerm||d.cage.toLowerCase().includes(dd_searchTerm.toLowerCase()))
+  );
+  const totalCages=new Set(dd_allDepartures.map(d=>d.cage)).size;
+  const thisWeek=dd_allDepartures.filter(d=>{if(!d.date)return false;const diff=(d.date-today)/86400000;return diff>=0&&diff<7;}).length;
+  const sc={}; dd_allDepartures.forEach(d=>{sc[d.shift]=(sc[d.shift]||0)+1;});
+  const topShift=Object.entries(sc).sort((a,b)=>b[1]-a[1])[0];
+  const upcoming=dd_allDepartures.filter(d=>d.date&&d.date>=today).length;
+
+  const weekMap=new Map();
+  for (const d of filtered) {
+    const mon=dd_getWeekMonday(d.date); const key=mon.getTime();
+    if (!weekMap.has(key)) weekMap.set(key,{monday:mon,deps:[]});
+    weekMap.get(key).deps.push(d);
+  }
+  const weeks=Array.from(weekMap.values()).sort((a,b)=>a.monday-b.monday);
+
+  let weeksHtml='';
+  if (weeks.length) {
+    let rowNum=1;
+    for (const wk of weeks) {
+      let lastDate=null;
+      let rows='';
+      for (const d of wk.deps) {
+        const ds=d.date.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+        const isToday=d.date.getTime()===today.getTime();
+        if (ds!==lastDate) { rows+=`<tr class="dd-date-grp"><td colspan="6">${ds}${isToday?'<span class="dd-today-pill">Today</span>':''}</td></tr>`; lastDate=ds; }
+        rows+=`<tr>
+          <td style="color:var(--text-muted);font-size:0.7rem">${rowNum++}</td>
+          <td style="color:var(--text-muted);font-size:0.76rem">${ds}</td>
+          <td><span class="dd-shift dd-shift-${d.shift}">${d.shift}</span></td>
+          <td><span class="dd-cage-badge">${d.cage}</span></td>
+          <td><span class="dd-vst-badge">${d.vstLabel}</span></td>
+          <td style="color:var(--text-muted);font-size:0.73rem;font-style:italic">${d.rawVal}</td>
+        </tr>`;
+      }
+      weeksHtml+=`<div>
+        <div class="dd-week-hdr">📅 ${dd_weekLabel(wk.monday)}<span class="dd-week-count">${wk.deps.length} cage${wk.deps.length!==1?'s':''}</span></div>
+        <table class="dd-tbl"><thead><tr><th>#</th><th>Date</th><th>Shift</th><th>Cage</th><th>VST</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>
+      </div>`;
+    }
+  } else {
+    weeksHtml='<div class="dd-empty"><div class="dd-empty-icon">🔍</div><h3>No upcoming departures</h3><p>Try adjusting your filters.</p></div>';
+  }
+
+  return `
+    <div class="dd-stats-row">
+      <div class="dd-stat"><div class="dd-stat-label">Upcoming</div><div class="dd-stat-value">${upcoming}</div><div class="dd-stat-sub">from today</div></div>
+      <div class="dd-stat"><div class="dd-stat-label">Unique Cages</div><div class="dd-stat-value">${totalCages}</div><div class="dd-stat-sub">in program</div></div>
+      <div class="dd-stat"><div class="dd-stat-label">Next 7 Days</div><div class="dd-stat-value">${thisWeek}</div><div class="dd-stat-sub">departures</div></div>
+      <div class="dd-stat"><div class="dd-stat-label">Busiest Shift</div><div class="dd-stat-value" style="font-size:1.2rem">${topShift?topShift[0]:'—'}</div><div class="dd-stat-sub">${topShift?topShift[1]+' departures':''}</div></div>
+    </div>
+    <div class="dd-filters">
+      <span style="font-size:0.77rem;color:var(--text-muted)">Filter:</span>
+      ${['ALL','AM','MID','PM','N'].map(f=>`<button class="dd-fbtn ${dd_filterShift===f?'active':''}" onclick="dd_setFilter('${f}')">${f==='N'?'Nights':f}</button>`).join('')}
+      <input class="dd-search" type="text" placeholder="🔍 Search cage…" oninput="dd_setSearch(this.value)" value="${dd_esc(dd_searchTerm)}" />
+      <span style="font-size:0.75rem;color:var(--text-muted);margin-left:auto">${filtered.length} result${filtered.length!==1?'s':''}</span>
+    </div>
+    ${weeksHtml}`;
+}
+
+function dd_buildChangesHtml() {
+  if (!dd_pushLogChanges.length) return `<div class="dd-empty"><div class="dd-empty-icon">🔀</div><h3>No push run yet</h3><p>After you push departures to the Tracker, this tab will show every cage whose date was changed.</p></div>`;
+  const pushTime=new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const newlyCreated=dd_pushLogChanges.filter(c=>c.isNew);
+  const dateUpdated=dd_pushLogChanges.filter(c=>!c.isNew&&c.oldDate);
+  const dateFirstSet=dd_pushLogChanges.filter(c=>!c.isNew&&!c.oldDate);
+  let rows='';
+  dd_pushLogChanges.forEach((c,i)=>{
+    const oldDisplay=c.oldDate?dd_fmtDateDisplay(c.oldDate):null;
+    const newDisplay=dd_fmtDateDisplay(c.newDate);
+    const newBadge=c.isNew?`<span style="background:#0d2a1a;border:1px solid #1a5c30;color:#4caf80;border-radius:4px;padding:1px 7px;font-size:0.62rem;font-weight:700;margin-right:5px">✦ NEW</span>`:'';
+    const oldCell=c.isNew?`<span class="dd-date-none">new entry</span><span class="dd-date-arrow">→</span>`:oldDisplay?`<span class="dd-date-old">${oldDisplay}</span><span class="dd-date-arrow">→</span>`:`<span class="dd-date-none">not set</span><span class="dd-date-arrow">→</span>`;
+    rows+=`<tr><td style="color:var(--text-muted);font-size:0.7rem">${i+1}</td><td>${newBadge}<span class="dd-cage-badge">${c.cage}</span></td><td><span class="dd-shift dd-shift-${c.shift}">${c.shift}</span></td><td><span class="dd-vst-badge">${c.vstLabel}</span></td><td>${oldCell}<span class="dd-date-new">${newDisplay}</span></td></tr>`;
+  });
+  return `
+    <div class="dd-stats-row">
+      <div class="dd-stat"><div class="dd-stat-label">Total Actions</div><div class="dd-stat-value" style="color:#4caf80">${dd_pushLogChanges.length}</div><div class="dd-stat-sub">this push</div></div>
+      <div class="dd-stat"><div class="dd-stat-label">Created</div><div class="dd-stat-value" style="color:var(--accent)">${newlyCreated.length}</div><div class="dd-stat-sub">new cages</div></div>
+      <div class="dd-stat"><div class="dd-stat-label">Dates Updated</div><div class="dd-stat-value" style="color:#e8b840">${dateUpdated.length}</div><div class="dd-stat-sub">replaced</div></div>
+      <div class="dd-stat"><div class="dd-stat-label">Dates First Set</div><div class="dd-stat-value" style="color:#a080f0">${dateFirstSet.length}</div><div class="dd-stat-sub">previously empty</div></div>
+    </div>
+    <div><span class="dd-section-pill">🕐 Push run: ${pushTime}</span></div>
+    <table class="dd-tbl"><thead><tr><th>#</th><th>Cage</th><th>Shift</th><th>VST</th><th>Result</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function dd_buildSkippedHtml() {
+  if (!dd_pushLogSkipped.length) return `<div class="dd-empty"><div class="dd-empty-icon">⚠️</div><h3>No push run yet</h3><p>After you push, this tab will show any cages that were already up-to-date or failed.</p></div>`;
+  const errCount=dd_pushLogSkipped.filter(s=>s.type==='err').length;
+  const alreadySet=dd_pushLogSkipped.filter(s=>s.type==='already');
+  const errors=dd_pushLogSkipped.filter(s=>s.type==='err');
+  function makeRows(items,cls) { return items.map((s,i)=>`<tr><td style="color:var(--text-muted);font-size:0.7rem">${i+1}</td><td><span class="dd-cage-badge">${s.cage}</span></td><td><span class="dd-shift dd-shift-${s.shift}">${s.shift}</span></td><td><span class="dd-vst-badge">${s.vstLabel}</span></td><td class="${cls}" style="font-size:0.73rem">${s.reason}</td></tr>`).join(''); }
+  let secs='';
+  if (alreadySet.length) secs+=`<div><div class="dd-section-title">✓ Already Up-to-Date (${alreadySet.length})</div><table class="dd-tbl"><thead><tr><th>#</th><th>Cage</th><th>Shift</th><th>VST</th><th>Reason</th></tr></thead><tbody>${makeRows(alreadySet,'dd-result-ok')}</tbody></table></div>`;
+  if (errors.length) secs+=`<div><div class="dd-section-title">✕ Failed (${errors.length})</div><table class="dd-tbl"><thead><tr><th>#</th><th>Cage</th><th>Shift</th><th>VST</th><th>Reason</th></tr></thead><tbody>${makeRows(errors,'dd-result-err')}</tbody></table></div>`;
+  return `
+    <div class="dd-stats-row">
+      <div class="dd-stat"><div class="dd-stat-label">Already Up-to-Date</div><div class="dd-stat-value" style="color:var(--accent)">${alreadySet.length}</div><div class="dd-stat-sub">unchanged</div></div>
+      <div class="dd-stat"><div class="dd-stat-label">Errors</div><div class="dd-stat-value" style="color:#f07070">${errCount}</div><div class="dd-stat-sub">API failures</div></div>
+    </div>${secs}`;
+}
+
+function dd_showStatus(msg, type) {
+  const e=document.getElementById('dd_status');
+  if (e) { e.textContent=msg; e.className='dd-status '+type; }
+}
+function dd_setFilter(f) { dd_filterShift=f; renderMain(); }
+function dd_setSearch(v) { dd_searchTerm=v; renderMain(); }
+
+// ── Push modal ────────────────────────────────────────────────────────────────
+function dd_openModal() {
+  document.getElementById('dd_modalBackdrop').classList.add('open');
+  document.getElementById('dd_pin').value='';
+  document.getElementById('dd_results').className='dd-push-results';
+  document.getElementById('dd_results').innerHTML='';
+  document.getElementById('dd_progress').style.display='none';
+  document.getElementById('dd_pushSummary').className='dd-push-summary';
+  dd_setPushBtns(true);
+  setTimeout(()=>document.getElementById('dd_pin').focus(),80);
+}
+function dd_closeModal() { document.getElementById('dd_modalBackdrop').classList.remove('open'); }
+function dd_setPushBtns(enabled) {
+  document.getElementById('dd_confirmBtn').disabled=!enabled;
+  document.getElementById('dd_cancelBtn').textContent=enabled?'Cancel':'Close';
+}
+function dd_setProgress(text,pct) {
+  document.getElementById('dd_progress').style.display='block';
+  document.getElementById('dd_progressText').textContent=text;
+  document.getElementById('dd_bar').style.width=pct+'%';
+}
+function dd_addResult(cls,text) {
+  const box=document.getElementById('dd_results');
+  box.classList.add('visible');
+  const div=document.createElement('div'); div.className=cls; div.textContent=text;
+  box.appendChild(div); box.scrollTop=box.scrollHeight;
+}
+
+async function dd_confirmPush() {
+  const pin=(document.getElementById('dd_pin').value||'').trim();
+  if (!pin) { document.getElementById('dd_pin').focus(); return; }
+  if (!dd_allDepartures.length) { dd_closeModal(); return; }
+
+  dd_setPushBtns(false);
+  document.getElementById('dd_results').innerHTML='';
+  document.getElementById('dd_results').className='dd-push-results';
+  dd_pushLogChanges=[]; dd_pushLogSkipped=[];
+
+  // 1. Auth
+  dd_setProgress('Authenticating…',5);
+  let authOk=false;
+  try {
+    const r=await fetch(DD_API+'/api/auth',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin})});
+    authOk=(await r.json()).ok===true;
+  } catch(e) { dd_showModalSummary('error','⚠️ Could not reach the Tracker API.'); dd_setPushBtns(true); return; }
+  if (!authOk) { dd_showModalSummary('error','⚠️ Incorrect PIN.'); dd_setPushBtns(true); document.getElementById('dd_pin').select(); return; }
+
+  // 2. Fetch cages
+  dd_setProgress('Fetching cage list…',15);
+  let trackerCages=[];
+  try {
+    const r=await fetch(DD_API+'/api/cages',{headers:{'Authorization':'Bearer '+pin}});
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json(); trackerCages=d.cages||d||[];
+  } catch(e) { dd_showModalSummary('error','⚠️ Failed to fetch cages: '+e.message); dd_setPushBtns(true); return; }
+
+  const cageByName=new Map(); for (const c of trackerCages) { if (c.name) cageByName.set(String(c.name).trim(),c); }
+
+  // 3. Push updates
+  const today=new Date(); today.setHours(0,0,0,0);
+  const toUpdate=dd_allDepartures.filter(d=>d.date&&d.date>=today);
+  let matched=0,created=0,skipped=0,failed=0;
+  const total=toUpdate.length;
+  const _uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+  const pad=n=>String(n).padStart(2,'0');
+
+  for (let i=0; i<total; i++) {
+    const dep=toUpdate[i];
+    dd_setProgress(`Updating cage ${dep.cage} (${i+1}/${total})…`,20+Math.round((i/total)*75));
+    const dateStr=`${dep.date.getFullYear()}-${pad(dep.date.getMonth()+1)}-${pad(dep.date.getDate())}`;
+    const cage=cageByName.get(String(dep.cage).trim());
+
+    if (!cage) {
+      const newCage={id:_uid(),name:String(dep.cage).trim(),height:0,width:0,length:0,weight:0,notes:`Auto-created by Departure Dashboard on ${new Date().toLocaleDateString('en-GB')}`,intoRmd:null,outOfRmd:null,departureDate:dateStr,location:'facility',locationDetail:'',createdAt:new Date().toISOString()};
+      try {
+        const r=await fetch(DD_API+'/api/cages',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+pin},body:JSON.stringify(newCage)});
+        if (!r.ok) { const t=await r.text().catch(()=>String(r.status)); dd_addResult('dd-result-err',`✕ FAIL  Cage ${dep.cage} — create failed: ${t}`); dd_pushLogSkipped.push({cage:dep.cage,reason:`Create failed: ${t}`,type:'err',shift:dep.shift,vstLabel:dep.vstLabel}); failed++; }
+        else { dd_addResult('dd-result-ok',`✦ NEW   Cage ${dep.cage} — created with date ${dateStr}`); dd_pushLogChanges.push({cage:dep.cage,oldDate:null,newDate:dateStr,shift:dep.shift,vstLabel:dep.vstLabel,isNew:true}); created++; cageByName.set(String(dep.cage).trim(),newCage); }
+      } catch(e) { dd_addResult('dd-result-err',`✕ FAIL  Cage ${dep.cage} — ${e.message}`); dd_pushLogSkipped.push({cage:dep.cage,reason:`Network error: ${e.message}`,type:'err',shift:dep.shift,vstLabel:dep.vstLabel}); failed++; }
+      await new Promise(r=>setTimeout(r,60)); continue;
+    }
+
+    const currentDate=cage.departure_date||cage.departureDate||null;
+    if (currentDate===dateStr) { dd_addResult('dd-result-skip',`⤳ SKIP  Cage ${dep.cage} — already ${dateStr}`); dd_pushLogSkipped.push({cage:dep.cage,reason:`Already set to ${dd_fmtDateDisplay(dateStr)}`,type:'already',shift:dep.shift,vstLabel:dep.vstLabel}); skipped++; continue; }
+
+    const payload={id:cage.id,name:cage.name,height:cage.height||0,width:cage.width||0,length:cage.length||0,weight:cage.weight||0,notes:cage.notes||'',location:cage.location||'facility',location_detail:cage.location_detail||cage.locationDetail||'',departure_date:dateStr,proposed_ship_day:cage.proposed_ship_day||cage.proposedShipDay||null,proposed_trip_id:cage.proposed_trip_id||cage.proposedTripId||null,shipping_preference:cage.shipping_preference||cage.shippingPreference||false,into_rmd:cage.into_rmd||cage.intoRmd||null,out_of_rmd:cage.out_of_rmd||cage.outOfRmd||null};
+    try {
+      const r=await fetch(DD_API+'/api/cages',{method:'PUT',headers:{'Content-Type':'application/json','Authorization':'Bearer '+pin},body:JSON.stringify(payload)});
+      if (!r.ok) { const t=await r.text().catch(()=>String(r.status)); dd_addResult('dd-result-err',`✕ FAIL  Cage ${dep.cage} — ${t}`); dd_pushLogSkipped.push({cage:dep.cage,reason:`API error: ${t}`,type:'err',shift:dep.shift,vstLabel:dep.vstLabel}); failed++; }
+      else { dd_addResult('dd-result-ok',`✓ OK    Cage ${dep.cage} → ${dateStr}  (was: ${currentDate||'none'})`); dd_pushLogChanges.push({cage:dep.cage,oldDate:currentDate,newDate:dateStr,shift:dep.shift,vstLabel:dep.vstLabel}); matched++; }
+    } catch(e) { dd_addResult('dd-result-err',`✕ FAIL  Cage ${dep.cage} — ${e.message}`); dd_pushLogSkipped.push({cage:dep.cage,reason:`Network error: ${e.message}`,type:'err',shift:dep.shift,vstLabel:dep.vstLabel}); failed++; }
+    await new Promise(r=>setTimeout(r,60));
+  }
+
+  dd_setProgress('Done.',100);
+  const parts=[];
+  if (matched>0) parts.push(`${matched} updated`);
+  if (created>0) parts.push(`${created} created`);
+  if (skipped>0) parts.push(`${skipped} skipped`);
+  if (failed>0)  parts.push(`${failed} failed`);
+  const type=failed>0?'warn':(matched===0&&created===0)?'warn':'success';
+  const icon=failed>0?'⚠️':(matched===0&&created===0)?'⚠️':'✅';
+  dd_showModalSummary(type,`${icon} Push complete — ${parts.join(' · ')}`);
+  dd_setPushBtns(false);
+  dd_tabsVisible=true;
+  // Refresh Changes/Skipped tab content (modal stays open for review; re-render on close)
+}
+function dd_showModalSummary(type,msg) {
+  // Show summary both in modal and in left panel
+  const s=document.getElementById('dd_pushSummary');
+  if (s) { s.textContent=msg; s.className='dd-push-summary '+type; }
+}
 
 </script>
 </head>
