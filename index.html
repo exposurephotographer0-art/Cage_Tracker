@@ -12333,6 +12333,8 @@ let aiWizardCages     = [];   // [{id,name,location,locationDetail,width,height,
 let aiWizardFramePairs= [];   // [{cageId,cageName,frameId,frameName,typeKey}] confirmed by user
 let aiWizardLoading   = false;
 let aiWizardMsg       = '';
+let aiWizardBriefingDone = false;  // true once AI has read & understood existing movements
+let aiWizardBriefingSummary = '';  // AI's summary of existing movements
 let aiRulesText       = '';
 let aiRulesSaved      = false;
 let aiRulesLoading    = false;
@@ -12434,7 +12436,20 @@ function aiRenderPlanPanel() {
 
   // ── Wizard step area ───────────────────────────────────────────────────
   let wizardArea = '';
-  if (aiWizardStep === 'cages') {
+  if (aiWizardStep === 'briefing') {
+    wizardArea = `
+      <div class="ai-section-label">Briefing — Reading existing movements…</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
+        ${aiWizardLoading
+          ? '<span style="display:inline-flex;align-items:center;gap:6px"><span class="ai-spinner"></span> AI is reviewing planned movements…</span>'
+          : 'AI has reviewed all existing planned movements. Read the summary below, then start planning.'}
+      </div>
+      ${!aiWizardLoading ? `
+        <div style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-size:12px;line-height:1.6;color:var(--text-secondary);white-space:pre-wrap;margin-bottom:12px">${esc(aiWizardBriefingSummary)}</div>
+        <button class="btn btn-primary" style="width:100%" onclick="aiWizardProceedFromBriefing()">✓ Understood — Start Step-by-Step Plan</button>
+      ` : ''}
+    `;
+  } else if (aiWizardStep === 'cages') {
     wizardArea = `
       <div class="ai-section-label">Step 1 of 3 — Which cages need moving?</div>
       <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
@@ -12546,14 +12561,32 @@ function aiRenderPlanPanel() {
             <select id="ai-trip-select" class="ai-trip-select" onchange="aiSelectedTripId=this.value">
               ${tripOpts}
             </select>
-            <button class="btn btn-primary" style="width:100%;margin-top:10px;padding:10px"
-              onclick="aiWizardStart()"
-              ${aiWizardLoading?'disabled':''}>
-              ${aiWizardLoading ? '<span style="display:inline-flex;align-items:center;gap:6px"><span class="ai-spinner"></span> Thinking…</span>' : '⚡ Start Step-by-Step Plan'}
-            </button>
-            ${aiWizardStep !== 'idle' ? `<button class="btn btn-secondary" style="width:100%;margin-top:6px;font-size:11px" onclick="aiWizardReset();renderMain()">✕ Start Over</button>` : ''}
+            ${!aiWizardBriefingDone ? `
+              <button class="btn btn-secondary" style="width:100%;margin-top:10px;padding:10px"
+                onclick="aiWizardReadMovements()"
+                ${aiWizardLoading?'disabled':''}>
+                ${aiWizardLoading && aiWizardStep==='briefing' ? '<span style="display:inline-flex;align-items:center;gap:6px"><span class="ai-spinner"></span> Reading movements…</span>' : '📋 Read & Understand Current Movements'}
+              </button>
+              <button class="btn btn-primary" style="width:100%;margin-top:6px;padding:10px;opacity:0.4;cursor:not-allowed" disabled title="Read existing movements first">
+                ⚡ Start Step-by-Step Plan
+              </button>
+              <div style="font-size:11px;color:var(--text-muted);text-align:center;margin-top:5px">Read existing movements first before planning</div>
+            ` : `
+              <button class="btn btn-secondary" style="width:100%;margin-top:10px;padding:8px;font-size:11px"
+                onclick="aiWizardReadMovements()"
+                ${aiWizardLoading?'disabled':''}>
+                🔄 Re-read Movements
+              </button>
+              <button class="btn btn-primary" style="width:100%;margin-top:6px;padding:10px"
+                onclick="aiWizardStart()"
+                ${aiWizardLoading?'disabled':''}>
+                ${aiWizardLoading && aiWizardStep!=='briefing' ? '<span style="display:inline-flex;align-items:center;gap:6px"><span class="ai-spinner"></span> Thinking…</span>' : '⚡ Start Step-by-Step Plan'}
+              </button>
+              <div style="font-size:11px;color:var(--green);text-align:center;margin-top:5px">✓ AI has reviewed existing movements</div>
+            `}
+            ${aiWizardStep !== 'idle' && aiWizardStep !== 'briefing' ? `<button class="btn btn-secondary" style="width:100%;margin-top:6px;font-size:11px" onclick="aiWizardReset();renderMain()">✕ Start Over</button>` : ''}
             <div style="margin:18px 0;border-top:1px solid var(--border)"></div>
-            ${aiWizardStep === 'idle' ? planArea : wizardArea}
+            ${aiWizardStep === 'idle' || aiWizardStep === 'briefing' ? (aiWizardStep === 'briefing' ? wizardArea : planArea) : wizardArea}
           </div>
         </div>
       </div>
@@ -12744,7 +12777,62 @@ function aiWizardReset() {
   aiDraftCommentary  = '';
   aiDraftWarnings    = [];
   aiPlanStatus       = 'idle';
-  aiPlanStatusMsg    = '';
+  aiPlanStatusMsg         = '';
+  aiWizardBriefingDone    = false;
+  aiWizardBriefingSummary = '';
+}
+
+// ── BRIEFING: Read & understand existing planned movements ─────────────
+async function aiWizardReadMovements() {
+  const tripSel = document.getElementById('ai-trip-select');
+  if (tripSel) aiSelectedTripId = tripSel.value;
+
+  aiWizardStep    = 'briefing';
+  aiWizardLoading = true;
+  aiWizardBriefingDone    = false;
+  aiWizardBriefingSummary = '';
+  renderMain();
+
+  const movements = (STATE.plannedMovements || []).filter(m => !m.completed);
+  let movementText = 'None';
+  if (movements.length > 0) {
+    movementText = movements.map(m => {
+      const cage = STATE.cages.find(c => c.id === m.cageId);
+      const cageName = cage ? cage.name : (m.cageId || '?');
+      return `${m.date||'?'} | ${cageName} | ${m.type||m.typeKey||'?'} | ${m.description||''} | shift: ${m.shift||'day'}${m.notes ? ' | notes: '+m.notes : ''}`;
+    }).join('\n');
+  }
+
+  try {
+    const data = await api('/api/ai-chat', 'POST', {
+      message: `You are about to help plan cage movements. First, read and understand the ${movements.length} movement(s) already planned below.
+
+EXISTING PLANNED MOVEMENTS:
+${movementText}
+
+Please summarise what is already planned: which cages are being moved, to where, on what dates, and note any patterns or constraints this creates (e.g. frames already committed, busy days, gaps). Be concise but thorough — this summary will inform the upcoming planning session. Do not suggest new movements yet.`,
+      history: [],
+      context: {
+        cages: STATE.cages || [],
+        frames: STATE.frames || [],
+        rmd: STATE.rmdSlots || [],
+        movements: movements,
+        boatTrips: STATE.shipments || []
+      },
+    });
+    aiWizardBriefingSummary = data.reply || 'No summary returned.';
+    aiWizardBriefingDone = true;
+  } catch(e) {
+    aiWizardBriefingSummary = '⚠ ' + e.message;
+    aiWizardBriefingDone = false;
+  }
+  aiWizardLoading = false;
+  renderMain();
+}
+
+function aiWizardProceedFromBriefing() {
+  aiWizardStep = 'idle';
+  renderMain();
 }
 
 // ── Helper: build minimal cage list (excluding junk + shipped) ────────
@@ -12773,12 +12861,20 @@ async function aiWizardStart() {
   if (!aiSelectedTripId) { showError('Please select a boat trip first.'); return; }
   const trip = getBoatTrip(aiSelectedTripId);
   if (!trip) { showError('Selected trip not found.'); return; }
+  if (!aiWizardBriefingDone) { showError('Please read and understand the existing movements first.'); return; }
 
-  aiWizardReset();
+  // Preserve briefing state, reset only wizard steps
   aiWizardTrip    = trip;
   aiWizardStep    = 'cages';
   aiWizardLoading = true;
   aiWizardMsg     = '';
+  aiWizardCages      = [];
+  aiWizardFramePairs = [];
+  aiDraftMovements   = null;
+  aiDraftCommentary  = '';
+  aiDraftWarnings    = [];
+  aiPlanStatus       = 'idle';
+  aiPlanStatusMsg    = '';
   renderMain();
 
   const cages = aiGetRelevantCages();
@@ -12788,7 +12884,7 @@ async function aiWizardStart() {
 
   try {
     const data = await api('/api/ai-chat', 'POST', {
-      message: `Trip: ${trip.label}, load date: ${trip.loadDate||'unknown'}, depart: ${trip.departDate||'unknown'}.
+      message: `${aiWizardBriefingSummary ? `Context — existing movements already planned:\n${aiWizardBriefingSummary}\n\n` : ''}Trip: ${trip.label}, load date: ${trip.loadDate||'unknown'}, depart: ${trip.departDate||'unknown'}.
 Available cages (not yet shipped): ${cageList}.
 Which of these cages are likely candidates to be moved onto frames for this trip? List only the cage names, comma-separated, no explanation.`,
       history: [],
