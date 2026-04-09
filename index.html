@@ -12808,12 +12808,33 @@ async function aiSendChat() {
 
   // Strip objects to only the fields the AI needs — keeps the payload small
   // enough to fit within Workers AI's 8k token context window.
+  //
+  // Cage filter rules:
+  //   - Never include shipped cages (already gone, not relevant)
+  //   - Never include zero-weight facility cages with no locationDetail (Excel junk rows)
+  //   - Facility cages: only include if they have a departure date within 7 days,
+  //     OR are assigned to a planned movement, OR have a locationDetail
+  //   - RMD and frame cages: always include (actively stored/staged)
+  const _sevenDaysFromNow = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const _movedCageIds = new Set((STATE.plannedMovements||[]).filter(m=>!m.completed).map(m=>m.cageId).filter(Boolean));
   const context = {
     cages: (STATE.cages || [])
-      .filter(c => c.weight > 0 || c.location !== 'facility' || c.locationDetail)
+      .filter(c => {
+        if (c.location === 'sea') return false;                              // shipped — skip
+        if (c.location === 'rmd' || c.location === 'frame') return true;    // actively stored — include
+        if (c.location === 'facility') {
+          if (c.weight <= 0 && !c.locationDetail) return false;             // junk row — skip
+          if (_movedCageIds.has(c.id)) return true;                         // has a planned move — include
+          if (c.locationDetail) return true;                                 // has a sub-location note — include
+          if (c.departureDate && c.departureDate <= _sevenDaysFromNow) return true; // leaving within 7 days — include
+          return false;                                                       // otherwise skip
+        }
+        return true;
+      })
       .map(c => ({
         id: c.id, name: c.name, weight: c.weight,
         location: c.location, locationDetail: c.locationDetail || '',
+        departureDate: c.departureDate || null,
       })),
     frames: (STATE.frames || []).map(f => ({
       id: f.id, name: f.name, width: f.width,
