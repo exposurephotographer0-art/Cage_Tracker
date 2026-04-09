@@ -1322,6 +1322,8 @@ tr.dragging { opacity: 0.4; }
 .dt-log-entry { border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; margin-bottom:10px; background:var(--bg-base); }
 .dt-log-entry.dt-hdt { border-color:#fca5a5; }
 .dt-le-head { padding:10px 14px; display:flex; justify-content:space-between; align-items:flex-start; background:var(--bg-elevated); border-bottom:1px solid var(--border); }
+.dt-le-del { background:none; border:none; cursor:pointer; font-size:14px; opacity:0.4; padding:2px 5px; border-radius:4px; line-height:1; flex-shrink:0; }
+.dt-le-del:hover { opacity:1; background:#fee2e2; }
 .dt-hdt .dt-le-head { background:#fef2f2; border-bottom-color:#fecaca; }
 .dt-le-title { font:700 14px var(--font-display); }
 .dt-le-ref   { font:500 11px var(--font-mono); color:var(--text-muted); margin-top:2px; }
@@ -13501,6 +13503,8 @@ function dtNewTeamState() {
     events: [],       // timeline entries
     dtEvents: [],     // resolved downtime events
     currentDtStart: null,
+    currentDtDesc: '',
+    currentDtCat: '',
     breakCount: 0,
   };
 }
@@ -13591,6 +13595,8 @@ function dtApiSaveSession(team) {
     events:         [...s.events],
     dtEvents:       [...s.dtEvents],
     currentDtStart: s.currentDtStart,
+    currentDtDesc:  s.status === 'downtime' ? (document.getElementById(`dtcmt-${team}`)?.value || '') : '',
+    currentDtCat:   s.status === 'downtime' ? (document.getElementById(`dtcat-${team}`)?.value || '') : '',
     breakCount:     s.breakCount,
     savedAt:        Date.now(),
   };
@@ -13637,6 +13643,8 @@ async function dtRestoreSessions() {
       s.events         = snap.events   || [];
       s.dtEvents       = snap.dtEvents || [];
       s.currentDtStart = snap.currentDtStart || null;
+      s.currentDtDesc  = snap.currentDtDesc  || '';
+      s.currentDtCat   = snap.currentDtCat   || '';
       s.breakCount     = snap.breakCount || 0;
 
       // Add a restore marker to the timeline so we can see the page was refreshed
@@ -13847,6 +13855,18 @@ async function dtConfirmStop() {
   render(); // re-render the whole downtime tab
 }
 
+async function dtDeleteLogEntry(id, ev) {
+  if (ev) ev.stopPropagation();
+  if (!confirm('Delete this downtime log entry? This cannot be undone.')) return;
+  try {
+    await api(`/api/downtime/tasks/${id}`, 'DELETE');
+    dtLog = dtLog.filter(e => e.id !== id);
+    render();
+  } catch(e) {
+    showError('Failed to delete log entry: ' + e.message);
+  }
+}
+
 // ── Render: full Downtime tab ────────────────────────────────────────────────
 function renderDowntime() {
   // Kick off a log load if not yet loaded (non-blocking)
@@ -13932,7 +13952,8 @@ function dtRenderTeamView(team) {
 }
 
 function dtRenderNewTaskPanel(team, cardCls, s) {
-  const catOpts = DT_CATEGORIES.map(c => `<option>${c}</option>`).join('');
+  const savedCat = s.currentDtCat || '';
+  const catOpts = DT_CATEGORIES.map(c => `<option value="${c}"${c === savedCat ? ' selected' : ''}>${c}</option>`).join('');
 
   // ── Active task section ──
   let activeHtml = '';
@@ -13951,13 +13972,13 @@ function dtRenderNewTaskPanel(team, cardCls, s) {
         <div class="dt-form-row">
           <div class="dt-fg">
             <label>Category</label>
-            <select id="dtcat-${team}">${catOpts}</select>
+            <select id="dtcat-${team}" onchange="dtApiSaveSession('${team}')">${catOpts}</select>
           </div>
         </div>
         <div class="dt-form-row" style="margin-bottom:8px">
           <div class="dt-fg">
             <label>Description</label>
-            <textarea id="dtcmt-${team}" placeholder="What caused the downtime?"></textarea>
+            <textarea id="dtcmt-${team}" placeholder="What caused the downtime?" oninput="dtApiSaveSession('${team}')">${esc(s.currentDtDesc)}</textarea>
           </div>
         </div>
         <button class="dt-btn dtb-res" onclick="dtResolveDowntime('${team}')">✔ Resolve Downtime</button>
@@ -14067,6 +14088,11 @@ function dtBuildEntry(e, num) {
     `<span class="dt-cat-tag">⚠ ${d.category||'Uncategorised'} — ${dtFmt(d.durSecs||0)}</span>`
   ).join('') : '';
 
+  const canDelete = getAccessLevel() === 'write';
+  const deleteBtn = canDelete && e.id
+    ? `<button class="dt-le-del" onclick="dtDeleteLogEntry('${e.id}',event)" title="Delete this log entry">🗑</button>`
+    : '';
+
   return `
   <div class="dt-log-entry ${hdt?'dt-hdt':''}">
     <div class="dt-le-head">
@@ -14075,7 +14101,10 @@ function dtBuildEntry(e, num) {
         <div class="dt-le-title">#${num} — ${desc} <span style="font-size:10px;font-weight:500;color:var(--text-muted)">${teamLbl}</span></div>
         ${ref ? `<div class="dt-le-ref">Ref: ${ref}</div>` : ''}
       </div>
-      <div class="dt-le-tr">${dtTsm(stMs)} – ${dtTsm(enMs)}</div>
+      <div style="display:flex;align-items:flex-start;gap:6px">
+        <div class="dt-le-tr">${dtTsm(stMs)} – ${dtTsm(enMs)}</div>
+        ${deleteBtn}
+      </div>
     </div>
     <div class="dt-le-stats">
       <div class="dt-le-stat"><div class="dt-ls-lbl">Working</div><div class="dt-ls-val g">${dtFmtHM(wSecs)}</div></div>
