@@ -12324,6 +12324,15 @@ let aiDraftCommentary = '';
 let aiDraftWarnings   = [];
 let aiSelectedTripId  = '';
 let aiRevisionText    = '';
+
+// ── Wizard state ──────────────────────────────────────────────────────
+// step: 'idle' | 'cages' | 'frames' | 'schedule' | 'review'
+let aiWizardStep      = 'idle';
+let aiWizardTrip      = null;
+let aiWizardCages     = [];   // [{id,name,location,locationDetail,width,height,weight}] confirmed by user
+let aiWizardFramePairs= [];   // [{cageId,cageName,frameId,frameName,typeKey}] confirmed by user
+let aiWizardLoading   = false;
+let aiWizardMsg       = '';
 let aiRulesText       = '';
 let aiRulesSaved      = false;
 let aiRulesLoading    = false;
@@ -12423,6 +12432,57 @@ function aiRenderPlanPanel() {
     : aiPlanStatus === 'err' ? '⚠ ' + aiPlanStatusMsg
     : 'No plan yet';
 
+  // ── Wizard step area ───────────────────────────────────────────────────
+  let wizardArea = '';
+  if (aiWizardStep === 'cages') {
+    wizardArea = `
+      <div class="ai-section-label">Step 1 of 3 — Which cages need moving?</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
+        ${aiWizardLoading
+          ? '<span style="display:inline-flex;align-items:center;gap:6px"><span class="ai-spinner"></span> AI is identifying cages…</span>'
+          : 'AI suggestion below. Edit if needed, then confirm.'}
+      </div>
+      ${!aiWizardLoading ? `
+        <textarea id="ai-wizard-cage-input" class="ai-revision-area" rows="4"
+          placeholder="e.g. 445, 431, 901">${esc(aiWizardMsg)}</textarea>
+        <div style="font-size:11px;color:var(--text-muted);margin:4px 0 10px">Comma-separated cage names. Remove any that don't apply.</div>
+        <button class="btn btn-primary" style="width:100%" onclick="aiWizardConfirmCages()">Confirm Cages → Assign Frames</button>
+      ` : ''}
+    `;
+  } else if (aiWizardStep === 'frames') {
+    wizardArea = `
+      <div class="ai-section-label">Step 2 of 3 — Assign cages to frames</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
+        ${aiWizardLoading
+          ? '<span style="display:inline-flex;align-items:center;gap:6px"><span class="ai-spinner"></span> AI is assigning frames…</span>'
+          : 'AI suggestions below. Edit any line, then confirm.'}
+      </div>
+      ${!aiWizardLoading ? `
+        <textarea id="ai-wizard-frame-input" class="ai-revision-area" rows="${Math.max(4, (aiWizardCages.length + 1))}"
+          placeholder="445 → TF-3&#10;431 → TF-5">${esc(aiWizardMsg)}</textarea>
+        <div style="font-size:11px;color:var(--text-muted);margin:4px 0 10px">Format: CageName → FrameName, one per line.</div>
+        <button class="btn btn-primary" style="width:100%" onclick="aiWizardConfirmFrames()">Confirm Frames → Schedule Dates</button>
+      ` : ''}
+    `;
+  } else if (aiWizardStep === 'schedule') {
+    wizardArea = `
+      <div class="ai-section-label">Step 3 of 3 — Schedule movement dates</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
+        ${aiWizardLoading
+          ? '<span style="display:inline-flex;align-items:center;gap:6px"><span class="ai-spinner"></span> AI is scheduling dates…</span>'
+          : 'AI schedule below. Edit dates/shifts, then confirm.'}
+      </div>
+      ${!aiWizardLoading ? `
+        <textarea id="ai-wizard-schedule-input" class="ai-revision-area" rows="${Math.max(4, (aiWizardFramePairs.length + 1))}"
+          placeholder="2025-06-10 | 445 → TF-3 | day&#10;2025-06-11 | 431 → TF-5 | am">${esc(aiWizardMsg)}</textarea>
+        <div style="font-size:11px;color:var(--text-muted);margin:4px 0 10px">Format: YYYY-MM-DD | CageName → FrameName | day/am/pm, one per line.</div>
+        <button class="btn btn-primary" style="width:100%" onclick="aiWizardConfirmSchedule()">Confirm Schedule → Review Plan</button>
+      ` : ''}
+    `;
+  } else if (aiWizardStep === 'review') {
+    wizardArea = ''; // falls through to planArea below
+  }
+
   // Plan table or empty state
   let planArea = '';
   if (aiDraftMovements && aiDraftMovements.length > 0) {
@@ -12487,12 +12547,13 @@ function aiRenderPlanPanel() {
               ${tripOpts}
             </select>
             <button class="btn btn-primary" style="width:100%;margin-top:10px;padding:10px"
-              onclick="aiGeneratePlan(false)"
-              ${aiPlanStatus==='loading'?'disabled':''}>
-              ${aiPlanStatus==='loading' ? '<span style="display:inline-flex;align-items:center;gap:6px"><span class="ai-spinner"></span> Generating…</span>' : '⚡ Generate Plan'}
+              onclick="aiWizardStart()"
+              ${aiWizardLoading?'disabled':''}>
+              ${aiWizardLoading ? '<span style="display:inline-flex;align-items:center;gap:6px"><span class="ai-spinner"></span> Thinking…</span>' : '⚡ Start Step-by-Step Plan'}
             </button>
+            ${aiWizardStep !== 'idle' ? `<button class="btn btn-secondary" style="width:100%;margin-top:6px;font-size:11px" onclick="aiWizardReset();renderMain()">✕ Start Over</button>` : ''}
             <div style="margin:18px 0;border-top:1px solid var(--border)"></div>
-            ${planArea}
+            ${aiWizardStep === 'idle' ? planArea : wizardArea}
           </div>
         </div>
       </div>
@@ -12661,99 +12722,265 @@ function aiAppendRule(text) {
 }
 
 // ── Generate plan ─────────────────────────────────────────────────────────────
-async function aiGeneratePlan(isRevision) {
-  // Re-read trip select in case DOM is fresh
+// ═══════════════════════════════════════════════════════════════════════
+// STEP-BY-STEP AI PLANNER WIZARD
+//
+// Step 1 (cages)   — AI identifies which cages need moving for this trip
+// Step 2 (frames)  — AI assigns each cage to a frame
+// Step 3 (schedule)— AI schedules dates/shifts for each movement
+// Step 4 (review)  — You review + apply
+//
+// Each AI call is small enough to fit in the 8B model's context window.
+// ═══════════════════════════════════════════════════════════════════════
+
+function aiWizardReset() {
+  aiWizardStep       = 'idle';
+  aiWizardTrip       = null;
+  aiWizardCages      = [];
+  aiWizardFramePairs = [];
+  aiWizardLoading    = false;
+  aiWizardMsg        = '';
+  aiDraftMovements   = null;
+  aiDraftCommentary  = '';
+  aiDraftWarnings    = [];
+  aiPlanStatus       = 'idle';
+  aiPlanStatusMsg    = '';
+}
+
+// ── Helper: build minimal cage list (excluding junk + shipped) ────────
+function aiGetRelevantCages(cutoffDays = 21) {
+  const cutoff = new Date(Date.now() + cutoffDays * 86400000).toISOString().slice(0, 10);
+  const movedIds = new Set((STATE.plannedMovements||[]).filter(m=>!m.completed).map(m=>m.cageId).filter(Boolean));
+  return (STATE.cages || []).filter(c => {
+    if (c.location === 'sea') return false;
+    if (c.location === 'rmd' || c.location === 'frame') return true;
+    if (c.location === 'facility') {
+      if (c.weight <= 0 && !c.locationDetail) return false;
+      if (movedIds.has(c.id)) return true;
+      if (c.locationDetail) return true;
+      if (c.departureDate && c.departureDate <= cutoff) return true;
+      return false;
+    }
+    return true;
+  }).map(c => ({ id: c.id, name: c.name, width: c.width, height: c.height, weight: c.weight,
+    location: c.location, locationDetail: c.locationDetail||'', departureDate: c.departureDate||null }));
+}
+
+// ── STEP 1: Ask AI which cages need to move for this trip ─────────────
+async function aiWizardStart() {
   const tripSel = document.getElementById('ai-trip-select');
   if (tripSel) aiSelectedTripId = tripSel.value;
   if (!aiSelectedTripId) { showError('Please select a boat trip first.'); return; }
-
   const trip = getBoatTrip(aiSelectedTripId);
   if (!trip) { showError('Selected trip not found.'); return; }
 
-  // Re-read revision text
-  const revEl = document.getElementById('ai-revision-input');
-  if (revEl) aiRevisionText = revEl.value;
-
-  aiPlanStatus = 'loading';
-  aiPlanStatusMsg = '';
+  aiWizardReset();
+  aiWizardTrip    = trip;
+  aiWizardStep    = 'cages';
+  aiWizardLoading = true;
+  aiWizardMsg     = '';
   renderMain();
 
-  // Build RMD summary for the AI
-  const rmdForAI = (STATE.rmdSlots||[]).map(r => ({
-    number: r.number,
-    A: { cage1: r.A?.cage1||null, cage2: r.A?.cage2||null },
-    B: { cage1: r.B?.cage1||null, cage2: r.B?.cage2||null },
-  }));
-
-  // Strip to only fields the AI needs, and exclude irrelevant cages:
-  //   - Skip shipped cages (location === 'sea')
-  //   - Skip zero-weight facility cages with no locationDetail (Excel junk)
-  //   - Skip facility cages with no planned movement and no departure within 14 days
-  const _planCutoff = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const _planMovedIds = new Set((STATE.plannedMovements||[]).filter(m=>!m.completed).map(m=>m.cageId).filter(Boolean));
-  const cagesForAI = (STATE.cages || [])
-    .filter(c => {
-      if (c.location === 'sea') return false;
-      if (c.location === 'rmd' || c.location === 'frame') return true;
-      if (c.location === 'facility') {
-        if (c.weight <= 0 && !c.locationDetail) return false;
-        if (_planMovedIds.has(c.id)) return true;
-        if (c.locationDetail) return true;
-        if (c.departureDate && c.departureDate <= _planCutoff) return true;
-        return false;
-      }
-      return true;
-    })
-    .map(c => ({ id: c.id, name: c.name, width: c.width, height: c.height, weight: c.weight, location: c.location, locationDetail: c.locationDetail||'', departureDate: c.departureDate||null, notes: c.notes||null }));
-
-  const framesForAI = (STATE.frames || []).map(f => ({
-    id: f.id, name: f.name, width: f.width, hasWaler: f.hasWaler,
-    location: f.location, returnDate: f.returnDate||null, cages: f.cages||[],
-  }));
-
-  const movementsForAI = (STATE.plannedMovements||[]).filter(m=>!m.completed).map(m => ({
-    date: m.date, description: m.description, shift: m.shift||'day', cageId: m.cageId||null,
-  }));
-
-  const payload = {
-    cages:         cagesForAI,
-    frames:        framesForAI,
-    rmd:           rmdForAI,
-    movements:     movementsForAI,
-    boatTrips:     STATE.boatTrips || [],
-    targetTrip:    trip,
-    operatorRules: aiRulesText,
-    draftPlan:     isRevision ? aiDraftMovements : null,
-    userGuidance:  isRevision ? aiRevisionText : null,
-  };
+  const cages = aiGetRelevantCages();
+  const cageList = cages.map(c =>
+    `${c.name} (${c.location}${c.locationDetail ? '/'+c.locationDetail : ''}, ${c.weight}t)`
+  ).join(', ') || 'none';
 
   try {
-    const data = await api('/api/ai-plan', 'POST', payload);
-    if (!data.ok) throw new Error(data.error || 'Unknown error from AI.');
-
-    // Resolve cage IDs from names where the AI returned _cageName but no cageId
-    (data.movements||[]).forEach(m => {
-      if (!m.cageId && m._cageName) {
-        const match = STATE.cages.find(c => c.name.trim().toLowerCase() === (m._cageName||'').trim().toLowerCase());
-        if (match) m.cageId = match.id;
-      }
-      // Resolve frameId from _frameName
-      if (!m.frameId && m._frameName) {
-        const match = STATE.frames.find(f => f.name.trim().toLowerCase() === (m._frameName||'').trim().toLowerCase());
-        if (match) m.frameId = match.id;
-      }
+    const data = await api('/api/ai-chat', 'POST', {
+      message: `Trip: ${trip.label}, load date: ${trip.loadDate||'unknown'}, depart: ${trip.departDate||'unknown'}.
+Available cages (not yet shipped): ${cageList}.
+Which of these cages are likely candidates to be moved onto frames for this trip? List only the cage names, comma-separated, no explanation.`,
+      history: [],
+      context: { cages, frames: [], rmd: [], movements: [], boatTrips: [trip] },
     });
-
-    aiDraftMovements  = data.movements || [];
-    aiDraftCommentary = data.commentary || '';
-    aiDraftWarnings   = data.warnings   || [];
-    aiRevisionText    = '';
-    aiPlanStatus = 'ok';
+    aiWizardMsg = data.reply || '';
   } catch(e) {
-    aiPlanStatus    = 'err';
-    aiPlanStatusMsg = e.message;
-    showError('AI plan failed: ' + e.message);
+    aiWizardMsg = '⚠ ' + e.message;
   }
+  aiWizardLoading = false;
+  renderMain();
+}
+
+// Called when user confirms the cage list (possibly edited)
+function aiWizardConfirmCages() {
+  const input = document.getElementById('ai-wizard-cage-input');
+  const raw = (input ? input.value : aiWizardMsg).trim();
+  // Parse comma-separated cage names
+  const names = raw.split(/[,
+]+/).map(s => s.trim()).filter(Boolean);
+  aiWizardCages = names.map(name => {
+    const cage = STATE.cages.find(c => c.name.trim().toLowerCase() === name.toLowerCase());
+    return cage ? { id: cage.id, name: cage.name, width: cage.width, height: cage.height,
+      weight: cage.weight, location: cage.location, locationDetail: cage.locationDetail||'' } : { id: null, name, width: 0, height: 0, weight: 0, location: 'unknown', locationDetail: '' };
+  }).filter(c => c.name);
+
+  if (!aiWizardCages.length) { showError('No cages identified. Please enter at least one cage name.'); return; }
+  aiWizardStep = 'frames';
+  aiWizardFrameStep();
+}
+
+// ── STEP 2: Ask AI to assign each cage to a frame ─────────────────────
+async function aiWizardFrameStep() {
+  aiWizardLoading = true;
+  aiWizardMsg     = '';
+  renderMain();
+
+  const frames = (STATE.frames||[]).filter(f => f.location === 'facility' && (!f.cages || f.cages.length === 0))
+    .map(f => `${f.name} (${f.width}m${f.hasWaler ? ', waler' : ''})`).join(', ') || 'none available';
+
+  const cageList = aiWizardCages.map(c =>
+    `${c.name} (${c.width}m wide, ${c.weight}t, needs waler: ${c.width > 1.5 ? 'maybe' : 'no'})`
+  ).join('; ');
+
+  try {
+    const data = await api('/api/ai-chat', 'POST', {
+      message: `Assign each cage to an available frame. Cages: ${cageList}. Available frames: ${frames}.
+Rules: cage width must not exceed frame width. Return ONLY a list like: CageName → FrameName, one per line, nothing else.`,
+      history: [],
+      context: { cages: aiWizardCages, frames: (STATE.frames||[]).filter(f=>f.location==='facility'), rmd: [], movements: [], boatTrips: [] },
+    });
+    aiWizardMsg = data.reply || '';
+  } catch(e) {
+    aiWizardMsg = '⚠ ' + e.message;
+  }
+  aiWizardLoading = false;
+  renderMain();
+}
+
+// Called when user confirms frame assignments
+function aiWizardConfirmFrames() {
+  const input = document.getElementById('ai-wizard-frame-input');
+  const raw = (input ? input.value : aiWizardMsg).trim();
+  const lines = raw.split('
+').map(s => s.trim()).filter(Boolean);
+  aiWizardFramePairs = [];
+  for (const line of lines) {
+    const m = line.match(/^(.+?)\s*[→\->]+\s*(.+)$/);
+    if (!m) continue;
+    const cageName  = m[1].trim();
+    const frameName = m[2].trim();
+    const cage  = aiWizardCages.find(c => c.name.toLowerCase() === cageName.toLowerCase())
+               || { id: null, name: cageName };
+    const frame = STATE.frames.find(f => f.name.toLowerCase() === frameName.toLowerCase())
+               || { id: null, name: frameName };
+    // Determine typeKey from cage location
+    const src = cage.location || 'facility';
+    const typeKey = src === 'rmd' ? 'rmd-to-frame' : 'facility-to-frame';
+    aiWizardFramePairs.push({ cageId: cage.id, cageName: cage.name, frameId: frame.id, frameName: frame.name, typeKey });
+  }
+  if (!aiWizardFramePairs.length) { showError('Could not parse frame assignments. Use format: CageName → FrameName'); return; }
+  aiWizardStep = 'schedule';
+  aiWizardScheduleStep();
+}
+
+// ── STEP 3: Ask AI to schedule dates ─────────────────────────────────
+async function aiWizardScheduleStep() {
+  aiWizardLoading = true;
+  aiWizardMsg     = '';
+  renderMain();
+
+  const trip = aiWizardTrip;
+  const pairList = aiWizardFramePairs.map(p => `${p.cageName} → ${p.frameName}`).join(', ');
+  const rules = aiRulesText ? `Operator rules: ${aiRulesText}. ` : '';
+
+  try {
+    const data = await api('/api/ai-chat', 'POST', {
+      message: `${rules}Schedule these cage movements before the load date of ${trip.loadDate||'unknown'} (trip: ${trip.label}, departs ${trip.departDate||'unknown'}).
+Movements to schedule: ${pairList}.
+Return ONLY a list like: YYYY-MM-DD | CageName → FrameName | day (or am/pm), one per line, nothing else.`,
+      history: [],
+      context: { cages: aiWizardCages, frames: [], rmd: [], movements: [], boatTrips: [trip] },
+    });
+    aiWizardMsg = data.reply || '';
+  } catch(e) {
+    aiWizardMsg = '⚠ ' + e.message;
+  }
+  aiWizardLoading = false;
+  renderMain();
+}
+
+// Called when user confirms the schedule
+function aiWizardConfirmSchedule() {
+  const input = document.getElementById('ai-wizard-schedule-input');
+  const raw = (input ? input.value : aiWizardMsg).trim();
+  const lines = raw.split('
+').map(s => s.trim()).filter(Boolean);
+  const movements = [];
+  for (const line of lines) {
+    // Format: YYYY-MM-DD | CageName → FrameName | shift
+    const parts = line.split('|').map(s => s.trim());
+    if (parts.length < 2) continue;
+    const date  = parts[0].match(/\d{4}-\d{2}-\d{2}/) ? parts[0].match(/\d{4}-\d{2}-\d{2}/)[0] : aiWizardTrip.loadDate;
+    const moveStr = parts[1] || '';
+    const shift = (parts[2] || 'day').toLowerCase().replace(/[^a-z]/g, '') || 'day';
+    const mMatch = moveStr.match(/^(.+?)\s*[→\->]+\s*(.+)$/);
+    const cageName  = mMatch ? mMatch[1].trim() : moveStr.trim();
+    const frameName = mMatch ? mMatch[2].trim() : '';
+    const pair = aiWizardFramePairs.find(p => p.cageName.toLowerCase() === cageName.toLowerCase());
+    const cage  = STATE.cages.find(c => c.name.toLowerCase() === cageName.toLowerCase());
+    const frame = STATE.frames.find(f => f.name.toLowerCase() === (frameName||'').toLowerCase())
+               || (pair ? STATE.frames.find(f => f.name.toLowerCase() === pair.frameName.toLowerCase()) : null);
+    const typeKey = pair ? pair.typeKey : (cage?.location === 'rmd' ? 'rmd-to-frame' : 'facility-to-frame');
+    const typeLabel = { 'rmd-to-frame':'RMD to Frame','facility-to-frame':'Facility to Frame','facility-to-rmd':'Facility to RMD','frame-to-rmd':'Frame to RMD','frame-to-ship':'Frame to Ship' }[typeKey] || 'Move';
+    movements.push({
+      id: uid(), date, typeKey, type: typeLabel, shift: ['day','am','pm'].includes(shift) ? shift : 'day',
+      description: `Move ${cageName}${frameName ? ' to ' + frameName : ''}`,
+      cageId: cage?.id || pair?.cageId || null,
+      frameId: frame?.id || pair?.frameId || null,
+      notes: null, completed: false,
+    });
+  }
+  if (!movements.length) { showError('Could not parse schedule. Use format: YYYY-MM-DD | CageName → FrameName | day'); return; }
+  aiDraftMovements  = movements;
+  aiDraftCommentary = `Wizard plan for ${aiWizardTrip.label}: ${movements.length} movements scheduled.`;
+  aiDraftWarnings   = [];
+  aiWizardStep      = 'review';
+  aiPlanStatus      = 'ok';
+  renderMain();
+}
+
+// Legacy single-shot generate (kept for revision flow)
+async function aiGeneratePlan(isRevision) {
+  if (!isRevision) { aiWizardStart(); return; }
+  // Revision: use chat to tweak the existing draft
+  const revEl = document.getElementById('ai-revision-input');
+  if (revEl) aiRevisionText = revEl.value;
+  if (!aiRevisionText.trim()) { showError('Please enter revision instructions first.'); return; }
+  aiPlanStatus = 'loading'; aiPlanStatusMsg = ''; renderMain();
+  try {
+    const moveSummary = (aiDraftMovements||[]).map(m=>`[${m.date}] ${m.description} (${m.shift})`).join(', ');
+    const data = await api('/api/ai-chat', 'POST', {
+      message: `Current plan: ${moveSummary}. Revision: "${aiRevisionText}". Return the updated list as: YYYY-MM-DD | CageName → FrameName | shift, one per line, nothing else.`,
+      history: [],
+      context: { cages: aiGetRelevantCages(), frames: (STATE.frames||[]).map(f=>({id:f.id,name:f.name,width:f.width,hasWaler:f.hasWaler,location:f.location})), rmd: [], movements: [], boatTrips: aiWizardTrip ? [aiWizardTrip] : [] },
+    });
+    const raw = data.reply || '';
+    // Reuse schedule parser
+    document.getElementById && (()=>{})(); // no-op
+    const lines = raw.split('
+').map(s=>s.trim()).filter(Boolean);
+    const updated = [];
+    for (const line of lines) {
+      const parts = line.split('|').map(s=>s.trim());
+      const date = parts[0]?.match(/\d{4}-\d{2}-\d{2}/)?.[0] || (aiWizardTrip?.loadDate || '');
+      const moveStr = parts[1] || '';
+      const shift = (parts[2]||'day').replace(/[^a-z]/g,'') || 'day';
+      const mm = moveStr.match(/^(.+?)\s*[→\->]+\s*(.+)$/);
+      const cageName = mm ? mm[1].trim() : moveStr.trim();
+      const frameName = mm ? mm[2].trim() : '';
+      const cage  = STATE.cages.find(c=>c.name.toLowerCase()===cageName.toLowerCase());
+      const frame = STATE.frames.find(f=>f.name.toLowerCase()===frameName.toLowerCase());
+      const pair  = (aiWizardFramePairs||[]).find(p=>p.cageName.toLowerCase()===cageName.toLowerCase());
+      const typeKey = pair?.typeKey || (cage?.location==='rmd'?'rmd-to-frame':'facility-to-frame');
+      const typeLabel = {'rmd-to-frame':'RMD to Frame','facility-to-frame':'Facility to Frame','facility-to-rmd':'Facility to RMD','frame-to-rmd':'Frame to RMD','frame-to-ship':'Frame to Ship'}[typeKey]||'Move';
+      if (date) updated.push({ id: uid(), date, typeKey, type: typeLabel, shift: ['day','am','pm'].includes(shift)?shift:'day',
+        description: `Move ${cageName}${frameName?' to '+frameName:''}`,
+        cageId: cage?.id||null, frameId: frame?.id||frame?.id||null, notes: null, completed: false });
+    }
+    if (updated.length) { aiDraftMovements = updated; aiPlanStatus = 'ok'; }
+    else throw new Error('Could not parse revised plan from AI response.');
+  } catch(e) { aiPlanStatus = 'err'; aiPlanStatusMsg = e.message; }
   renderMain();
 }
 
