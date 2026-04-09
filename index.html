@@ -12807,8 +12807,7 @@ function aiWizardConfirmCages() {
   const input = document.getElementById('ai-wizard-cage-input');
   const raw = (input ? input.value : aiWizardMsg).trim();
   // Parse comma-separated cage names
-  const names = raw.split(/[,
-]+/).map(s => s.trim()).filter(Boolean);
+  const names = raw.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
   aiWizardCages = names.map(name => {
     const cage = STATE.cages.find(c => c.name.trim().toLowerCase() === name.toLowerCase());
     return cage ? { id: cage.id, name: cage.name, width: cage.width, height: cage.height,
@@ -12852,8 +12851,7 @@ Rules: cage width must not exceed frame width. Return ONLY a list like: CageName
 function aiWizardConfirmFrames() {
   const input = document.getElementById('ai-wizard-frame-input');
   const raw = (input ? input.value : aiWizardMsg).trim();
-  const lines = raw.split('
-').map(s => s.trim()).filter(Boolean);
+  const lines = raw.split('\n').map(s => s.trim()).filter(Boolean);
   aiWizardFramePairs = [];
   for (const line of lines) {
     const m = line.match(/^(.+?)\s*[→\->]+\s*(.+)$/);
@@ -12904,8 +12902,7 @@ Return ONLY a list like: YYYY-MM-DD | CageName → FrameName | day (or am/pm), o
 function aiWizardConfirmSchedule() {
   const input = document.getElementById('ai-wizard-schedule-input');
   const raw = (input ? input.value : aiWizardMsg).trim();
-  const lines = raw.split('
-').map(s => s.trim()).filter(Boolean);
+  const lines = raw.split('\n').map(s => s.trim()).filter(Boolean);
   const movements = [];
   for (const line of lines) {
     // Format: YYYY-MM-DD | CageName → FrameName | shift
@@ -12958,8 +12955,7 @@ async function aiGeneratePlan(isRevision) {
     const raw = data.reply || '';
     // Reuse schedule parser
     document.getElementById && (()=>{})(); // no-op
-    const lines = raw.split('
-').map(s=>s.trim()).filter(Boolean);
+    const lines = raw.split('\n').map(s=>s.trim()).filter(Boolean);
     const updated = [];
     for (const line of lines) {
       const parts = line.split('|').map(s=>s.trim());
