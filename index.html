@@ -96,6 +96,109 @@ body {
 @keyframes fadeIn { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: translateY(0); } }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
+/* ── AI Planner Tab ── */
+.ai-layout { display:grid; grid-template-columns:1fr 360px; gap:18px; align-items:start; }
+.ai-panel { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; }
+.ai-panel-hdr {
+  display:flex; align-items:center; gap:10px;
+  padding:12px 18px; background:var(--bg-elevated);
+  border-bottom:1px solid var(--border);
+  font:700 13px var(--font-display);
+}
+.ai-panel-hdr .ai-panel-icon { font-size:18px; }
+.ai-panel-body { padding:18px; }
+.ai-inner-tabs { display:flex; gap:2px; margin-bottom:18px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius); padding:3px; }
+.ai-inner-tab {
+  flex:1; padding:7px 10px; border:none; background:transparent;
+  font:600 12px var(--font-display); color:var(--text-muted);
+  border-radius:6px; cursor:pointer; transition:all 0.12s; text-align:center;
+}
+.ai-inner-tab:hover { color:var(--text-secondary); background:rgba(255,255,255,0.5); }
+.ai-inner-tab.active { background:var(--bg-base); color:var(--accent); box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+.ai-chat-wrap { display:flex; flex-direction:column; height:420px; }
+.ai-chat-messages {
+  flex:1; overflow-y:auto; padding:12px;
+  background:var(--bg-elevated); border:1px solid var(--border-light);
+  border-radius:var(--radius); margin-bottom:12px;
+  display:flex; flex-direction:column; gap:10px;
+}
+.ai-msg { display:flex; gap:10px; max-width:90%; }
+.ai-msg.user { align-self:flex-end; flex-direction:row-reverse; }
+.ai-msg-bubble {
+  padding:9px 13px; border-radius:12px;
+  font-size:13px; line-height:1.55;
+  white-space:pre-wrap; word-break:break-word;
+}
+.ai-msg.user  .ai-msg-bubble { background:var(--accent); color:#fff; border-bottom-right-radius:3px; }
+.ai-msg.ai    .ai-msg-bubble { background:var(--bg-base); border:1px solid var(--border); color:var(--text-primary); border-bottom-left-radius:3px; }
+.ai-msg-avatar { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; margin-top:2px; }
+.ai-msg.user .ai-msg-avatar { background:var(--accent); color:#fff; }
+.ai-msg.ai   .ai-msg-avatar { background:#1a2235; color:#e8a830; font:700 11px var(--font-mono); }
+.ai-chat-input-row { display:flex; gap:8px; }
+.ai-chat-input {
+  flex:1; padding:9px 12px; border:1px solid var(--border);
+  border-radius:var(--radius); font:400 13px var(--font-display);
+  background:var(--bg-input); color:var(--text-primary); resize:none;
+  min-height:40px; max-height:100px;
+}
+.ai-chat-input:focus { outline:none; border-color:var(--accent); }
+.ai-thinking {
+  display:flex; align-items:center; gap:8px;
+  padding:9px 13px; background:var(--bg-base);
+  border:1px solid var(--border); border-radius:12px;
+  border-bottom-left-radius:3px; font-size:12px; color:var(--text-muted);
+}
+.ai-thinking-dots span {
+  display:inline-block; width:5px; height:5px; border-radius:50%;
+  background:var(--accent); margin:0 1px;
+  animation:ai-dot-bounce 1.2s infinite;
+}
+.ai-thinking-dots span:nth-child(2) { animation-delay:0.2s; }
+.ai-thinking-dots span:nth-child(3) { animation-delay:0.4s; }
+@keyframes ai-dot-bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-5px)} }
+
+.ai-plan-table { width:100%; font-size:12px; border-collapse:collapse; }
+.ai-plan-table th { background:var(--bg-elevated); padding:7px 10px; text-align:left; font:700 10px var(--font-mono); color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; border-bottom:2px solid var(--border); }
+.ai-plan-table td { padding:7px 10px; border-bottom:1px solid var(--border-light); vertical-align:middle; }
+.ai-plan-table tr:last-child td { border-bottom:none; }
+.ai-plan-table tr:hover td { background:var(--bg-elevated); }
+.ai-plan-row-del { background:none; border:none; color:var(--text-muted); cursor:pointer; padding:2px 5px; border-radius:3px; font-size:14px; }
+.ai-plan-row-del:hover { color:var(--red); background:var(--bg-elevated); }
+.ai-warn-box { background:#fff8e6; border:1px solid #f0d080; border-radius:var(--radius); padding:10px 14px; font-size:12px; color:#7a5a00; margin-bottom:14px; }
+.ai-warn-box ul { margin:4px 0 0 16px; padding:0; }
+.ai-warn-box li { margin-bottom:2px; }
+.ai-commentary { background:#e6f0fa; border:1px solid #b0c8e8; border-radius:var(--radius); padding:10px 14px; font-size:12px; color:#1a3a6a; margin-bottom:14px; line-height:1.55; }
+.ai-rules-area {
+  width:100%; min-height:160px; padding:10px 12px;
+  font:400 12px var(--font-display); line-height:1.6;
+  background:var(--bg-input); border:1px solid var(--border);
+  border-radius:var(--radius); color:var(--text-primary); resize:vertical;
+}
+.ai-rules-area:focus { outline:none; border-color:var(--accent); }
+.ai-status-chip {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:3px 10px; border-radius:20px; font:600 11px var(--font-mono);
+}
+.ai-status-chip.idle { background:var(--bg-elevated); color:var(--text-muted); border:1px solid var(--border); }
+.ai-status-chip.loading { background:#fff8e6; color:#7a5a00; border:1px solid #f0d080; }
+.ai-status-chip.ok { background:#e6f5ec; color:#1a8a4a; border:1px solid #b0dcc0; }
+.ai-status-chip.err { background:#fce8e8; color:#c93030; border:1px solid #e8b0b0; }
+.ai-spinner { width:12px; height:12px; border:2px solid rgba(0,0,0,0.1); border-top-color:currentColor; border-radius:50%; animation:spin 0.7s linear infinite; display:inline-block; }
+.ai-apply-btn { width:100%; padding:11px; font:700 14px var(--font-display); background:var(--accent); color:#1a1f2e; border:none; border-radius:var(--radius); cursor:pointer; transition:opacity 0.12s; margin-top:4px; }
+.ai-apply-btn:hover { opacity:0.88; }
+.ai-apply-btn:disabled { opacity:0.45; cursor:not-allowed; }
+.ai-section-label { font:700 11px var(--font-mono); color:var(--text-muted); text-transform:uppercase; letter-spacing:.07em; margin-bottom:8px; margin-top:16px; }
+.ai-section-label:first-child { margin-top:0; }
+.ai-trip-select { width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius); background:var(--bg-input); font:500 13px var(--font-display); color:var(--text-primary); }
+.ai-trip-select:focus { outline:none; border-color:var(--accent); }
+.ai-revision-area {
+  width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius);
+  background:var(--bg-input); font:400 12px var(--font-display); color:var(--text-primary);
+  resize:none; min-height:60px;
+}
+.ai-revision-area:focus { outline:none; border-color:var(--accent); }
+@media (max-width:900px) { .ai-layout { grid-template-columns:1fr; } }
+
 /* ── Components ── */
 .section-title { font-size: 20px; font-weight: 700; color: var(--text-primary); margin-bottom: 16px; letter-spacing: -0.02em; }
 .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
@@ -1193,6 +1296,7 @@ const TABS = [
   {id:'audit', label:'Audit Log', icon:'📋'},
   {id:'settings', label:'Settings', icon:'⚙'},
   {id:'departuredash', label:'Departure Dashboard', icon:'📦'},
+  {id:'ai', label:'AI Planner', icon:'🤖'},
 ];
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
@@ -1817,6 +1921,7 @@ function renderTab(id) {
     case 'audit': return renderAuditLog();
     case 'settings': return renderSettings();
     case 'departuredash': return renderDepartureDashTab();
+    case 'ai': return renderAITab();
     default: return '';
   }
 }
@@ -12203,6 +12308,544 @@ function dd_openModal() {
   setTimeout(()=>document.getElementById('dd_pin').focus(),80);
 }
 function dd_closeModal() { document.getElementById('dd_modalBackdrop').classList.remove('open'); renderMain(); }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// AI PLANNER TAB
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Module state ──────────────────────────────────────────────────────────────
+let aiInnerTab        = 'plan';          // 'plan' | 'chat' | 'rules'
+let aiChatHistory     = [];              // [{role:'user'|'ai', content}]
+let aiChatThinking    = false;
+let aiPlanStatus      = 'idle';          // 'idle' | 'loading' | 'ok' | 'err'
+let aiPlanStatusMsg   = '';
+let aiDraftMovements  = null;            // array of movement objects from last AI call
+let aiDraftCommentary = '';
+let aiDraftWarnings   = [];
+let aiSelectedTripId  = '';
+let aiRevisionText    = '';
+let aiRulesText       = '';
+let aiRulesSaved      = false;
+let aiRulesLoading    = false;
+
+// ── Load saved rules on first visit ──────────────────────────────────────────
+async function aiLoadRules() {
+  if (aiRulesLoading) return;
+  aiRulesLoading = true;
+  try {
+    const data = await api('/api/ai-rules');
+    aiRulesText = data.rules || '';
+  } catch(e) {
+    // Not critical — just leave blank
+  } finally {
+    aiRulesLoading = false;
+  }
+}
+
+async function aiSaveRules() {
+  const ta = document.getElementById('ai-rules-textarea');
+  if (ta) aiRulesText = ta.value;
+  try {
+    await api('/api/ai-rules', 'PUT', { rules: aiRulesText });
+    aiRulesSaved = true;
+    showSuccess('Rules saved.');
+    setTimeout(() => { aiRulesSaved = false; aiRefreshRulesBtn(); }, 2500);
+  } catch(e) {
+    showError('Failed to save rules: ' + e.message);
+  }
+}
+
+function aiRefreshRulesBtn() {
+  const btn = document.getElementById('ai-rules-save-btn');
+  if (!btn) return;
+  btn.textContent = aiRulesSaved ? '✓ Saved' : '💾 Save Rules';
+  btn.disabled = aiRulesSaved;
+}
+
+// ── Main render ───────────────────────────────────────────────────────────────
+function renderAITab() {
+  // Load rules if not yet loaded
+  if (!aiRulesText && !aiRulesLoading) aiLoadRules().then(() => {
+    const ta = document.getElementById('ai-rules-textarea');
+    if (ta) ta.value = aiRulesText;
+  });
+
+  const tabs = [
+    { id:'plan',  icon:'🗓', label:'Movement Planner' },
+    { id:'chat',  icon:'💬', label:'Facility Chat'    },
+    { id:'rules', icon:'📋', label:'Operator Rules'   },
+  ];
+
+  const tabBar = `<div class="ai-inner-tabs">
+    ${tabs.map(t => `<button class="ai-inner-tab ${aiInnerTab===t.id?'active':''}"
+      onclick="aiSwitchTab('${t.id}')">${t.icon} ${t.label}</button>`).join('')}
+  </div>`;
+
+  let panelHTML = '';
+  if      (aiInnerTab === 'plan')  panelHTML = aiRenderPlanPanel();
+  else if (aiInnerTab === 'chat')  panelHTML = aiRenderChatPanel();
+  else if (aiInnerTab === 'rules') panelHTML = aiRenderRulesPanel();
+
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <h2 class="section-title" style="margin:0">🤖 AI Planner</h2>
+      <div style="font-size:11px;color:var(--text-muted)">Powered by Claude · Uses your live facility data</div>
+    </div>
+    ${tabBar}
+    ${panelHTML}
+  `;
+}
+
+function aiSwitchTab(id) {
+  aiInnerTab = id;
+  renderMain();
+}
+
+// ── Plan panel ────────────────────────────────────────────────────────────────
+function aiRenderPlanPanel() {
+  const trips = (STATE.boatTrips || []).slice().sort((a,b) => {
+    return (a.loadDate||a.departDate||'').localeCompare(b.loadDate||b.departDate||'');
+  });
+
+  const tripOpts = [
+    '<option value="">— Select a boat trip —</option>',
+    ...trips.map(t => {
+      const dateStr = t.loadDate ? ` · Load: ${fmt(t.loadDate)}` : t.departDate ? ` · Depart: ${fmt(t.departDate)}` : '';
+      return `<option value="${t.id}" ${aiSelectedTripId===t.id?'selected':''}>${esc(t.label||'Trip')}${dateStr}</option>`;
+    })
+  ].join('');
+
+  // Status chip
+  const chipClass = aiPlanStatus === 'loading' ? 'loading' : aiPlanStatus === 'ok' ? 'ok' : aiPlanStatus === 'err' ? 'err' : 'idle';
+  const chipContent = aiPlanStatus === 'loading'
+    ? `<span class="ai-spinner"></span> Generating plan…`
+    : aiPlanStatus === 'ok' ? '✓ Plan ready'
+    : aiPlanStatus === 'err' ? '⚠ ' + aiPlanStatusMsg
+    : 'No plan yet';
+
+  // Plan table or empty state
+  let planArea = '';
+  if (aiDraftMovements && aiDraftMovements.length > 0) {
+    const rows = aiDraftMovements.map((m, i) => {
+      const typeColor = {
+        'rmd-to-frame':'#27a060','facility-to-frame':'#2563b0','facility-to-rmd':'#0d9488',
+        'frame-to-rmd':'#7040c0','frame-to-ship':'#c08520','other':'#8895a7'
+      }[m.typeKey] || '#8895a7';
+      return `<tr>
+        <td style="font:700 11px var(--font-mono);color:var(--accent)">${m.date||'—'}</td>
+        <td><span style="font:700 10px var(--font-mono);color:${typeColor}">${esc(m.type||m.typeKey||'—')}</span></td>
+        <td style="font-weight:600">${esc(m.description||'')}</td>
+        <td style="color:var(--text-muted)">${esc(m.shift||'day')}</td>
+        <td style="color:var(--text-muted);font-size:11px">${esc(m.notes||'')}</td>
+        <td><button class="ai-plan-row-del" onclick="aiDeleteDraftRow(${i})" title="Remove this movement">✕</button></td>
+      </tr>`;
+    }).join('');
+
+    planArea = `
+      ${aiDraftCommentary ? `<div class="ai-commentary">💡 ${esc(aiDraftCommentary)}</div>` : ''}
+      ${aiDraftWarnings.length ? `<div class="ai-warn-box">⚠ Warnings:<ul>${aiDraftWarnings.map(w=>`<li>${esc(w)}</li>`).join('')}</ul></div>` : ''}
+      <div style="overflow-x:auto;margin-bottom:14px">
+        <table class="ai-plan-table">
+          <thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Shift</th><th>Notes</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="ai-section-label">Revise this plan</div>
+      <textarea id="ai-revision-input" class="ai-revision-area"
+        placeholder="e.g. 'swap cage 445 to Frame TF-8' or 'push Wednesday movements to Thursday'…"
+        onchange="aiRevisionText=this.value" oninput="aiRevisionText=this.value">${esc(aiRevisionText)}</textarea>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-secondary" style="flex:1" onclick="aiGeneratePlan(true)"
+          ${aiPlanStatus==='loading'?'disabled':''}>🔄 Revise Plan</button>
+        <button class="ai-apply-btn" style="flex:1;padding:9px"
+          onclick="aiApplyPlan()" ${aiPlanStatus==='loading'?'disabled':''}>
+          ✓ Apply Plan to Movements (${aiDraftMovements.length})
+        </button>
+      </div>
+    `;
+  } else {
+    planArea = `<div style="text-align:center;padding:40px 20px;color:var(--text-muted)">
+      <div style="font-size:32px;margin-bottom:12px">🗓</div>
+      <div style="font-weight:600;font-size:14px;margin-bottom:6px">No plan generated yet</div>
+      <div style="font-size:12px;line-height:1.6">Select a boat trip above, then click <strong>Generate Plan</strong>.<br>
+      The AI will propose a day-by-day movement schedule using your current cage, frame, and RMD state.</div>
+    </div>`;
+  }
+
+  return `
+    <div class="ai-layout">
+      <div>
+        <div class="ai-panel">
+          <div class="ai-panel-hdr">
+            <span class="ai-panel-icon">🗓</span>
+            <span>Movement Plan</span>
+            <span class="ai-status-chip ${chipClass}" style="margin-left:auto">${chipContent}</span>
+          </div>
+          <div class="ai-panel-body">
+            <div class="ai-section-label">Target boat trip</div>
+            <select id="ai-trip-select" class="ai-trip-select" onchange="aiSelectedTripId=this.value">
+              ${tripOpts}
+            </select>
+            <button class="btn btn-primary" style="width:100%;margin-top:10px;padding:10px"
+              onclick="aiGeneratePlan(false)"
+              ${aiPlanStatus==='loading'?'disabled':''}>
+              ${aiPlanStatus==='loading' ? '<span style="display:inline-flex;align-items:center;gap:6px"><span class="ai-spinner"></span> Generating…</span>' : '⚡ Generate Plan'}
+            </button>
+            <div style="margin:18px 0;border-top:1px solid var(--border)"></div>
+            ${planArea}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="ai-panel" style="margin-bottom:14px">
+          <div class="ai-panel-hdr"><span class="ai-panel-icon">📊</span><span>Facility Snapshot</span></div>
+          <div class="ai-panel-body" style="font-size:12px">
+            ${aiRenderSnapshot()}
+          </div>
+        </div>
+        <div class="ai-panel">
+          <div class="ai-panel-hdr"><span class="ai-panel-icon">📋</span><span>Active Rules</span></div>
+          <div class="ai-panel-body">
+            ${aiRulesText
+              ? `<div style="font-size:12px;line-height:1.6;color:var(--text-secondary);white-space:pre-wrap">${esc(aiRulesText)}</div>
+                 <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="aiSwitchTab('rules')">✏ Edit Rules</button>`
+              : `<div style="font-size:12px;color:var(--text-muted);font-style:italic">No rules saved yet.</div>
+                 <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="aiSwitchTab('rules')">＋ Add Rules</button>`
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function aiRenderSnapshot() {
+  const cages = STATE.cages || [];
+  const frames = STATE.frames || [];
+  const rmd = STATE.rmdSlots || [];
+  const pending = (STATE.plannedMovements||[]).filter(m=>!m.completed);
+
+  const loc = (l) => cages.filter(c=>c.location===l).length;
+  const framesAtFac = frames.filter(f=>f.location==='facility').length;
+  const rmdUsed = rmd.reduce((sum,r)=>sum+['A','B'].reduce((s,side)=>s+(r[side].cage1?1:0)+(r[side].cage2?1:0),0),0);
+  const rmdCap  = rmd.length * 4;
+
+  const rows = [
+    ['Cages at facility', loc('facility')],
+    ['Cages in RMD',      loc('rmd')],
+    ['Cages on frames',   loc('frame')],
+    ['Cages at sea',      loc('sea') + loc('shipped')],
+    ['Frames at facility', `${framesAtFac} / ${frames.length}`],
+    ['RMD slots used',    `${rmdUsed} / ${rmdCap}`],
+    ['Pending movements', pending.length],
+  ];
+
+  return rows.map(([label, val]) => `
+    <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border-light)">
+      <span style="color:var(--text-muted)">${label}</span>
+      <span style="font:700 12px var(--font-mono);color:var(--text-primary)">${val}</span>
+    </div>`).join('') + `
+    <button class="btn btn-secondary btn-sm" style="margin-top:12px;width:100%" onclick="aiSwitchTab('chat')">💬 Ask a question about the facility</button>
+  `;
+}
+
+// ── Chat panel ────────────────────────────────────────────────────────────────
+function aiRenderChatPanel() {
+  const messages = aiChatHistory.length === 0
+    ? `<div style="text-align:center;padding:30px 16px;color:var(--text-muted)">
+        <div style="font-size:28px;margin-bottom:8px">💬</div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Ask anything about the facility</div>
+        <div style="font-size:11px;line-height:1.6">
+          "How many cages are in RMD right now?"<br>
+          "Which frames have walers?"<br>
+          "What movements are due this week?"
+        </div>
+      </div>`
+    : aiChatHistory.map(msg => `
+        <div class="ai-msg ${msg.role}">
+          <div class="ai-msg-avatar">${msg.role==='user'?'👤':'CT'}</div>
+          <div class="ai-msg-bubble">${esc(msg.content)}</div>
+        </div>`).join('') +
+      (aiChatThinking ? `<div class="ai-msg ai">
+        <div class="ai-msg-avatar">CT</div>
+        <div class="ai-thinking">Thinking <div class="ai-thinking-dots"><span></span><span></span><span></span></div></div>
+      </div>` : '');
+
+  return `
+    <div class="ai-panel" style="max-width:760px">
+      <div class="ai-panel-hdr">
+        <span class="ai-panel-icon">💬</span>
+        <span>Facility Chat</span>
+        ${aiChatHistory.length > 0
+          ? `<button class="btn btn-secondary btn-xs" style="margin-left:auto" onclick="aiClearChat()">Clear</button>`
+          : ''}
+      </div>
+      <div class="ai-panel-body">
+        <div class="ai-chat-wrap">
+          <div class="ai-chat-messages" id="ai-chat-messages">${messages}</div>
+          <div class="ai-chat-input-row">
+            <textarea id="ai-chat-input" class="ai-chat-input" rows="1"
+              placeholder="Ask about cages, frames, RMD, movements…"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiSendChat()}"
+            ></textarea>
+            <button class="btn btn-primary" onclick="aiSendChat()" ${aiChatThinking?'disabled':''}>Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Rules panel ───────────────────────────────────────────────────────────────
+function aiRenderRulesPanel() {
+  const examples = [
+    'Max 4 movements per day',
+    'Heavy cages (≥6.5t) must use frames with a waler',
+    'No movements on Fridays',
+    'Cage 445 always goes to Frame TF-8 if available',
+    'RMD slots 1–3 reserved for short cages only',
+  ];
+
+  return `
+    <div class="ai-layout">
+      <div>
+        <div class="ai-panel">
+          <div class="ai-panel-hdr"><span class="ai-panel-icon">📋</span><span>Operator Rules &amp; Constraints</span></div>
+          <div class="ai-panel-body">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:12px;line-height:1.6">
+              Write your standing rules here in plain English. The AI reads these on every plan generation — you don't need to repeat them in each request.
+            </div>
+            <textarea id="ai-rules-textarea" class="ai-rules-area"
+              placeholder="Write your rules here, one per line…"
+              oninput="aiRulesText=this.value;aiRulesSaved=false;aiRefreshRulesBtn()"
+            >${esc(aiRulesText)}</textarea>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+              <button id="ai-rules-save-btn" class="btn btn-primary" onclick="aiSaveRules()">
+                ${aiRulesSaved ? '✓ Saved' : '💾 Save Rules'}
+              </button>
+              <span style="font-size:11px;color:var(--text-muted)">Saved rules persist in your D1 database.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="ai-panel">
+          <div class="ai-panel-hdr"><span class="ai-panel-icon">💡</span><span>Example Rules</span></div>
+          <div class="ai-panel-body">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Click any example to append it to your rules.</div>
+            ${examples.map(ex => `
+              <div onclick="aiAppendRule('${ex.replace(/'/g,"&#39;")}')"
+                style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);
+                       margin-bottom:7px;font-size:12px;cursor:pointer;background:var(--bg-elevated);
+                       transition:all 0.1s;color:var(--text-secondary)"
+                onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--text-primary)'"
+                onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-secondary)'">
+                ＋ ${esc(ex)}
+              </div>`).join('')}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function aiAppendRule(text) {
+  const ta = document.getElementById('ai-rules-textarea');
+  const current = ta ? ta.value.trim() : aiRulesText.trim();
+  const newVal = current ? current + '\n' + text : text;
+  aiRulesText = newVal;
+  if (ta) { ta.value = newVal; ta.focus(); }
+  aiRulesSaved = false;
+  aiRefreshRulesBtn();
+}
+
+// ── Generate plan ─────────────────────────────────────────────────────────────
+async function aiGeneratePlan(isRevision) {
+  // Re-read trip select in case DOM is fresh
+  const tripSel = document.getElementById('ai-trip-select');
+  if (tripSel) aiSelectedTripId = tripSel.value;
+  if (!aiSelectedTripId) { showError('Please select a boat trip first.'); return; }
+
+  const trip = getBoatTrip(aiSelectedTripId);
+  if (!trip) { showError('Selected trip not found.'); return; }
+
+  // Re-read revision text
+  const revEl = document.getElementById('ai-revision-input');
+  if (revEl) aiRevisionText = revEl.value;
+
+  aiPlanStatus = 'loading';
+  aiPlanStatusMsg = '';
+  renderMain();
+
+  // Build RMD summary for the AI
+  const rmdForAI = (STATE.rmdSlots||[]).map(r => ({
+    number: r.number,
+    A: { cage1: r.A?.cage1||null, cage2: r.A?.cage2||null },
+    B: { cage1: r.B?.cage1||null, cage2: r.B?.cage2||null },
+  }));
+
+  const payload = {
+    cages:         STATE.cages || [],
+    frames:        STATE.frames || [],
+    rmd:           rmdForAI,
+    movements:     (STATE.plannedMovements||[]).filter(m=>!m.completed),
+    boatTrips:     STATE.boatTrips || [],
+    targetTrip:    trip,
+    operatorRules: aiRulesText,
+    draftPlan:     isRevision ? aiDraftMovements : null,
+    userGuidance:  isRevision ? aiRevisionText : null,
+  };
+
+  try {
+    const data = await api('/api/ai-plan', 'POST', payload);
+    if (!data.ok) throw new Error(data.error || 'Unknown error from AI.');
+
+    // Resolve cage IDs from names where the AI returned _cageName but no cageId
+    (data.movements||[]).forEach(m => {
+      if (!m.cageId && m._cageName) {
+        const match = STATE.cages.find(c => c.name.trim().toLowerCase() === (m._cageName||'').trim().toLowerCase());
+        if (match) m.cageId = match.id;
+      }
+      // Resolve frameId from _frameName
+      if (!m.frameId && m._frameName) {
+        const match = STATE.frames.find(f => f.name.trim().toLowerCase() === (m._frameName||'').trim().toLowerCase());
+        if (match) m.frameId = match.id;
+      }
+    });
+
+    aiDraftMovements  = data.movements || [];
+    aiDraftCommentary = data.commentary || '';
+    aiDraftWarnings   = data.warnings   || [];
+    aiRevisionText    = '';
+    aiPlanStatus = 'ok';
+  } catch(e) {
+    aiPlanStatus    = 'err';
+    aiPlanStatusMsg = e.message;
+    showError('AI plan failed: ' + e.message);
+  }
+  renderMain();
+}
+
+function aiDeleteDraftRow(idx) {
+  if (!aiDraftMovements) return;
+  aiDraftMovements.splice(idx, 1);
+  if (aiDraftMovements.length === 0) aiPlanStatus = 'idle';
+  renderMain();
+}
+
+// ── Apply plan ────────────────────────────────────────────────────────────────
+async function aiApplyPlan() {
+  if (!aiDraftMovements || aiDraftMovements.length === 0) return;
+
+  const count = aiDraftMovements.length;
+  if (!confirm(`Add ${count} movement${count!==1?'s':''} to the Planner? This will appear in the Planned Movements table and can be deleted individually if needed.`)) return;
+
+  // Push to local STATE first (optimistic)
+  const toAdd = aiDraftMovements.map(m => ({
+    id:          m.id || uid(),
+    date:        m.date,
+    type:        m.type || m.typeKey || 'other',
+    typeKey:     m.typeKey || 'other',
+    description: m.description || '',
+    notes:       m.notes || null,
+    shift:       m.shift || 'day',
+    cageId:      m.cageId || null,
+    frameId:     m.frameId || null,
+    rmdNumber:   m.rmdNumber || null,
+    rmdSide:     m.rmdSide || null,
+    rmdSlot:     m.rmdSlot || null,
+    completed:   false,
+  }));
+
+  STATE.plannedMovements.push(...toAdd);
+
+  // Clear draft
+  aiDraftMovements  = null;
+  aiDraftCommentary = '';
+  aiDraftWarnings   = [];
+  aiPlanStatus      = 'idle';
+  aiRevisionText    = '';
+  renderMain();
+
+  showSuccess(`✓ ${count} movement${count!==1?'s':''} added to the Planner.`);
+
+  // Persist to API in background
+  try {
+    await Promise.all(toAdd.map(m => addMovementToAPI(m)));
+  } catch(e) {
+    showError('Some movements may not have saved: ' + e.message);
+  }
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+async function aiSendChat() {
+  const input = document.getElementById('ai-chat-input');
+  const message = input ? input.value.trim() : '';
+  if (!message || aiChatThinking) return;
+
+  if (input) input.value = '';
+
+  aiChatHistory.push({ role: 'user', content: message });
+  aiChatThinking = true;
+  renderMain();
+
+  // Scroll to bottom
+  setTimeout(() => {
+    const el = document.getElementById('ai-chat-messages');
+    if (el) el.scrollTop = el.scrollHeight;
+  }, 50);
+
+  // Build RMD lines for context
+  const rmdLines = (STATE.rmdSlots||[]).map(r => {
+    const aSlots = [r.A?.cage1, r.A?.cage2].filter(Boolean);
+    const bSlots = [r.B?.cage1, r.B?.cage2].filter(Boolean);
+    // Include cage names for clarity
+    const aNames = aSlots.map(id => { const c=getCage(id); return c?c.name:id; });
+    const bNames = bSlots.map(id => { const c=getCage(id); return c?c.name:id; });
+    return `RMD-${r.number}: A[${aNames.join(', ')||'empty'}] B[${bNames.join(', ')||'empty'}]`;
+  });
+
+  const context = {
+    cages:      STATE.cages || [],
+    frames:     STATE.frames || [],
+    rmd:        STATE.rmdSlots || [],
+    movements:  (STATE.plannedMovements||[]).filter(m=>!m.completed),
+    boatTrips:  STATE.boatTrips || [],
+  };
+
+  // Use last 10 turns as history
+  const historyForAPI = aiChatHistory.slice(-10).slice(0,-1).map(h => ({
+    role:    h.role === 'user' ? 'user' : 'assistant',
+    content: h.content,
+  }));
+
+  try {
+    const data = await api('/api/ai-chat', 'POST', {
+      message,
+      history: historyForAPI,
+      context,
+    });
+    if (!data.ok) throw new Error(data.error || 'No response from AI.');
+    aiChatHistory.push({ role: 'ai', content: data.reply });
+  } catch(e) {
+    aiChatHistory.push({ role: 'ai', content: '⚠ Error: ' + e.message });
+  }
+
+  aiChatThinking = false;
+  renderMain();
+
+  setTimeout(() => {
+    const el = document.getElementById('ai-chat-messages');
+    if (el) el.scrollTop = el.scrollHeight;
+  }, 50);
+}
+
+function aiClearChat() {
+  if (!aiChatHistory.length) return;
+  aiChatHistory = [];
+  renderMain();
+}
 function dd_setPushBtns(enabled) {
   document.getElementById('dd_confirmBtn').disabled=!enabled;
   document.getElementById('dd_cancelBtn').textContent=enabled?'Cancel':'Close';
