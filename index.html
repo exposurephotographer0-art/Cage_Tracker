@@ -12806,12 +12806,34 @@ async function aiSendChat() {
     return `RMD-${r.number}: A[${aNames.join(', ')||'empty'}] B[${bNames.join(', ')||'empty'}]`;
   });
 
+  // Strip objects to only the fields the AI needs — keeps the payload small
+  // enough to fit within Workers AI's 8k token context window.
   const context = {
-    cages:      STATE.cages || [],
-    frames:     STATE.frames || [],
-    rmd:        STATE.rmdSlots || [],
-    movements:  (STATE.plannedMovements||[]).filter(m=>!m.completed),
-    boatTrips:  STATE.boatTrips || [],
+    cages: (STATE.cages || [])
+      .filter(c => c.weight > 0 || c.location !== 'facility' || c.locationDetail)
+      .map(c => ({
+        id: c.id, name: c.name, weight: c.weight,
+        location: c.location, locationDetail: c.locationDetail || '',
+      })),
+    frames: (STATE.frames || []).map(f => ({
+      id: f.id, name: f.name, width: f.width,
+      hasWaler: f.hasWaler, location: f.location,
+      returnDate: f.returnDate || null,
+      cages: f.cages || [],
+    })),
+    rmd: (STATE.rmdSlots || []).map(r => ({
+      number: r.number,
+      A: { cage1: r.A?.cage1||null, cage2: r.A?.cage2||null },
+      B: { cage1: r.B?.cage1||null, cage2: r.B?.cage2||null },
+    })),
+    movements: (STATE.plannedMovements||[]).filter(m=>!m.completed).map(m => ({
+      date: m.date, description: m.description, shift: m.shift||'day',
+    })),
+    boatTrips: (STATE.boatTrips || []).map(t => ({
+      id: t.id, label: t.label,
+      loadDate: t.loadDate||null, departDate: t.departDate||null,
+      notes: t.notes||null,
+    })),
   };
 
   // Use last 10 turns as history
