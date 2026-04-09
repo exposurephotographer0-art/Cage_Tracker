@@ -12794,30 +12794,30 @@ async function aiWizardReadMovements() {
   renderMain();
 
   const movements = (STATE.plannedMovements || []).filter(m => !m.completed);
-  let movementText = 'None';
+
+  // Build a compact movement list client-side — resolve cage names here so
+  // we don't need to send the full cages/frames/rmd arrays to the worker.
+  let movementText = 'None planned.';
   if (movements.length > 0) {
     movementText = movements.map(m => {
       const cage = STATE.cages.find(c => c.id === m.cageId);
       const cageName = cage ? cage.name : (m.cageId || '?');
-      return `${m.date||'?'} | ${cageName} | ${m.type||m.typeKey||'?'} | ${m.description||''} | shift: ${m.shift||'day'}${m.notes ? ' | notes: '+m.notes : ''}`;
+      return `${m.date||'?'} | ${cageName} | ${m.description||m.type||'?'} | shift:${m.shift||'day'}${m.notes ? ' | '+m.notes : ''}`;
     }).join('\n');
   }
 
+  // Send ONLY the pre-built text — no large context arrays.
+  // This keeps the Workers AI prompt small and avoids the CPU timeout.
   try {
     const data = await api('/api/ai-chat', 'POST', {
-      message: `You are about to help plan cage movements. First, read and understand the ${movements.length} movement(s) already planned below.
-
-EXISTING PLANNED MOVEMENTS:
-${movementText}
-
-Please summarise what is already planned: which cages are being moved, to where, on what dates, and note any patterns or constraints this creates (e.g. frames already committed, busy days, gaps). Be concise but thorough — this summary will inform the upcoming planning session. Do not suggest new movements yet.`,
+      message: `Summarise these ${movements.length} planned cage movement(s) in 3-6 bullet points. Note which cages move, to where, on which dates, any busy days, and any frames already committed. Be brief. Do not suggest new movements.\n\nPLANNED MOVEMENTS:\n${movementText}`,
       history: [],
       context: {
-        cages: STATE.cages || [],
-        frames: STATE.frames || [],
-        rmd: STATE.rmdSlots || [],
-        movements: movements,
-        boatTrips: STATE.shipments || []
+        cages: [],
+        frames: [],
+        rmd: [],
+        movements: [],
+        boatTrips: []
       },
     });
     aiWizardBriefingSummary = data.reply || 'No summary returned.';
