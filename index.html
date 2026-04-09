@@ -1647,6 +1647,8 @@ async function loadState() {
     STATE.customTabItems = data.customTabItems  || [];
     console.log('[CageTracker] State synced from API:', STATE.cages.length, 'cages');
     render();
+    // Restore any in-progress downtime sessions after the main state is loaded
+    dtRestoreSessions();
   } catch(e) {
     console.warn('[CageTracker] API unavailable, using local data:', e.message);
   }
@@ -13569,6 +13571,90 @@ async function dtApiLoadLog() {
   }
 }
 
+// Save the live state of one team's active task to D1 (fire-and-forget).
+// Called after every user action so a refresh can restore from here.
+function dtApiSaveSession(team) {
+  const s = dtState[team];
+  if (!s.active) return;
+  // Commit elapsed seconds up to now so the snapshot is accurate,
+  // then restart the segment clock so timing isn't lost.
+  const elapsed = s.segStart ? Math.floor((Date.now() - s.segStart) / 1000) : 0;
+  const snapshot = {
+    active:         s.active,
+    status:         s.status,
+    task:           s.task,
+    startTime:      s.startTime,
+    workSecs:       s.workSecs  + (s.status === 'working'  ? elapsed : 0),
+    downSecs:       s.downSecs  + (s.status === 'downtime' ? elapsed : 0),
+    breakSecs:      s.breakSecs + (s.status === 'break'    ? elapsed : 0),
+    segStart:       s.segStart, // preserve so timer picks up correctly on restore
+    events:         [...s.events],
+    dtEvents:       [...s.dtEvents],
+    currentDtStart: s.currentDtStart,
+    breakCount:     s.breakCount,
+    savedAt:        Date.now(),
+  };
+  // Non-blocking — we don't await, errors are swallowed silently
+  api('/api/downtime/active', 'PUT', { team, session: JSON.stringify(snapshot) })
+    .catch(e => console.warn('[Downtime] Session save failed:', e.message));
+}
+
+// Clear a team's active session from D1 once the task is complete.
+function dtApiClearSession(team) {
+  api('/api/downtime/active', 'DELETE', { team })
+    .catch(e => console.warn('[Downtime] Session clear failed:', e.message));
+}
+
+// On page load: fetch any persisted active sessions and restore them into dtState.
+// If a session was in an active segment, we extrapolate the elapsed time from savedAt.
+let dtSessionsRestored = false;
+async function dtRestoreSessions() {
+  if (dtSessionsRestored) return;
+  dtSessionsRestored = true;
+  try {
+    const data = await api('/api/downtime/active');
+    const active = data.active || {};
+    let anyRestored = false;
+    for (const team of ['lifting', 'external']) {
+      const snap = active[team];
+      if (!snap || !snap.active) continue;
+
+      // Compute seconds that ticked by while the page was away
+      const gapMs = snap.segStart && snap.savedAt
+        ? Math.max(0, Date.now() - snap.savedAt)
+        : 0;
+      const gapSecs = Math.floor(gapMs / 1000);
+
+      const s = dtState[team];
+      s.active         = true;
+      s.status         = snap.status;
+      s.task           = snap.task;
+      s.startTime      = snap.startTime;
+      s.workSecs       = snap.workSecs  + (snap.status === 'working'  ? gapSecs : 0);
+      s.downSecs       = snap.downSecs  + (snap.status === 'downtime' ? gapSecs : 0);
+      s.breakSecs      = snap.breakSecs + (snap.status === 'break'    ? gapSecs : 0);
+      s.segStart       = snap.segStart ? Date.now() : null; // restart from now
+      s.events         = snap.events   || [];
+      s.dtEvents       = snap.dtEvents || [];
+      s.currentDtStart = snap.currentDtStart || null;
+      s.breakCount     = snap.breakCount || 0;
+
+      // Add a restore marker to the timeline so we can see the page was refreshed
+      s.events.push({ time: Date.now(), type: 'p', label: 'Page refreshed', note: `(gap: ${dtFmt(gapSecs)})` });
+
+      anyRestored = true;
+      console.log('[Downtime] Restored active session for team:', team, snap.status);
+    }
+    if (anyRestored) {
+      dtStartTick();
+      if (activeTab === 'downtime') render();
+      else showSuccess('⏱ Active downtime task restored — check the Downtime tab.');
+    }
+  } catch(e) {
+    console.warn('[Downtime] Could not restore sessions:', e.message);
+  }
+}
+
 // ── Tick ─────────────────────────────────────────────────────────────────────
 function dtStartTick() {
   if (dtTickHandle) return;
@@ -13610,6 +13696,7 @@ function dtStartTask(team) {
   dtPushEv(team, 'w', 'Started');
 
   dtStartTick();
+  dtApiSaveSession(team);
   dtRenderTeamPanel(team);
 }
 
@@ -13617,6 +13704,7 @@ function dtPauseTask(team) {
   const dur = dtCommit(team);
   dtPushEv(team, 'p', 'Paused', `after ${dtFmt(dur)}`);
   dtState[team].status = 'paused';
+  dtApiSaveSession(team);
   dtRenderTeamPanel(team);
 }
 
@@ -13624,6 +13712,7 @@ function dtResumeTask(team) {
   dtPushEv(team, 'w', 'Resumed');
   dtState[team].status = 'working';
   dtState[team].segStart = Date.now();
+  dtApiSaveSession(team);
   dtRenderTeamPanel(team);
 }
 
@@ -13633,6 +13722,7 @@ function dtStartBreak(team) {
   dtPushEv(team, 'b', `Break ${dtState[team].breakCount} started`);
   dtState[team].status = 'break';
   dtState[team].segStart = Date.now();
+  dtApiSaveSession(team);
   dtRenderTeamPanel(team);
 }
 
@@ -13641,6 +13731,7 @@ function dtEndBreak(team) {
   dtPushEv(team, 'w', `Break ${dtState[team].breakCount} ended`, `(${dtFmt(dur)})`);
   dtState[team].status = 'working';
   dtState[team].segStart = Date.now();
+  dtApiSaveSession(team);
   dtRenderTeamPanel(team);
 }
 
@@ -13650,6 +13741,7 @@ function dtStartDowntime(team) {
   dtPushEv(team, 'd', 'Downtime started');
   dtState[team].status = 'downtime';
   dtState[team].segStart = Date.now();
+  dtApiSaveSession(team);
   dtRenderTeamPanel(team);
 }
 
@@ -13663,6 +13755,7 @@ function dtResolveDowntime(team) {
   s.currentDtStart = null;
   s.status = 'working';
   s.segStart = Date.now();
+  dtApiSaveSession(team);
   dtRenderTeamPanel(team);
 }
 
@@ -13721,6 +13814,7 @@ function dtCancelStop() {
   s.events = s.events.filter(e => e.label !== 'Task stopped');
   document.getElementById('dt-stop-modal')?.classList.remove('open');
   dtPending = null;
+  dtApiSaveSession(team); // re-persist resumed state
   dtRenderTeamPanel(team);
 }
 
@@ -13740,7 +13834,8 @@ async function dtConfirmStop() {
     dt_events: JSON.stringify(entry.dtEvents),
   });
 
-  // Reset team state
+  // Clear persisted session and reset team state
+  dtApiClearSession(team);
   Object.assign(dtState[team], dtNewTeamState());
   dtStopTick();
 
