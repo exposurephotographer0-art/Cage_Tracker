@@ -1261,6 +1261,109 @@ tr.dragging { opacity: 0.4; }
 .dd-result-skip { color:#e8a830; }
 .dd-result-err  { color:#f07070; }
 
+/* ═══════════════════════════════════════════
+   DOWNTIME TRACKER STYLES
+   ═══════════════════════════════════════════ */
+.dt-page { max-width:960px; }
+.dt-team-tabs { display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:20px; }
+.dt-team-tab { padding:10px 22px; font:600 13px var(--font-display); color:var(--text-muted); border:none; background:none; border-bottom:3px solid transparent; margin-bottom:-2px; cursor:pointer; transition:color .12s; }
+.dt-team-tab:hover { color:var(--text-secondary); }
+.dt-team-tab.dtl-on { color:var(--blue); border-bottom-color:var(--blue); }
+.dt-team-tab.dte-on { color:var(--green); border-bottom-color:var(--green); }
+.dt-team-tab.dts-on { color:var(--accent); border-bottom-color:var(--accent); }
+.dt-status-chip { display:inline-flex; align-items:center; padding:2px 9px; border-radius:10px; font:700 10px var(--font-mono); text-transform:uppercase; letter-spacing:.05em; margin-left:8px; }
+.dtchip-idle     { background:#e8eaef; color:var(--text-muted); }
+.dtchip-working  { background:#d4edda; color:#1a6634; }
+.dtchip-break    { background:#fff3cd; color:#856404; }
+.dtchip-downtime { background:#fce8e8; color:#c93030; }
+.dtchip-paused   { background:#dbeafe; color:#1e40af; }
+.dt-inner-tabs { display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:16px; }
+.dt-inner-tab { padding:8px 16px; font:600 12px var(--font-display); color:var(--text-muted); border:none; background:none; border-bottom:2px solid transparent; margin-bottom:-1px; cursor:pointer; transition:color .12s; }
+.dt-inner-tab:hover { color:var(--text-primary); }
+.dt-inner-tab.dti-on-l { color:var(--blue); border-bottom-color:var(--blue); }
+.dt-inner-tab.dti-on-e { color:var(--green); border-bottom-color:var(--green); }
+.dt-new-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius-lg); padding:18px; margin-bottom:14px; }
+.dt-new-card.dt-lift-card { border-top:3px solid var(--blue); }
+.dt-new-card.dt-ext-card  { border-top:3px solid var(--green); }
+.dt-form-row { display:flex; gap:10px; margin-bottom:12px; }
+.dt-fg { display:flex; flex-direction:column; gap:4px; flex:1; }
+.dt-fg label { font:700 11px var(--font-display); color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; }
+.dt-fg input, .dt-fg select, .dt-fg textarea { border:1px solid var(--border); border-radius:var(--radius); padding:8px 11px; font:400 13px var(--font-display); background:var(--bg-input); color:var(--text-primary); outline:none; transition:border .15s; font-family:var(--font-display); }
+.dt-fg input:focus, .dt-fg select:focus, .dt-fg textarea:focus { border-color:var(--blue); background:#fff; }
+.dt-fg textarea { resize:vertical; min-height:50px; }
+.dt-fg select { cursor:pointer; }
+.dt-btn-row { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+.dt-btn { border:none; border-radius:var(--radius); padding:8px 14px; font:600 12px var(--font-display); cursor:pointer; display:inline-flex; align-items:center; gap:5px; transition:opacity .12s, transform .1s; }
+.dt-btn:hover:not(:disabled) { opacity:.82; transform:translateY(-1px); }
+.dt-btn:disabled { opacity:.35; cursor:not-allowed; transform:none; }
+.dtb-go { background:var(--green); color:#fff; }
+.dtb-pause { background:var(--orange); color:#fff; }
+.dtb-resume { background:var(--blue); color:#fff; }
+.dtb-break { background:var(--purple); color:#fff; }
+.dtb-ebrk { background:var(--green); color:#fff; }
+.dtb-stop { background:var(--red); color:#fff; }
+.dtb-dt { background:#9b1c1c; color:#fff; }
+.dtb-res { background:var(--green); color:#fff; }
+.dtb-save { background:#1a2235; color:#fff; }
+.dtb-cancel { background:var(--bg-elevated); color:var(--text-secondary); border:1px solid var(--border); }
+.dtb-export { background:#1a2235; color:#fff; font-size:11px; padding:6px 12px; }
+.dt-active-card { background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius); padding:14px; margin-bottom:12px; }
+.dt-at-title { font:700 15px var(--font-display); color:var(--text-primary); }
+.dt-at-ref   { font:500 12px var(--font-mono); color:var(--text-muted); margin:3px 0 12px; }
+.dt-timers { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px; }
+.dt-tblk { flex:1; min-width:90px; background:var(--bg-base); border:1px solid var(--border); border-radius:var(--radius); padding:8px 10px; text-align:center; }
+.dt-tlbl { font:700 10px var(--font-mono); color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; }
+.dt-tval { font:700 18px var(--font-mono); margin-top:3px; font-variant-numeric:tabular-nums; }
+.dt-tv-w { color:var(--green); } .dt-tv-d { color:var(--red); } .dt-tv-b { color:var(--orange); }
+.dt-dt-panel { background:#fef2f2; border:1px solid #fca5a5; border-radius:var(--radius); padding:12px; margin-bottom:10px; }
+.dt-dt-panel h5 { font:700 12px var(--font-display); color:var(--red); margin-bottom:10px; }
+.dt-brk-panel { background:#fffbeb; border:1px solid #fde68a; border-radius:var(--radius); padding:10px 14px; display:flex; align-items:center; gap:10px; font:600 13px var(--font-display); color:#78350f; margin-bottom:10px; }
+.dt-log-empty { text-align:center; color:var(--text-muted); font-size:13px; padding:32px 0; }
+.dt-log-entry { border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; margin-bottom:10px; background:var(--bg-base); }
+.dt-log-entry.dt-hdt { border-color:#fca5a5; }
+.dt-le-head { padding:10px 14px; display:flex; justify-content:space-between; align-items:flex-start; background:var(--bg-elevated); border-bottom:1px solid var(--border); }
+.dt-hdt .dt-le-head { background:#fef2f2; border-bottom-color:#fecaca; }
+.dt-le-title { font:700 14px var(--font-display); }
+.dt-le-ref   { font:500 11px var(--font-mono); color:var(--text-muted); margin-top:2px; }
+.dt-le-date  { font:600 11px var(--font-mono); background:#1a2235; color:#e8a830; border-radius:5px; padding:2px 8px; display:inline-block; margin-bottom:3px; }
+.dt-le-tr    { font:500 11px var(--font-mono); color:var(--text-muted); text-align:right; white-space:nowrap; }
+.dt-le-stats { display:flex; border-bottom:1px solid var(--border); }
+.dt-hdt .dt-le-stats { border-bottom-color:#fecaca; }
+.dt-le-stat  { flex:1; padding:8px 10px; text-align:center; border-right:1px solid var(--border); }
+.dt-le-stat:last-child { border-right:none; }
+.dt-ls-lbl   { font:700 10px var(--font-mono); color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; }
+.dt-ls-val   { font:700 13px var(--font-display); margin-top:2px; }
+.dt-ls-val.r { color:var(--red); } .dt-ls-val.g { color:var(--green); }
+.dt-le-body  { padding:10px 14px; }
+.dt-dt-tags  { padding:8px 14px; border-bottom:1px solid #fecaca; background:#fef2f2; display:flex; flex-wrap:wrap; gap:6px; }
+.dt-cat-tag  { display:inline-flex; align-items:center; gap:4px; background:#fce8e8; color:#9b1c1c; border-radius:5px; padding:2px 8px; font:700 10px var(--font-mono); text-transform:uppercase; }
+.dt-etl      { display:flex; flex-direction:column; gap:5px; }
+.dt-ev       { display:flex; align-items:flex-start; gap:8px; font-size:12px; }
+.dt-edot     { width:7px; height:7px; border-radius:50%; margin-top:3px; flex-shrink:0; }
+.dt-ew { background:var(--green); } .dt-ep { background:var(--text-muted); }
+.dt-eb { background:var(--orange); } .dt-ed { background:var(--red); } .dt-ee { background:#1a2235; }
+.dt-et   { color:var(--text-muted); min-width:62px; font-family:var(--font-mono); }
+.dt-edur { font-weight:600; min-width:68px; }
+.dt-enote { color:var(--text-muted); font-style:italic; }
+.dt-le-note { margin-top:8px; padding-top:8px; border-top:1px dashed var(--border); font-style:italic; color:var(--text-muted); font-size:12px; }
+.dt-sgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:18px; }
+.dt-scard { background:var(--bg-base); border:1px solid var(--border); border-radius:var(--radius); padding:14px; text-align:center; }
+.dt-sc-lbl { font:700 10px var(--font-mono); color:var(--text-muted); text-transform:uppercase; letter-spacing:.05em; }
+.dt-sc-val { font:700 22px var(--font-display); margin-top:4px; }
+.dt-sc-val.b { color:var(--blue); } .dt-sc-val.g { color:var(--green); } .dt-sc-val.r { color:var(--red); } .dt-sc-val.o { color:var(--orange); }
+.dt-modal-bg { display:none; position:fixed; inset:0; background:rgba(15,23,42,.65); z-index:600; align-items:center; justify-content:center; padding:20px; }
+.dt-modal-bg.open { display:flex; }
+.dt-modal { background:var(--bg-base); border-radius:var(--radius-lg); padding:24px; width:100%; max-width:460px; box-shadow:0 20px 60px rgba(0,0,0,.35); border:1px solid var(--border); }
+.dt-modal h3 { font:700 15px var(--font-display); margin-bottom:6px; }
+.dt-modal .dt-mname { font:600 13px var(--font-display); color:var(--text-primary); margin-bottom:4px; }
+.dt-modal p { font-size:12px; color:var(--text-muted); margin-bottom:12px; }
+.dt-modal textarea { width:100%; border:1px solid var(--border); border-radius:var(--radius); padding:10px 12px; font:400 13px var(--font-display); font-family:var(--font-display); resize:vertical; min-height:80px; outline:none; margin-bottom:14px; background:var(--bg-input); }
+.dt-modal textarea:focus { border-color:var(--blue); background:#fff; }
+.dt-modal-btns { display:flex; gap:10px; justify-content:flex-end; }
+.dt-sec-hdr { font:700 11px var(--font-mono); color:var(--text-muted); text-transform:uppercase; letter-spacing:.06em; padding-bottom:8px; border-bottom:1px solid var(--border); margin-bottom:12px; }
+@keyframes dt-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.dt-pulse { animation:dt-pulse 1.4s infinite; }
+
 </style>
 <script>
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1291,6 +1394,7 @@ const TABS = [
   {id:'movements', label:'Movements', icon:'↔'},
   {id:'boatplan', label:'Boat Planner', icon:'🚢'},
   {id:'shipping', label:'Shipping', icon:'⛴'},
+  {id:'downtime', label:'Downtime', icon:'⏱'},
   {id:'report', label:'Report', icon:'⎙'},
   {id:'actionedlog', label:'Actioned Log', icon:'✓'},
   {id:'audit', label:'Audit Log', icon:'📋'},
@@ -1915,6 +2019,7 @@ function renderTab(id) {
     case 'movements': return renderMovementsMap();
     case 'boatplan': return renderBoatPlanner();
     case 'shipping': return renderShipping();
+    case 'downtime': return renderDowntime();
     case 'overview': return renderOverview();
     case 'report': return renderReport();
     case 'actionedlog': return renderActionedLog();
@@ -13338,6 +13443,660 @@ function dd_showModalSummary(type,msg) {
   // Show summary both in modal and in left panel
   const s=document.getElementById('dd_pushSummary');
   if (s) { s.textContent=msg; s.className='dd-push-summary '+type; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DOWNTIME TRACKER — full client state, UI render, API persistence
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── In-memory state (active tasks only — completed go to D1) ────────────────
+const DT_CATEGORIES = [
+  '— Select category —',
+  'Winded Off',
+  'Waiting for Permit',
+  'Equipment Fault',
+  'Missing Parts / Materials',
+  'Waiting for Instruction',
+  'Access Restricted',
+  'Weather Hold',
+  'Third Party Delay',
+  'Other',
+];
+
+// Per-team live state
+const dtState = {
+  lifting:  dtNewTeamState(),
+  external: dtNewTeamState(),
+};
+
+// Completed tasks loaded from / saved to D1
+let dtLog = [];          // array of completed task objects
+let dtLogLoaded = false; // have we fetched from API yet?
+let dtLogLoading = false;
+
+// Active downtime sub-tab: 'lifting' | 'external' | 'summary'
+let dtTeamTab = 'lifting';
+
+// Per-team inner tab: 'task' | 'log'
+const dtInnerTab = { lifting: 'task', external: 'task' };
+
+// Pending stop (waiting for modal confirm)
+let dtPending = null;
+
+// Interval handle
+let dtTickHandle = null;
+
+function dtNewTeamState() {
+  return {
+    active: false,
+    status: 'idle',   // idle | working | paused | break | downtime
+    task: null,       // { desc, ref }
+    startTime: null,
+    workSecs: 0,
+    downSecs: 0,
+    breakSecs: 0,
+    segStart: null,
+    events: [],       // timeline entries
+    dtEvents: [],     // resolved downtime events
+    currentDtStart: null,
+    breakCount: 0,
+  };
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function dtPad(n) { return String(n).padStart(2,'0'); }
+function dtFmt(s) { return `${dtPad(Math.floor(s/3600))}:${dtPad(Math.floor(s%3600/60))}:${dtPad(s%60)}`; }
+function dtFmtHM(s) { const h=Math.floor(s/3600),m=Math.floor(s%3600/60); return `${h}h ${m}m`; }
+function dtTs(ms) { return new Date(ms).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+function dtTsm(ms) { return new Date(ms).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }
+function dtDateStr(ms) { return new Date(ms).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'}); }
+function dtDateISO(ms) { const d=new Date(ms); return `${d.getFullYear()}-${dtPad(d.getMonth()+1)}-${dtPad(d.getDate())}`; }
+
+function dtCommit(team) {
+  const s = dtState[team];
+  if (!s.segStart) return 0;
+  const el = Math.floor((Date.now() - s.segStart) / 1000);
+  if (s.status === 'working')  s.workSecs  += el;
+  if (s.status === 'downtime') s.downSecs  += el;
+  if (s.status === 'break')    s.breakSecs += el;
+  s.segStart = null;
+  return el;
+}
+
+function dtPushEv(team, type, label, note) {
+  dtState[team].events.push({ time: Date.now(), type, label, note: note||'' });
+}
+
+// ── Chip helper ──────────────────────────────────────────────────────────────
+const DT_CHIP = {
+  idle:     ['dtchip-idle',    'Idle'],
+  working:  ['dtchip-working', 'Working'],
+  paused:   ['dtchip-paused',  'Paused'],
+  break:    ['dtchip-break',   'Break'],
+  downtime: ['dtchip-downtime','Downtime'],
+};
+function dtChip(team) {
+  const [cls, lbl] = DT_CHIP[dtState[team].status] || DT_CHIP.idle;
+  return `<span class="dt-status-chip ${cls}">${lbl}</span>`;
+}
+
+// ── API helpers ──────────────────────────────────────────────────────────────
+async function dtApiSaveTask(entry) {
+  try {
+    await api('/api/downtime/tasks', 'POST', entry);
+  } catch(e) {
+    console.warn('[Downtime] Failed to save task to D1:', e.message);
+    showError('Downtime task saved locally but failed to sync to server: ' + e.message);
+  }
+}
+
+async function dtApiLoadLog() {
+  if (dtLogLoading) return;
+  dtLogLoading = true;
+  try {
+    const data = await api('/api/downtime/tasks');
+    dtLog = (data.tasks || []).map(t => ({
+      ...t,
+      events:   (typeof t.events   === 'string') ? JSON.parse(t.events)   : (t.events   || []),
+      dtEvents: (typeof t.dt_events === 'string') ? JSON.parse(t.dt_events): (t.dtEvents || []),
+    }));
+    dtLogLoaded = true;
+  } catch(e) {
+    console.warn('[Downtime] Could not load log from API:', e.message);
+    dtLogLoaded = true; // don't keep retrying
+  } finally {
+    dtLogLoading = false;
+  }
+}
+
+// ── Tick ─────────────────────────────────────────────────────────────────────
+function dtStartTick() {
+  if (dtTickHandle) return;
+  dtTickHandle = setInterval(dtTick, 1000);
+}
+
+function dtStopTick() {
+  if (!dtState.lifting.active && !dtState.external.active) {
+    clearInterval(dtTickHandle);
+    dtTickHandle = null;
+  }
+}
+
+function dtTick() {
+  ['lifting','external'].forEach(team => {
+    const s = dtState[team];
+    if (!s.active || !s.segStart) return;
+    const el = Math.floor((Date.now() - s.segStart) / 1000);
+    const upd = (id, val) => { const el2=document.getElementById(id); if(el2) el2.textContent=val; };
+    if (s.status === 'working')  upd(`dtw-${team}`, dtFmt(s.workSecs + el));
+    if (s.status === 'downtime') upd(`dtd-${team}`, dtFmt(s.downSecs + el));
+    if (s.status === 'break')    upd(`dtb-${team}`, dtFmt(s.breakSecs + el));
+  });
+}
+
+// ── Task controls ─────────────────────────────────────────────────────────────
+function dtStartTask(team) {
+  const desc = document.getElementById(`dtdesc-${team}`)?.value.trim();
+  const ref  = document.getElementById(`dtref-${team}`)?.value.trim();
+  if (!desc) { showError('Please enter a task description.'); return; }
+
+  Object.assign(dtState[team], dtNewTeamState());
+  const s = dtState[team];
+  s.active = true;
+  s.status = 'working';
+  s.task = { desc, ref: ref || '' };
+  s.startTime = Date.now();
+  s.segStart = Date.now();
+  dtPushEv(team, 'w', 'Started');
+
+  dtStartTick();
+  dtRenderTeamPanel(team);
+}
+
+function dtPauseTask(team) {
+  const dur = dtCommit(team);
+  dtPushEv(team, 'p', 'Paused', `after ${dtFmt(dur)}`);
+  dtState[team].status = 'paused';
+  dtRenderTeamPanel(team);
+}
+
+function dtResumeTask(team) {
+  dtPushEv(team, 'w', 'Resumed');
+  dtState[team].status = 'working';
+  dtState[team].segStart = Date.now();
+  dtRenderTeamPanel(team);
+}
+
+function dtStartBreak(team) {
+  dtCommit(team);
+  dtState[team].breakCount++;
+  dtPushEv(team, 'b', `Break ${dtState[team].breakCount} started`);
+  dtState[team].status = 'break';
+  dtState[team].segStart = Date.now();
+  dtRenderTeamPanel(team);
+}
+
+function dtEndBreak(team) {
+  const dur = dtCommit(team);
+  dtPushEv(team, 'w', `Break ${dtState[team].breakCount} ended`, `(${dtFmt(dur)})`);
+  dtState[team].status = 'working';
+  dtState[team].segStart = Date.now();
+  dtRenderTeamPanel(team);
+}
+
+function dtStartDowntime(team) {
+  dtCommit(team);
+  dtState[team].currentDtStart = Date.now();
+  dtPushEv(team, 'd', 'Downtime started');
+  dtState[team].status = 'downtime';
+  dtState[team].segStart = Date.now();
+  dtRenderTeamPanel(team);
+}
+
+function dtResolveDowntime(team) {
+  const s = dtState[team];
+  const cat = document.getElementById(`dtcat-${team}`)?.value || 'Uncategorised';
+  const cmt = document.getElementById(`dtcmt-${team}`)?.value.trim() || '(no description)';
+  const dur = dtCommit(team);
+  s.dtEvents.push({ start: s.currentDtStart, end: Date.now(), category: cat, comment: cmt, durSecs: dur });
+  dtPushEv(team, 'd', 'Downtime resolved', `${dtFmt(dur)} — [${cat}] ${cmt}`);
+  s.currentDtStart = null;
+  s.status = 'working';
+  s.segStart = Date.now();
+  dtRenderTeamPanel(team);
+}
+
+function dtStopTask(team) {
+  const s = dtState[team];
+  if (!s.active) return;
+
+  if (s.status === 'downtime') {
+    const cat = document.getElementById(`dtcat-${team}`)?.value || 'Uncategorised';
+    const cmt = document.getElementById(`dtcmt-${team}`)?.value.trim() || '(no description — task stopped)';
+    const dur = dtCommit(team);
+    s.dtEvents.push({ start: s.currentDtStart, end: Date.now(), category: cat, comment: cmt, durSecs: dur });
+    dtPushEv(team, 'd', 'Downtime closed on stop', `${dtFmt(dur)} — [${cat}] ${cmt}`);
+    s.currentDtStart = null;
+  } else {
+    dtCommit(team);
+  }
+  dtPushEv(team, 'e', 'Task stopped');
+
+  const entry = {
+    id: 'dt_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,6),
+    team,
+    task_desc: s.task.desc,
+    task_ref: s.task.ref,
+    start_time: s.startTime,
+    end_time: Date.now(),
+    work_secs: s.workSecs,
+    down_secs: s.downSecs,
+    break_secs: s.breakSecs,
+    break_count: s.breakCount,
+    task_comment: '',
+    // Serialised for D1
+    events:    [...s.events],
+    dtEvents:  [...s.dtEvents],
+  };
+
+  // Show stop modal
+  const modal = document.getElementById('dt-stop-modal');
+  const mname = document.getElementById('dt-modal-name');
+  const mcmt  = document.getElementById('dt-modal-comment');
+  if (modal && mname && mcmt) {
+    mname.textContent = `"${s.task.desc}"${s.task.ref ? ' · ' + s.task.ref : ''}`;
+    mcmt.value = '';
+    modal.classList.add('open');
+  }
+  dtPending = { team, entry };
+}
+
+function dtCancelStop() {
+  if (!dtPending) return;
+  const { team } = dtPending;
+  const s = dtState[team];
+  s.active = true;
+  s.status = 'working';
+  s.segStart = Date.now();
+  s.events = s.events.filter(e => e.label !== 'Task stopped');
+  document.getElementById('dt-stop-modal')?.classList.remove('open');
+  dtPending = null;
+  dtRenderTeamPanel(team);
+}
+
+async function dtConfirmStop() {
+  if (!dtPending) return;
+  const { team, entry } = dtPending;
+  const mcmt = document.getElementById('dt-modal-comment');
+  entry.task_comment = mcmt?.value.trim() || '';
+
+  // Add to local log immediately
+  dtLog.push(entry);
+
+  // Persist to D1
+  await dtApiSaveTask({
+    ...entry,
+    events:   JSON.stringify(entry.events),
+    dt_events: JSON.stringify(entry.dtEvents),
+  });
+
+  // Reset team state
+  Object.assign(dtState[team], dtNewTeamState());
+  dtStopTick();
+
+  document.getElementById('dt-stop-modal')?.classList.remove('open');
+  dtPending = null;
+
+  // Switch to log tab to show the new entry
+  dtInnerTab[team] = 'log';
+  render(); // re-render the whole downtime tab
+}
+
+// ── Render: full Downtime tab ────────────────────────────────────────────────
+function renderDowntime() {
+  // Kick off a log load if not yet loaded (non-blocking)
+  if (!dtLogLoaded && !dtLogLoading) {
+    dtApiLoadLog().then(() => {
+      if (activeTab === 'downtime') render();
+    });
+  }
+
+  return `
+  <div class="dt-page">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+      <div>
+        <h2 style="font:700 20px var(--font-display)">⏱ Downtime Tracker</h2>
+        <div style="font:500 12px var(--font-mono);color:var(--text-muted);margin-top:2px">Track activity time, breaks and downtime for both teams</div>
+      </div>
+    </div>
+
+    <!-- Team tabs -->
+    <div class="dt-team-tabs">
+      <button class="dt-team-tab ${dtTeamTab==='lifting' ?'dtl-on':''}" onclick="dtSwitchTeam('lifting')">
+        🏗️ Lifting Team ${dtChip('lifting')}
+      </button>
+      <button class="dt-team-tab ${dtTeamTab==='external'?'dte-on':''}" onclick="dtSwitchTeam('external')">
+        🔧 External Works ${dtChip('external')}
+      </button>
+      <button class="dt-team-tab ${dtTeamTab==='summary' ?'dts-on':''}" onclick="dtSwitchTeam('summary')" style="margin-left:auto">
+        📊 Daily Summary
+      </button>
+    </div>
+
+    ${dtTeamTab === 'lifting'  ? dtRenderTeamView('lifting')  : ''}
+    ${dtTeamTab === 'external' ? dtRenderTeamView('external') : ''}
+    ${dtTeamTab === 'summary'  ? dtRenderSummary()            : ''}
+  </div>
+
+  <!-- Stop-task modal (shared) -->
+  <div class="dt-modal-bg" id="dt-stop-modal">
+    <div class="dt-modal">
+      <h3>✅ Task Complete</h3>
+      <div class="dt-mname" id="dt-modal-name"></div>
+      <p>Add any final notes before saving to the log.</p>
+      <textarea id="dt-modal-comment" placeholder="Optional: overall notes, what was achieved, any outstanding issues…"></textarea>
+      <div class="dt-modal-btns">
+        <button class="dt-btn dtb-cancel" onclick="dtCancelStop()">✕ Cancel</button>
+        <button class="dt-btn dtb-save"   onclick="dtConfirmStop()">💾 Save to Log</button>
+      </div>
+    </div>
+  </div>
+  `;
+}
+
+function dtSwitchTeam(t) {
+  dtTeamTab = t;
+  render();
+}
+
+function dtSwitchInner(team, tab) {
+  dtInnerTab[team] = tab;
+  render();
+}
+
+// ── Render: one team's panel (re-used for live updates via render()) ──────────
+function dtRenderTeamView(team) {
+  const s = dtState[team];
+  const iL = team === 'lifting';
+  const cardCls = iL ? 'dt-lift-card' : 'dt-ext-card';
+  const onCls   = iL ? 'dti-on-l'    : 'dti-on-e';
+  const tab = dtInnerTab[team];
+  const logEntries = dtLog.filter(e => e.team === team);
+
+  return `
+  <div class="dt-inner-tabs">
+    <button class="dt-inner-tab ${tab==='task'?onCls:''}" onclick="dtSwitchInner('${team}','task')">New Task</button>
+    <button class="dt-inner-tab ${tab==='log' ?onCls:''}" onclick="dtSwitchInner('${team}','log')">
+      Activity Log (${logEntries.length})
+    </button>
+  </div>
+
+  ${tab === 'task' ? dtRenderNewTaskPanel(team, cardCls, s) : ''}
+  ${tab === 'log'  ? dtRenderLog(team, logEntries) : ''}
+  `;
+}
+
+function dtRenderNewTaskPanel(team, cardCls, s) {
+  const catOpts = DT_CATEGORIES.map(c => `<option>${c}</option>`).join('');
+
+  // ── Active task section ──
+  let activeHtml = '';
+  if (s.active) {
+    const pauseBtn = s.status === 'paused'
+      ? `<button class="dt-btn dtb-resume" onclick="dtResumeTask('${team}')">▶ Resume</button>`
+      : `<button class="dt-btn dtb-pause"  onclick="dtPauseTask('${team}')" ${s.status==='break'||s.status==='downtime'?'disabled':''}>⏸ Pause</button>`;
+
+    const brkBtn = `<button class="dt-btn dtb-break" onclick="dtStartBreak('${team}')" ${s.status==='downtime'?'disabled':''}>☕ Break</button>`;
+    const dtBtn  = `<button class="dt-btn dtb-dt"    onclick="dtStartDowntime('${team}')" ${s.status!=='working'?'disabled':''}>⚠ Downtime</button>`;
+    const stopBtn= `<button class="dt-btn dtb-stop"  onclick="dtStopTask('${team}')">⏹ Stop Task</button>`;
+
+    const downtimePanelHtml = s.status === 'downtime' ? `
+      <div class="dt-dt-panel">
+        <h5>⚠ Active Downtime</h5>
+        <div class="dt-form-row">
+          <div class="dt-fg">
+            <label>Category</label>
+            <select id="dtcat-${team}">${catOpts}</select>
+          </div>
+        </div>
+        <div class="dt-form-row" style="margin-bottom:8px">
+          <div class="dt-fg">
+            <label>Description</label>
+            <textarea id="dtcmt-${team}" placeholder="What caused the downtime?"></textarea>
+          </div>
+        </div>
+        <button class="dt-btn dtb-res" onclick="dtResolveDowntime('${team}')">✔ Resolve Downtime</button>
+      </div>` : `<div id="dtcat-${team}" style="display:none"></div><div id="dtcmt-${team}" style="display:none"></div>`;
+
+    const brkPanelHtml = s.status === 'break' ? `
+      <div class="dt-brk-panel">
+        ☕ Team on break — timers paused
+        <button class="dt-btn dtb-ebrk" style="margin-left:auto" onclick="dtEndBreak('${team}')">▶ End Break</button>
+      </div>` : '';
+
+    activeHtml = `
+    <div class="dt-active-card">
+      <div class="dt-at-title">${s.task.desc}</div>
+      ${s.task.ref ? `<div class="dt-at-ref">Ref: ${s.task.ref}</div>` : '<div style="margin-bottom:12px"></div>'}
+      <div class="dt-timers">
+        <div class="dt-tblk">
+          <div class="dt-tlbl">Working</div>
+          <div class="dt-tval dt-tv-w ${s.status==='working'?'dt-pulse':''}" id="dtw-${team}">${dtFmt(s.workSecs)}</div>
+        </div>
+        <div class="dt-tblk">
+          <div class="dt-tlbl">Downtime</div>
+          <div class="dt-tval dt-tv-d" id="dtd-${team}">${dtFmt(s.downSecs)}</div>
+        </div>
+        <div class="dt-tblk">
+          <div class="dt-tlbl">Breaks</div>
+          <div class="dt-tval dt-tv-b" id="dtb-${team}">${dtFmt(s.breakSecs)}</div>
+        </div>
+      </div>
+      <div class="dt-btn-row">${pauseBtn}${brkBtn}${dtBtn}${stopBtn}</div>
+    </div>
+    ${downtimePanelHtml}
+    ${brkPanelHtml}`;
+  }
+
+  return `
+  <div class="dt-new-card ${cardCls}">
+    <div class="dt-form-row">
+      <div class="dt-fg" style="flex:2">
+        <label>Task Description</label>
+        <input id="dtdesc-${team}" placeholder="${team==='lifting'?'e.g. Replace sling on Crane A':'e.g. Repair fence section B'}" ${s.active?'disabled':''} value="${s.active?s.task.desc:''}" />
+      </div>
+      <div class="dt-fg" style="flex:1">
+        <label>Item / Ref No.</label>
+        <input id="dtref-${team}" placeholder="e.g. CAGE-042" ${s.active?'disabled':''} value="${s.active?s.task.ref:''}" />
+      </div>
+    </div>
+    <div class="dt-btn-row" style="margin-top:0">
+      <button class="dt-btn dtb-go" onclick="dtStartTask('${team}')" ${s.active?'disabled':''}>▶ Go</button>
+    </div>
+  </div>
+  ${activeHtml}`;
+}
+
+// Re-render just the team panel in place without a full render() (for timer updates we use dtTick)
+function dtRenderTeamPanel(team) {
+  if (activeTab === 'downtime' && dtTeamTab === team) {
+    render();
+  }
+}
+
+// ── Render: log ───────────────────────────────────────────────────────────────
+function dtRenderLog(team, entries) {
+  if (!dtLogLoaded) {
+    return `<div class="dt-log-empty" style="padding:40px 0">
+      <div style="font-size:20px;margin-bottom:8px">⏳</div>
+      Loading activity log…
+    </div>`;
+  }
+  if (!entries.length) {
+    return `<div class="dt-log-empty">No completed tasks yet.</div>`;
+  }
+  return entries.map((e, i) => dtBuildEntry(e, i + 1)).join('');
+}
+
+function dtBuildEntry(e, num) {
+  const hdt   = (e.down_secs || e.downSecs || 0) > 0;
+  const wSecs = e.work_secs  || e.workSecs  || 0;
+  const dSecs = e.down_secs  || e.downSecs  || 0;
+  const bSecs = e.break_secs || e.breakSecs || 0;
+  const bCnt  = e.break_count|| e.breakCount|| 0;
+  const desc  = e.task_desc  || e.taskDesc  || '';
+  const ref   = e.task_ref   || e.taskRef   || '';
+  const cmt   = e.task_comment||e.taskComment||'';
+  const stMs  = e.start_time || e.startTime || 0;
+  const enMs  = e.end_time   || e.endTime   || 0;
+  const team  = e.team || 'lifting';
+  const dtEvs = (typeof e.dt_events === 'string') ? JSON.parse(e.dt_events) : (e.dtEvents || []);
+  const evs   = (typeof e.events    === 'string') ? JSON.parse(e.events)    : (e.events   || []);
+
+  const totAct = wSecs + dSecs;
+  const dtPct  = totAct > 0 ? Math.round(dSecs / totAct * 100) : 0;
+
+  const teamLbl = team === 'lifting' ? '🏗️ Lifting' : '🔧 Ext Works';
+
+  const evHtml = evs.map(ev => {
+    const dot = {w:'dt-ew',p:'dt-ep',b:'dt-eb',d:'dt-ed',e:'dt-ee'}[ev.type] || 'dt-ew';
+    return `<div class="dt-ev">
+      <div class="dt-edot ${dot}"></div>
+      <span class="dt-et">${dtTs(ev.time)}</span>
+      <span class="dt-edur">${ev.label}</span>
+      ${ev.note ? `<span class="dt-enote">${ev.note}</span>` : ''}
+    </div>`;
+  }).join('');
+
+  const dtTagsHtml = hdt ? dtEvs.map(d =>
+    `<span class="dt-cat-tag">⚠ ${d.category||'Uncategorised'} — ${dtFmt(d.durSecs||0)}</span>`
+  ).join('') : '';
+
+  return `
+  <div class="dt-log-entry ${hdt?'dt-hdt':''}">
+    <div class="dt-le-head">
+      <div>
+        <div><span class="dt-le-date">📅 ${dtDateStr(stMs)}</span></div>
+        <div class="dt-le-title">#${num} — ${desc} <span style="font-size:10px;font-weight:500;color:var(--text-muted)">${teamLbl}</span></div>
+        ${ref ? `<div class="dt-le-ref">Ref: ${ref}</div>` : ''}
+      </div>
+      <div class="dt-le-tr">${dtTsm(stMs)} – ${dtTsm(enMs)}</div>
+    </div>
+    <div class="dt-le-stats">
+      <div class="dt-le-stat"><div class="dt-ls-lbl">Working</div><div class="dt-ls-val g">${dtFmtHM(wSecs)}</div></div>
+      <div class="dt-le-stat"><div class="dt-ls-lbl">Downtime</div><div class="dt-ls-val ${hdt?'r':''}">${dtFmtHM(dSecs)}${hdt?` (${dtPct}%)`:''}</div></div>
+      <div class="dt-le-stat"><div class="dt-ls-lbl">Breaks ×${bCnt}</div><div class="dt-ls-val">${dtFmtHM(bSecs)}</div></div>
+    </div>
+    ${hdt ? `<div class="dt-dt-tags">${dtTagsHtml}</div>` : ''}
+    <div class="dt-le-body">
+      <div class="dt-etl">${evHtml}</div>
+      ${cmt ? `<div class="dt-le-note">📝 ${cmt}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+// ── Render: summary ───────────────────────────────────────────────────────────
+function dtRenderSummary() {
+  const all  = dtLog;
+  const lift = all.filter(e => e.team === 'lifting');
+  const ext  = all.filter(e => e.team === 'external');
+
+  const sumW = a => a.reduce((t,e) => t + (e.work_secs||e.workSecs||0), 0);
+  const sumD = a => a.reduce((t,e) => t + (e.down_secs||e.downSecs||0), 0);
+  const sumB = a => a.reduce((t,e) => t + (e.break_secs||e.breakSecs||0), 0);
+  const evts = a => a.reduce((t,e) => { const d=(typeof e.dt_events==='string')?JSON.parse(e.dt_events):(e.dtEvents||[]); return t+d.length; }, 0);
+  const eff  = (w,d) => { const a=w+d; return a>0?Math.round(w/a*100):null; };
+  const effCls = v => v===null?'':v>=80?'g':v>=60?'o':'r';
+
+  const aw=sumW(all),ad=sumD(all),ab=sumB(all),ae=eff(aw,ad);
+  const lw=sumW(lift),ld=sumD(lift),le=eff(lw,ld);
+  const ew=sumW(ext), ed=sumD(ext), ee=eff(ew,ed);
+
+  const statCard = (lbl, val, cls) =>
+    `<div class="dt-scard"><div class="dt-sc-lbl">${lbl}</div><div class="dt-sc-val ${cls}">${val}</div></div>`;
+
+  return `
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div class="dt-sec-hdr" style="margin:0">Overall Today</div>
+    <button class="dt-btn dtb-export" onclick="dtExportCSV()">⬇ Export CSV</button>
+  </div>
+  <div class="dt-sgrid">
+    ${statCard('Tasks Done', all.length, 'b')}
+    ${statCard('Working Time', dtFmtHM(aw), 'g')}
+    ${statCard('Total Downtime', dtFmtHM(ad), 'r')}
+    ${statCard('Break Time', dtFmtHM(ab), 'o')}
+    ${statCard('DT Events', evts(all), 'r')}
+    ${statCard('Efficiency', ae!==null?ae+'%':'—', effCls(ae))}
+  </div>
+
+  <div class="dt-sec-hdr" style="margin-bottom:12px">🏗️ Lifting Team</div>
+  <div class="dt-sgrid" style="margin-bottom:20px">
+    ${statCard('Tasks', lift.length, 'b')}
+    ${statCard('Working', dtFmtHM(lw), 'g')}
+    ${statCard('Downtime', dtFmtHM(ld), 'r')}
+    ${statCard('Efficiency', le!==null?le+'%':'—', effCls(le))}
+  </div>
+
+  <div class="dt-sec-hdr" style="margin-bottom:12px">🔧 External Works</div>
+  <div class="dt-sgrid" style="margin-bottom:24px">
+    ${statCard('Tasks', ext.length, 'b')}
+    ${statCard('Working', dtFmtHM(ew), 'g')}
+    ${statCard('Downtime', dtFmtHM(ed), 'r')}
+    ${statCard('Efficiency', ee!==null?ee+'%':'—', effCls(ee))}
+  </div>
+
+  <div class="dt-sec-hdr" style="margin-bottom:12px">All Completed Tasks</div>
+  ${!all.length
+    ? '<div class="dt-log-empty">No tasks completed yet.</div>'
+    : all.map((e,i) => dtBuildEntry(e, i+1)).join('')
+  }`;
+}
+
+// ── CSV Export ────────────────────────────────────────────────────────────────
+function dtExportCSV() {
+  if (!dtLog.length) { showError('No completed tasks to export.'); return; }
+
+  const maxDT = Math.max(1, ...dtLog.map(e => {
+    const d = (typeof e.dt_events==='string') ? JSON.parse(e.dt_events) : (e.dtEvents||[]);
+    return d.length;
+  }));
+
+  const hdr = ['#','Date','Team','Description','Ref','Start','End',
+    'Work (min)','Downtime (min)','Break (min)','Total DT Events','Task Notes'];
+  for (let i=1; i<=maxDT; i++) hdr.push(`DT${i} Time (min)`, `DT${i} Category`, `DT${i} Description`);
+
+  const rows = [hdr];
+  dtLog.forEach((e, i) => {
+    const dtEvs = (typeof e.dt_events==='string') ? JSON.parse(e.dt_events) : (e.dtEvents||[]);
+    const stMs  = e.start_time || e.startTime || 0;
+    const enMs  = e.end_time   || e.endTime   || 0;
+    const row = [
+      i+1,
+      new Date(stMs).toLocaleDateString('en-GB'),
+      e.team === 'lifting' ? 'Lifting' : 'External Works',
+      e.task_desc||e.taskDesc||'',
+      e.task_ref||e.taskRef||'',
+      dtTsm(stMs), dtTsm(enMs),
+      Math.round((e.work_secs||e.workSecs||0)/60),
+      Math.round((e.down_secs||e.downSecs||0)/60),
+      Math.round((e.break_secs||e.breakSecs||0)/60),
+      dtEvs.length,
+      e.task_comment||e.taskComment||'',
+    ];
+    for (let j=0; j<maxDT; j++) {
+      const d = dtEvs[j];
+      d ? row.push(Math.round((d.durSecs||0)/60), d.category||'Uncategorised', d.comment||'')
+        : row.push('','','');
+    }
+    rows.push(row);
+  });
+
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type:'text/csv' }));
+  const d = new Date();
+  a.download = `downtime_${d.getFullYear()}-${dtPad(d.getMonth()+1)}-${dtPad(d.getDate())}.csv`;
+  a.click();
 }
 
 </script>
