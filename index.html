@@ -434,100 +434,7 @@ tr.dragging { opacity: 0.4; }
 .rmd-mini-count { font: 700 16px var(--font-mono); }
 .rmd-mini-count.empty { color: #d0d0d0; }
 
-/* ── AI Chat Panel ── */
-.ai-chat-fab {
-  position: fixed; bottom: 24px; right: 24px; z-index: 1000;
-  width: 52px; height: 52px; border-radius: 50%;
-  background: linear-gradient(135deg, #e8a830, #c08520);
-  border: none; cursor: pointer; box-shadow: 0 4px 16px rgba(192,133,32,0.45);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 22px; transition: all 0.18s; color: #fff;
-}
-.ai-chat-fab:hover { transform: scale(1.08); box-shadow: 0 6px 22px rgba(192,133,32,0.55); }
-.ai-chat-fab.open { background: linear-gradient(135deg, #475569, #334155); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
 
-.ai-chat-panel {
-  position: fixed; bottom: 86px; right: 24px; z-index: 999;
-  width: 380px; max-width: calc(100vw - 48px);
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: var(--radius-lg); box-shadow: 0 8px 32px rgba(0,0,0,0.18);
-  display: flex; flex-direction: column; overflow: hidden;
-  transition: all 0.2s cubic-bezier(0.34,1.56,0.64,1);
-  transform-origin: bottom right;
-}
-.ai-chat-panel.hidden { opacity: 0; pointer-events: none; transform: scale(0.85); }
-
-.ai-chat-header {
-  background: #1a2235; padding: 12px 16px;
-  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
-}
-.ai-chat-header-icon {
-  width: 30px; height: 30px; border-radius: 8px;
-  background: linear-gradient(135deg, #e8a830, #c08520);
-  display: flex; align-items: center; justify-content: center; font-size: 14px;
-}
-.ai-chat-header-title { flex: 1; }
-.ai-chat-header-title div:first-child { font: 700 13px var(--font-display); color: #fff; }
-.ai-chat-header-title div:last-child { font: 500 10px var(--font-mono); color: #8899aa; letter-spacing: 0.06em; }
-.ai-chat-close { background: none; border: none; color: #8899aa; font-size: 18px; cursor: pointer; line-height:1; padding: 2px 4px; border-radius: 4px; }
-.ai-chat-close:hover { color: #fff; background: rgba(255,255,255,0.08); }
-
-.ai-chat-messages {
-  flex: 1; overflow-y: auto; padding: 14px; display: flex;
-  flex-direction: column; gap: 10px; min-height: 280px; max-height: 380px;
-}
-.ai-chat-msg {
-  max-width: 88%; padding: 9px 13px; border-radius: 12px;
-  font-size: 13px; line-height: 1.5; word-break: break-word;
-}
-.ai-chat-msg.user {
-  align-self: flex-end; background: linear-gradient(135deg, #e8a830, #c08520);
-  color: #fff; border-bottom-right-radius: 4px;
-}
-.ai-chat-msg.assistant {
-  align-self: flex-start; background: var(--bg-elevated);
-  color: var(--text-primary); border: 1px solid var(--border); border-bottom-left-radius: 4px;
-}
-.ai-chat-msg.error { background: #fce8e8; color: var(--red); border: 1px solid #e8b0b0; }
-.ai-chat-msg.thinking {
-  align-self: flex-start; background: var(--bg-elevated);
-  border: 1px dashed var(--border); color: var(--text-muted); font-style: italic;
-}
-.ai-chat-thinking-dots::after {
-  content: '...'; animation: chat-dots 1.2s steps(4,end) infinite;
-}
-@keyframes chat-dots {
-  0%,20% { content: ''; } 40% { content: '.'; } 60% { content: '..'; } 80%,100% { content: '...'; }
-}
-
-.ai-chat-footer {
-  border-top: 1px solid var(--border); padding: 10px 12px;
-  display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0;
-}
-.ai-chat-input {
-  flex: 1; resize: none; border-radius: 8px; font-size: 13px;
-  padding: 8px 12px; line-height: 1.4; min-height: 38px; max-height: 100px;
-  background: var(--bg-input); border: 1px solid var(--border); color: var(--text-primary);
-}
-.ai-chat-input:focus { outline: none; border-color: var(--accent); }
-.ai-chat-send {
-  width: 36px; height: 36px; border-radius: 8px; border: none; flex-shrink: 0;
-  background: linear-gradient(135deg, #e8a830, #c08520); color: #fff;
-  font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-  transition: all 0.12s;
-}
-.ai-chat-send:hover { filter: brightness(1.1); }
-.ai-chat-send:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.ai-chat-suggestions {
-  display: flex; flex-wrap: wrap; gap: 5px; padding: 6px 14px 0;
-}
-.ai-chat-suggestion {
-  font: 500 11px var(--font-display); padding: 4px 10px; border-radius: 20px;
-  background: var(--accent-dim); color: var(--accent); border: 1px solid #e0c880;
-  cursor: pointer; transition: all 0.1s; white-space: nowrap;
-}
-.ai-chat-suggestion:hover { background: #f5e6c8; }
 
 .planner-layout { display: grid; grid-template-columns: 1fr 340px; gap: 16px; }
 .planner-sidebar { max-height: calc(100vh - 140px); overflow-y: auto; }
@@ -5655,8 +5562,7 @@ let auditSort = 'date-desc'; // 'date-desc' | 'date-asc'
 // ANALYTICS
 // ═══════════════════════════════════════════════════════════════════════════════
 let _analyticsCharts = {};
-let _aiCharts = [];          // [{id, prompt, chartCfg, error, loading}]
-let _aiChartInput = '';
+
 
 function destroyAnalyticsCharts() {
   Object.values(_analyticsCharts).forEach(c => { try { c.destroy(); } catch(e) {} });
@@ -6156,30 +6062,7 @@ function renderAnalytics() {
 
     <div id="analytics-data" style="display:none" data-json="${encodeURIComponent(JSON.stringify(chartData))}"></div>
 
-    <!-- AI Chart Builder -->
-    <div class="card" style="margin-top:20px">
-      <div class="card-title" style="margin-bottom:4px">🤖 AI Chart Builder</div>
-      <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">
-        Describe any graph you want in plain English — the AI will generate it from your facility data.
-        Try: <em>"cages stored in RMD over time"</em>, <em>"movement types by month"</em>, <em>"cages per frame width"</em>
-      </div>
-      <div style="display:flex;gap:8px;margin-bottom:12px">
-        <input id="ai-chart-input" type="text" placeholder="e.g. show me cages in RMD over time, or frame utilisation by width"
-          style="flex:1;padding:8px 12px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);font:400 13px var(--font-display);color:var(--text-primary)"
-          value="${esc(_aiChartInput)}"
-          oninput="_aiChartInput=this.value"
-          onkeydown="if(event.key==='Enter')requestAIChart()"/>
-        <button class="btn btn-primary" onclick="requestAIChart()" style="white-space:nowrap">✨ Generate Chart</button>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
-        ${['Cages in RMD over time','Movement types by month','Cages per frame width','Weight breakdown by location','Boat trip cage counts','Frames at facility vs away'].map(s =>
-          `<button class="btn btn-secondary btn-sm" style="font-size:11px" onclick="_aiChartInput='${s}';document.getElementById('ai-chart-input').value='${s}';requestAIChart()">${s}</button>`
-        ).join('')}
-      </div>
-      <div id="ai-charts-area">
-        ${_aiCharts.length === 0 ? '' : _aiCharts.map((c, i) => renderAIChartCard(c, i)).join('')}
-      </div>
-    </div>
+
 
   </div>`;
 }
@@ -6241,190 +6124,6 @@ function drawAnalyticsCharts() {
   });
 }
 
-
-// ── AI Chart Builder ─────────────────────────────────────────────────────────
-
-function renderAIChartCard(c, i) {
-  if (c.loading) {
-    return `<div class="card" style="margin-top:12px;padding:14px 16px;background:var(--bg-elevated)">
-      <div style="display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:12px">
-        <span style="animation:spin 1s linear infinite;display:inline-block">⏳</span>
-        AI is building your chart for: <em>${esc(c.prompt)}</em>
-      </div>
-    </div>`;
-  }
-  if (c.error) {
-    return `<div class="card" style="margin-top:12px;padding:14px 16px;background:var(--bg-elevated)">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div>
-          <div style="font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:4px">🤖 ${esc(c.prompt)}</div>
-          <div style="color:var(--red);font-size:12px">⚠ ${esc(c.error)}</div>
-        </div>
-        <button class="btn btn-secondary btn-sm" onclick="_aiCharts.splice(${i},1);renderAIChartsArea()">✕</button>
-      </div>
-    </div>`;
-  }
-  return `<div class="card" style="margin-top:12px;padding:14px 16px;background:var(--bg-elevated)" id="ai-chart-card-${c.id}">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div style="font:700 12px var(--font-mono);color:var(--accent)">🤖 ${esc(c.prompt)}</div>
-      <div style="display:flex;gap:6px">
-        <button class="btn btn-secondary btn-sm" onclick="rerunAIChart(${i})" title="Regenerate">↻</button>
-        <button class="btn btn-secondary btn-sm" onclick="_aiCharts.splice(${i},1);renderAIChartsArea()">✕</button>
-      </div>
-    </div>
-    ${c.insight ? `<div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;padding:8px 10px;background:var(--bg-deep);border-radius:6px;line-height:1.5">${esc(c.insight)}</div>` : ''}
-    <div style="position:relative;height:280px"><canvas id="ai-canvas-${c.id}"></canvas></div>
-  </div>`;
-}
-
-function renderAIChartsArea() {
-  const area = document.getElementById('ai-charts-area');
-  if (!area) return;
-  area.innerHTML = _aiCharts.map((c, i) => renderAIChartCard(c, i)).join('');
-  // Draw charts for non-loading, non-error entries
-  _aiCharts.forEach(c => {
-    if (!c.loading && !c.error && c.chartCfg) {
-      const canvas = document.getElementById('ai-canvas-' + c.id);
-      if (!canvas) return;
-      try { Chart.getChart(canvas)?.destroy(); } catch(e) {}
-      try { new Chart(canvas, c.chartCfg); } catch(e) {
-        console.error('AI chart render error:', e);
-      }
-    }
-  });
-}
-
-function buildFacilitySnapshot() {
-  // Build a rich but compact data snapshot for the AI to work with
-  const completedMoves = STATE.plannedMovements.filter(m => m.completed);
-
-  // Movement counts by date and type
-  const byDate = {};
-  completedMoves.forEach(m => {
-    const d = (m.date || '').slice(0,10);
-    if (!d) return;
-    if (!byDate[d]) byDate[d] = {};
-    byDate[d][m.typeKey] = (byDate[d][m.typeKey] || 0) + 1;
-  });
-
-  // RMD snapshot: current occupancy per slot
-  const rmdOccupancy = STATE.rmdSlots.map(r => ({
-    number: r.number,
-    A: { cage1: !!r.A.cage1, cage2: !!r.A.cage2 },
-    B: { cage1: !!r.B.cage1, cage2: !!r.B.cage2 },
-  }));
-  const totalRmdSlots = STATE.rmdSlots.length * 4;
-  const filledRmdSlots = STATE.rmdSlots.reduce((n, r) =>
-    n + ['A','B'].reduce((nn, s) => nn + (r[s].cage1?1:0) + (r[s].cage2?1:0), 0), 0);
-
-  // Frame utilisation
-  const framesAtFacility = STATE.frames.filter(f => f.location === 'facility');
-  const frameWidthGroups = {};
-  framesAtFacility.forEach(f => {
-    const k = f.width + 'm';
-    if (!frameWidthGroups[k]) frameWidthGroups[k] = { total: 0, occupied: 0 };
-    frameWidthGroups[k].total++;
-    if (f.cages.length > 0) frameWidthGroups[k].occupied++;
-  });
-
-  // Boat trips with cage counts
-  const tripSummary = (STATE.boatTrips||[]).map(t => ({
-    label: t.label || t.id,
-    departDate: t.departDate || t.loadDate || '',
-    cagesShipped: STATE.cages.filter(c => c.proposedTripId === t.id && c.location === 'shipped').length,
-    cagesPlanned: STATE.cages.filter(c => c.proposedTripId === t.id && c.location !== 'shipped').length,
-  })).sort((a,b) => a.departDate.localeCompare(b.departDate));
-
-  // Location breakdown
-  const locationCounts = {};
-  STATE.cages.forEach(c => { locationCounts[c.location] = (locationCounts[c.location]||0)+1; });
-
-  // Weight breakdown
-  const weights = STATE.cages.map(c => c.weight).filter(Boolean);
-
-  // Movement history reconstructed: RMD count per day (approximation from location history)
-  const rmdOverTime = {};
-  STATE.cages.forEach(c => {
-    if (!c.locationHistory) return;
-    c.locationHistory.forEach((h, idx) => {
-      const d = (h.date||'').slice(0,10);
-      if (!d) return;
-      if (!rmdOverTime[d]) rmdOverTime[d] = { inRmd: 0, inFrame: 0, inFacility: 0 };
-      if (h.location === 'rmd')      rmdOverTime[d].inRmd++;
-      if (h.location === 'frame')    rmdOverTime[d].inFrame++;
-      if (h.location === 'facility') rmdOverTime[d].inFacility++;
-    });
-  });
-
-  return {
-    today: todayStr(),
-    cageCount: STATE.cages.length,
-    locationCounts,
-    weightStats: {
-      min: weights.length ? Math.min(...weights) : null,
-      max: weights.length ? Math.max(...weights) : null,
-      avg: weights.length ? +(weights.reduce((a,b)=>a+b,0)/weights.length).toFixed(2) : null,
-      heavy: STATE.cages.filter(c=>(c.weight||0)>=6.5).length,
-      light: STATE.cages.filter(c=>(c.weight||0)>0&&(c.weight||0)<6.5).length,
-    },
-    rmd: { totalSlots: totalRmdSlots, filledSlots: filledRmdSlots, slotCount: STATE.rmdSlots.length },
-    frames: { total: STATE.frames.length, atFacility: framesAtFacility.length, widthGroups: frameWidthGroups },
-    movements: {
-      total: completedMoves.length,
-      pending: STATE.plannedMovements.filter(m=>!m.completed).length,
-      byDate,
-      typeSummary: completedMoves.reduce((acc,m) => { acc[m.typeKey]=(acc[m.typeKey]||0)+1; return acc; }, {}),
-    },
-    trips: tripSummary,
-    rmdOverTime: Object.fromEntries(Object.entries(rmdOverTime).sort(([a],[b])=>a.localeCompare(b))),
-    cages: STATE.cages.map(c => ({
-      name: c.name, location: c.location, width: c.width, height: c.height,
-      weight: c.weight, locationDetail: c.locationDetail,
-    })),
-  };
-}
-
-async function requestAIChart() {
-  const prompt = _aiChartInput.trim();
-  if (!prompt) return;
-  _aiChartInput = '';
-  const inputEl = document.getElementById('ai-chart-input');
-  if (inputEl) inputEl.value = '';
-
-  const id = Date.now();
-  _aiCharts.unshift({ id, prompt, loading: true, chartCfg: null, error: null, insight: null });
-  renderAIChartsArea();
-
-  try {
-    const snapshot = buildFacilitySnapshot();
-    const res = await fetch(API_BASE + '/api/ai-chart', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': _sessionPin ? `Bearer ${_sessionPin}` : '' },
-      body: JSON.stringify({ prompt, snapshot }),
-      signal: AbortSignal.timeout(45000),
-    });
-    const data = res.ok ? await res.json() : null;
-    const idx = _aiCharts.findIndex(c => c.id === id);
-    if (idx === -1) return;
-    if (data?.ok && data.chartCfg) {
-      _aiCharts[idx] = { id, prompt, loading: false, chartCfg: data.chartCfg, insight: data.insight || null, error: null };
-    } else {
-      _aiCharts[idx] = { id, prompt, loading: false, chartCfg: null, error: data?.error || 'AI did not return a valid chart config.', insight: null };
-    }
-  } catch(e) {
-    const idx = _aiCharts.findIndex(c => c.id === id);
-    if (idx !== -1) _aiCharts[idx] = { id, prompt, loading: false, chartCfg: null, error: 'Request failed: ' + e.message, insight: null };
-  }
-  renderAIChartsArea();
-}
-
-async function rerunAIChart(i) {
-  const prompt = _aiCharts[i]?.prompt;
-  if (!prompt) return;
-  _aiCharts.splice(i, 1);
-  _aiChartInput = prompt;
-  await requestAIChart();
-}
 
 async function saveActionedLogEntry(date, field, value) {
   if (!STATE.actionedLog[date]) STATE.actionedLog[date] = {};
@@ -8288,73 +7987,9 @@ async function generateBoatMovements() {
       }
     });
 
-  bpGeneratedMovements = { moves, warnings, assignments: scheduledSteps, framesUsed: boatFrames, scheduledSteps, aiInsight: null, aiLoading: true };
+  bpGeneratedMovements = { moves, warnings, assignments: scheduledSteps, framesUsed: boatFrames, scheduledSteps };
   render();
 
-  // ── AI insight (non-blocking) ─────────────────────────────────────────
-  try {
-    const noFrameCages = scheduledSteps.filter(s => s.action === 'no_frame');
-    // Build per-day schedule summary for AI
-    const byDay = {};
-    scheduledSteps.filter(s=>s.action!=='no_frame').forEach(s => {
-      const d = s.date || 'unscheduled';
-      if (!byDay[d]) byDay[d] = [];
-      byDay[d].push(`${s.cage?.name} → ${s.frame?.name || '?'} (${s.action})`);
-    });
-    const daySchedule = Object.entries(byDay).sort(([a],[b])=>a.localeCompare(b))
-      .map(([d, steps]) => `  ${d}: ${steps.join(' | ')}`).join('\n');
-
-    const payload = {
-      boatDate: bpBoatDate,
-      userGuidance: bpGuidance || null,
-      facilityExitCages: exitCagesToPlan.map(c => ({ name: c.name, width: c.width, departureDate: c.departureDate })),
-      boatCages: boatCages.map(c => ({ name: c.name, width: c.width, height: c.height, location: c.location, needsWaler: needsWaler(c) })),
-      facilityFrames: STATE.frames.filter(f => f.location === 'facility').map(f => ({ name: f.name, width: f.width, hasWaler: f.hasWaler, occupancy: f.cages.length })),
-      returningFrames: STATE.frames.filter(f => (f.location==='client'||f.location==='boat') && f.returnDate && f.returnDate <= bpBoatDate).map(f => ({ name: f.name, width: f.width, returnDate: f.returnDate, hasWaler: f.hasWaler })),
-      scheduledSteps: scheduledSteps.filter(s=>s.action!=='no_frame').map(s => ({ cage: s.cage?.name, frame: s.frame?.name, action: s.action, date: s.date, isReturningFrame: !!s.isReturningFrame })),
-      daySchedule,
-      warnings: warnings.filter(w => w.startsWith('⚠') || w.startsWith('🚨')),
-      noFrameCages: noFrameCages.map(s => s.cage?.name),
-      productionStoppageDay,
-      workDays: workDays.length,
-      dailyLimit: DAILY_LIMIT,
-      existingMovements: (STATE.plannedMovements || []).filter(m => !m.completed).map(m => ({
-        date: m.date, description: m.description, shift: m.shift, type: m.type
-      })),
-      previousAiInsight: bpGeneratedMovements?.aiInsight || null,
-      learnedPrefs: {
-        summary: learnedPrefs.summary,
-        completedMovements: learnedPrefs.totalCompleted,
-        framePrefsByCage: Object.entries(learnedPrefs.framePrefByCageId).map(([cid, fid]) => {
-          const c = getCage(cid), f = getFrame(fid);
-          return c && f ? `${c.name} → ${f.name}` : null;
-        }).filter(Boolean),
-        rmdPrefsByCage: Object.entries(learnedPrefs.rmdPrefByCageId).map(([cid, key]) => {
-          const c = getCage(cid);
-          return c ? `${c.name} → RMD-${key}` : null;
-        }).filter(Boolean),
-        rmdPrefsByHeightCat: learnedPrefs.rmdPrefByHeightCat,
-      },
-    };
-    const aiRes = await fetch(API_BASE + '/api/ai-boat-plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': _sessionPin ? `Bearer ${_sessionPin}` : '' },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(30000)
-    });
-    const res = aiRes.ok ? await aiRes.json() : null;
-    if (res && res.insight) {
-      bpGeneratedMovements.aiInsight = res.insight;
-      bpGeneratedMovements.aiLoading = false;
-      render();
-    } else {
-      bpGeneratedMovements.aiLoading = false;
-      render();
-    }
-  } catch(e) {
-    bpGeneratedMovements.aiLoading = false;
-    render();
-  }
 }
 // ── Plan Preview Popup — Map View ────────────────────────────────────────────
 // Converts scheduledSteps into fake movements (same schema as STATE.plannedMovements),
@@ -8780,7 +8415,7 @@ function renderBoatPlanner() {
   // Generated movements panel
   let movementsHTML = '';
   if (bpGeneratedMovements) {
-    const {moves, warnings, aiInsight, aiLoading} = bpGeneratedMovements;
+    const {moves, warnings} = bpGeneratedMovements;
     const warningsHTML = warnings.map(w => {
       const isInfo = w.startsWith('ℹ');
       return `<div class="bp-warning" style="${isInfo ? 'background:#e6f0fa;border-color:#a0c8e8;color:var(--blue)' : ''}">${esc(w)}</div>`;
@@ -8799,22 +8434,12 @@ function renderBoatPlanner() {
     }).join('');
     const hasMoves = moves.some(m => m.category === 'move' || m.category === 'returning-frame' || m.category === 'facility-rmd');
 
-    // AI insight panel
-    const aiHTML = aiLoading
-      ? `<div style="margin-top:12px;padding:10px 14px;background:#f6f7f9;border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:8px"><span style="animation:spin 1s linear infinite;display:inline-block">⏳</span> AI is analysing this plan…</div>`
-      : aiInsight
-        ? `<div style="margin-top:12px;padding:12px 14px;background:linear-gradient(135deg,#fff8e6,#fffdf5);border:1px solid #e0c880;border-radius:8px">
-            <div style="font:700 11px var(--font-mono);color:var(--accent);margin-bottom:6px">🤖 AI PLAN ADVISOR</div>
-            <div style="font-size:12.5px;color:var(--text-secondary);line-height:1.6;white-space:pre-wrap">${esc(aiInsight)}</div>
-           </div>`
-        : '';
 
     movementsHTML = `
       <div class="card">
         <div class="card-title">Generated Movement Plan for ${fmt(bpBoatDate)}</div>
         ${warningsHTML}
         ${movesListHTML ? `<ul class="bp-movement-list">${movesListHTML}</ul>` : '<div class="empty-msg">No movements needed.</div>'}
-        ${aiHTML}
         ${hasMoves ? `
           <div style="margin-top:16px;border-top:1px solid var(--border);padding-top:14px">
             <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">💬 Guidance for Re-generation</div>
@@ -12757,221 +12382,5 @@ function dd_showModalSummary(type,msg) {
 
 <!-- mobile bottom nav -->
 <nav id="mobile-nav"></nav>
-
-<script>
-// ═══════════════════════════════════════════════════════════════════════
-// AI CHAT ASSISTANT
-// ═══════════════════════════════════════════════════════════════════════
-let _aiChatHistory = [];
-let _aiChatOpen = false;
-
-function toggleAIChat() {
-  _aiChatOpen = !_aiChatOpen;
-  const panel = document.getElementById('ai-chat-panel');
-  const fab = document.getElementById('ai-chat-fab');
-  if (_aiChatOpen) {
-    panel.classList.remove('hidden');
-    fab.classList.add('open');
-    fab.title = 'Close AI Assistant';
-    fab.innerHTML = '✕';
-    // Show greeting if empty
-    const msgs = document.getElementById('ai-chat-messages');
-    if (msgs && msgs.children.length === 0) {
-      appendAIChatMsg('assistant', "👋 Hi! I'm your Cage Tracker assistant. Ask me anything about your cage movements, frame availability, boat trips, or how to improve your planning.");
-      showAIChatSuggestions();
-    }
-    setTimeout(() => document.getElementById('ai-chat-input')?.focus(), 100);
-  } else {
-    panel.classList.add('hidden');
-    fab.classList.remove('open');
-    fab.title = 'Open AI Assistant';
-    fab.innerHTML = '🤖';
-  }
-}
-
-function appendAIChatMsg(role, text) {
-  const msgs = document.getElementById('ai-chat-messages');
-  if (!msgs) return;
-  const div = document.createElement('div');
-  div.className = `ai-chat-msg ${role}`;
-  div.textContent = text;
-  msgs.appendChild(div);
-  msgs.scrollTop = msgs.scrollHeight;
-  return div;
-}
-
-function showAIChatSuggestions() {
-  const msgs = document.getElementById('ai-chat-messages');
-  if (!msgs) return;
-  const wrap = document.createElement('div');
-  wrap.className = 'ai-chat-suggestions';
-  wrap.id = 'ai-chat-suggestions';
-  const suggestions = [
-    'How well are movements planned?',
-    'Any scheduling conflicts?',
-    'Frame availability summary',
-    'Cages ready to ship?',
-    'Suggest improvements',
-  ];
-  suggestions.forEach(s => {
-    const btn = document.createElement('button');
-    btn.className = 'ai-chat-suggestion';
-    btn.textContent = s;
-    btn.onclick = () => { sendAIChatMessage(s); wrap.remove(); };
-    wrap.appendChild(btn);
-  });
-  msgs.appendChild(wrap);
-  msgs.scrollTop = msgs.scrollHeight;
-}
-
-function removeAIChatSuggestions() {
-  document.getElementById('ai-chat-suggestions')?.remove();
-}
-
-async function sendAIChatMessage(overrideText) {
-  const input = document.getElementById('ai-chat-input');
-  const sendBtn = document.getElementById('ai-chat-send');
-  const text = (overrideText || input?.value || '').trim();
-  if (!text) return;
-
-  removeAIChatSuggestions();
-  if (input) input.value = '';
-  if (sendBtn) sendBtn.disabled = true;
-
-  appendAIChatMsg('user', text);
-  _aiChatHistory.push({ role: 'user', content: text });
-
-  // Thinking indicator
-  const thinkingDiv = document.createElement('div');
-  thinkingDiv.className = 'ai-chat-msg thinking';
-  thinkingDiv.innerHTML = 'Thinking<span class="ai-chat-thinking-dots"></span>';
-  const msgs = document.getElementById('ai-chat-messages');
-  msgs.appendChild(thinkingDiv);
-  msgs.scrollTop = msgs.scrollHeight;
-
-  try {
-    // Build full context snapshot with RMD, frame, and cage detail
-    const allCages = STATE.cages || [];
-    const allMovements = STATE.plannedMovements || [];
-    const allFrames = STATE.frames || [];
-    const allRmd = STATE.rmdSlots || [];
-
-    // Build a cage lookup map by id
-    const cageById = {};
-    allCages.forEach(c => { cageById[c.id] = c; });
-
-    // Build enriched RMD list: each slot with cage names + dimensions
-    const rmdDetail = allRmd.map(slot => {
-      const sides = ['A', 'B'].map(side => {
-        const s = slot[side] || {};
-        const cages = [s.cage1, s.cage2, s.cage3, s.cage4]
-          .filter(Boolean)
-          .map(id => {
-            const c = cageById[id];
-            return c ? `${c.name}(${c.width}m×${c.height}m,${c.weight}t)` : id;
-          });
-        return `${side}:[${cages.join(', ') || 'empty'}]`;
-      });
-      return `RMD-${String(slot.number).padStart(2,'0')} ${sides.join(' | ')}`; 
-    });
-
-    // Build enriched frame list with cage names
-    const frameDetail = allFrames.map(f => {
-      const cageNames = (f.cages || []).map(id => {
-        const c = cageById[id];
-        return c ? `${c.name}(${c.width}m)` : id;
-      });
-      return {
-        name: f.name, width: f.width, location: f.location,
-        hasWaler: f.hasWaler, returnDate: f.returnDate || null,
-        cages: cageNames
-      };
-    });
-
-    const context = {
-      cages: allCages.map(c => ({
-        name: c.name, width: c.width, height: c.height,
-        length: c.length, weight: c.weight,
-        location: c.location, locationDetail: c.locationDetail || null,
-        notes: c.notes || null
-      })),
-      frames: frameDetail,
-      rmd: rmdDetail,
-      movements: allMovements.slice(0, 80).map(m => ({
-        date: m.date, description: m.description,
-        shift: m.shift, completed: m.completed
-      })),
-      boatTrips: (STATE.boatTrips || []).map(t => ({
-        label: t.label, loadDate: t.loadDate,
-        departDate: t.departDate, notes: t.notes || null
-      })),
-    };
-
-    const res = await fetch(API_BASE + '/api/ai-chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + _sessionPin
-      },
-      body: JSON.stringify({ message: text, history: _aiChatHistory.slice(-6), context })
-    });
-
-    thinkingDiv.remove();
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => String(res.status));
-      appendAIChatMsg('error', '⚠️ Server error (' + res.status + '): ' + errText);
-    } else {
-      const data = await res.json();
-      if (data.ok && data.reply) {
-        appendAIChatMsg('assistant', data.reply);
-        _aiChatHistory.push({ role: 'assistant', content: data.reply });
-      } else {
-        appendAIChatMsg('error', '⚠️ ' + (data.error || 'Something went wrong. Please try again.'));
-      }
-    }
-  } catch (e) {
-    thinkingDiv.remove();
-    appendAIChatMsg('error', '⚠️ Error: ' + (e.message || 'Connection failed.'));
-    console.error('AI chat error:', e);
-  }
-
-  if (sendBtn) sendBtn.disabled = false;
-  if (input) input.focus();
-}
-
-function aiChatKeydown(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendAIChatMessage();
-  }
-}
-</script>
-
-<!-- ── AI Chat Assistant ── -->
-<button id="ai-chat-fab" class="ai-chat-fab" onclick="toggleAIChat()" title="Open AI Assistant">🤖</button>
-
-<div id="ai-chat-panel" class="ai-chat-panel hidden">
-  <div class="ai-chat-header">
-    <div class="ai-chat-header-icon">🤖</div>
-    <div class="ai-chat-header-title">
-      <div>AI Assistant</div>
-      <div>CAGE TRACKER ADVISOR</div>
-    </div>
-    <button class="ai-chat-close" onclick="toggleAIChat()" title="Close">✕</button>
-  </div>
-  <div id="ai-chat-messages" class="ai-chat-messages"></div>
-  <div class="ai-chat-footer">
-    <textarea
-      id="ai-chat-input"
-      class="ai-chat-input"
-      placeholder="Ask about movements, frames, planning…"
-      rows="1"
-      onkeydown="aiChatKeydown(event)"
-      oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"
-    ></textarea>
-    <button id="ai-chat-send" class="ai-chat-send" onclick="sendAIChatMessage()" title="Send">➤</button>
-  </div>
-</div>
 
 </body></html>
