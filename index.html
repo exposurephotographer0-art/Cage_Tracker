@@ -12685,11 +12685,41 @@ async function aiGeneratePlan(isRevision) {
     B: { cage1: r.B?.cage1||null, cage2: r.B?.cage2||null },
   }));
 
+  // Strip to only fields the AI needs, and exclude irrelevant cages:
+  //   - Skip shipped cages (location === 'sea')
+  //   - Skip zero-weight facility cages with no locationDetail (Excel junk)
+  //   - Skip facility cages with no planned movement and no departure within 14 days
+  const _planCutoff = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const _planMovedIds = new Set((STATE.plannedMovements||[]).filter(m=>!m.completed).map(m=>m.cageId).filter(Boolean));
+  const cagesForAI = (STATE.cages || [])
+    .filter(c => {
+      if (c.location === 'sea') return false;
+      if (c.location === 'rmd' || c.location === 'frame') return true;
+      if (c.location === 'facility') {
+        if (c.weight <= 0 && !c.locationDetail) return false;
+        if (_planMovedIds.has(c.id)) return true;
+        if (c.locationDetail) return true;
+        if (c.departureDate && c.departureDate <= _planCutoff) return true;
+        return false;
+      }
+      return true;
+    })
+    .map(c => ({ id: c.id, name: c.name, width: c.width, height: c.height, weight: c.weight, location: c.location, locationDetail: c.locationDetail||'', departureDate: c.departureDate||null, notes: c.notes||null }));
+
+  const framesForAI = (STATE.frames || []).map(f => ({
+    id: f.id, name: f.name, width: f.width, hasWaler: f.hasWaler,
+    location: f.location, returnDate: f.returnDate||null, cages: f.cages||[],
+  }));
+
+  const movementsForAI = (STATE.plannedMovements||[]).filter(m=>!m.completed).map(m => ({
+    date: m.date, description: m.description, shift: m.shift||'day', cageId: m.cageId||null,
+  }));
+
   const payload = {
-    cages:         STATE.cages || [],
-    frames:        STATE.frames || [],
+    cages:         cagesForAI,
+    frames:        framesForAI,
     rmd:           rmdForAI,
-    movements:     (STATE.plannedMovements||[]).filter(m=>!m.completed),
+    movements:     movementsForAI,
     boatTrips:     STATE.boatTrips || [],
     targetTrip:    trip,
     operatorRules: aiRulesText,
