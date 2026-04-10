@@ -1531,6 +1531,21 @@ const ZOOM_STEPS = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2];
 // Set this to your Worker URL, e.g. https://cage-tracker-api.yourname.workers.dev
 const API_BASE = 'https://cage-tracker-api.exposurephotographer0.workers.dev';
 
+// ── Factory tag data (loaded alongside state) ────────────────────────
+let FACTORY_TAG_DATA = {}; // cage_id → { tags: {}, custom_fields: {} }
+
+const FACTORY_TAG_DEFS = [
+  { key:'tag_blue',      label:'Blue',        color:'#3b82f6' },
+  { key:'tag_blue_red',  label:'Blue & Red',  color:'#7c3aed' },
+  { key:'tag_green',     label:'Green',       color:'#22c55e' },
+  { key:'tag_green_red', label:'Green & Red', color:'#16a34a' },
+  { key:'tag_pink',      label:'Pink',        color:'#ec4899' },
+  { key:'tag_yellow',    label:'Yellow',      color:'#eab308' },
+  { key:'tag_white',     label:'White',       color:'#d1d5db' },
+  { key:'tag_purple',    label:'Purple',      color:'#a855f7' },
+  { key:'tag_orange',    label:'Orange',      color:'#f97316' },
+];
+
 // ── PIN Auth ─────────────────────────────────────────────────────────
 let _sessionPin = null;
 let _sessionLevel = null; // 'read', 'write', or 'ship'
@@ -1616,7 +1631,11 @@ async function loadState() {
 
   // Then try to refresh from the API in the background
   try {
-    const data = await api('/api/state');
+    const [data, fdRes] = await Promise.all([
+      api('/api/state'),
+      fetch(API_BASE + '/api/factory-data', { headers: { Authorization: 'Bearer ' + _sessionPin } }).then(r => r.ok ? r.json() : { data: {} }).catch(() => ({ data: {} })),
+    ]);
+    FACTORY_TAG_DATA = fdRes.data || {};
     STATE = {
       ...initState(),
       cages: data.cages.map(normaliseCage),
@@ -3035,7 +3054,7 @@ function renderCages() {
   }
 
   let rows = filtered.length === 0
-    ? `<tr><td colspan="12" style="text-align:center;padding:20px" class="empty-msg">No cages found</td></tr>`
+    ? `<tr><td colspan="13" style="text-align:center;padding:20px" class="empty-msg">No cages found</td></tr>`
     : filtered.map(c=>{
       if (cageEditing === c.id) {
         return `<tr style="background:#fdf8ee">
@@ -3051,6 +3070,7 @@ function renderCages() {
           <td><input id="ce-out-rmd-${c.id}" type="date" value="${c.outOfRmd||''}" style="width:130px;font-size:12px"/></td>
           <td><span class="badge badge-${hBadge(c.height)}">${hCat(c.height)}</span></td>
           <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
+          <td>—</td>
           <td style="text-align:center"><input type="checkbox" id="ce-sp-${c.id}" ${c.shippingPreference?'checked':''} style="width:15px;height:15px;accent-color:#e8b800" title="Shipping Preference"/></td>
           <td style="text-align:center"><input type="checkbox" id="ce-sp2-${c.id}" ${c.shippingPreference2?'checked':''} style="width:15px;height:15px;accent-color:#3b82f6" title="Shipping Preference 2"/></td>
           <td colspan="2" style="white-space:nowrap">
@@ -3078,6 +3098,14 @@ function renderCages() {
         <td style="font-size:11px"><span class="editable-cell" onclick="startInlineEdit('${c.id}','outOfRmd',this)" title="Click to edit Out of RMD date">${c.outOfRmd ? fmt(c.outOfRmd) : '<span style="color:var(--text-muted)">—</span>'}</span></td>
         <td><span class="badge badge-${hBadge(c.height)}">${hCat(c.height)}</span></td>
         <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
+        <td style="white-space:nowrap">${(()=>{
+          const fd = FACTORY_TAG_DATA[c.id] || {};
+          const tags = fd.tags || {};
+          const active = FACTORY_TAG_DEFS.filter(t => tags[t.key]);
+          return active.length
+            ? active.map(t => `<span title="${esc(t.label)}" style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${t.color};border:1px solid rgba(0,0,0,0.15);margin-right:2px;vertical-align:middle"></span>`).join('')
+            : '<span style="color:var(--text-muted)">—</span>';
+        })()}</td>
         <td style="text-align:center">
           <input type="checkbox" title="Shipping Preference — highlights yellow across all views" ${c.shippingPreference?'checked':''} onchange="toggleShippingPreference('${c.id}',this.checked)" style="width:15px;height:15px;cursor:pointer;accent-color:#e8b800"/>
         </td>
@@ -3157,7 +3185,7 @@ function renderCages() {
       <table>
         <thead><tr>
           <th style="width:32px"><input type="checkbox" id="cage-select-all" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)" onchange="toggleAllCages(this.checked,${JSON.stringify(filtered.map(c=>c.id))})"/></th>
-          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Boat Trip</th><th>Into RMD</th><th>Out of RMD</th><th>Category</th><th>Location</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th title="Shipping Preference 2 — highlight blue across all views">🔵 SP2</th><th>Move</th><th></th>
+          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Boat Trip</th><th>Into RMD</th><th>Out of RMD</th><th>Category</th><th>Location</th><th>Tags</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th title="Shipping Preference 2 — highlight blue across all views">🔵 SP2</th><th>Move</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
