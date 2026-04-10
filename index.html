@@ -13467,41 +13467,34 @@ const DT_CATEGORIES = [
   'Other',
 ];
 
-// Per-team live state
+// Per-team live state — each team holds a map of taskId → taskState
+// allowing multiple concurrent tasks per team
 const dtState = {
-  lifting:  dtNewTeamState(),
-  external: dtNewTeamState(),
+  lifting:  {},
+  external: {},
 };
 
-// Completed tasks loaded from / saved to D1
-let dtLog = [];          // array of completed task objects
-let dtLogLoaded = false; // have we fetched from API yet?
+let dtLog = [];
+let dtLogLoaded = false;
 let dtLogLoading = false;
 
-// Active downtime sub-tab: 'lifting' | 'external' | 'summary'
 let dtTeamTab = 'lifting';
-
-// Per-team inner tab: 'task' | 'log'
 const dtInnerTab = { lifting: 'task', external: 'task' };
-
-// Pending stop (waiting for modal confirm)
 let dtPending = null;
-
-// Interval handle
 let dtTickHandle = null;
 
-function dtNewTeamState() {
+function dtNewTaskState() {
   return {
-    active: false,
-    status: 'idle',   // idle | working | paused | break | downtime
-    task: null,       // { desc, ref }
+    active: true,
+    status: 'working',
+    task: null,
     startTime: null,
     workSecs: 0,
     downSecs: 0,
     breakSecs: 0,
     segStart: null,
-    events: [],       // timeline entries
-    dtEvents: [],     // resolved downtime events
+    events: [],
+    dtEvents: [],
     currentDtStart: null,
     currentDtDesc: '',
     currentDtCat: '',
@@ -13509,7 +13502,13 @@ function dtNewTeamState() {
   };
 }
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+function dtAllTasks() {
+  return ['lifting','external'].flatMap(team =>
+    Object.entries(dtState[team]).map(([tid, s]) => ({ team, tid, s }))
+  );
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function dtPad(n) { return String(n).padStart(2,'0'); }
 function dtFmt(s) { return `${dtPad(Math.floor(s/3600))}:${dtPad(Math.floor(s%3600/60))}:${dtPad(s%60)}`; }
 function dtFmtHM(s) { const h=Math.floor(s/3600),m=Math.floor(s%3600/60); return `${h}h ${m}m`; }
@@ -13518,9 +13517,9 @@ function dtTsm(ms) { return new Date(ms).toLocaleTimeString('en-GB',{hour:'2-dig
 function dtDateStr(ms) { return new Date(ms).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short',year:'numeric'}); }
 function dtDateISO(ms) { const d=new Date(ms); return `${d.getFullYear()}-${dtPad(d.getMonth()+1)}-${dtPad(d.getDate())}`; }
 
-function dtCommit(team) {
-  const s = dtState[team];
-  if (!s.segStart) return 0;
+function dtCommit(team, tid) {
+  const s = dtState[team][tid];
+  if (!s || !s.segStart) return 0;
   const el = Math.floor((Date.now() - s.segStart) / 1000);
   if (s.status === 'working')  s.workSecs  += el;
   if (s.status === 'downtime') s.downSecs  += el;
@@ -13529,11 +13528,11 @@ function dtCommit(team) {
   return el;
 }
 
-function dtPushEv(team, type, label, note) {
-  dtState[team].events.push({ time: Date.now(), type, label, note: note||'' });
+function dtPushEv(team, tid, type, label, note) {
+  dtState[team][tid].events.push({ time: Date.now(), type, label, note: note||'' });
 }
 
-// ── Chip helper ──────────────────────────────────────────────────────────────
+// ── Chip — shows worst status across all active tasks for a team ─────────────
 const DT_CHIP = {
   idle:     ['dtchip-idle',    'Idle'],
   working:  ['dtchip-working', 'Working'],
@@ -13541,12 +13540,18 @@ const DT_CHIP = {
   break:    ['dtchip-break',   'Break'],
   downtime: ['dtchip-downtime','Downtime'],
 };
+const DT_STATUS_PRIORITY = { downtime:4, break:3, working:2, paused:1, idle:0 };
 function dtChip(team) {
-  const [cls, lbl] = DT_CHIP[dtState[team].status] || DT_CHIP.idle;
-  return `<span class="dt-status-chip ${cls}">${lbl}</span>`;
+  const tasks = Object.values(dtState[team]);
+  if (!tasks.length) return `<span class="dt-status-chip dtchip-idle">Idle</span>`;
+  const worst = tasks.reduce((best, s) =>
+    (DT_STATUS_PRIORITY[s.status]||0) > (DT_STATUS_PRIORITY[best]||0) ? s.status : best, 'idle');
+  const count = tasks.length;
+  const [cls, lbl] = DT_CHIP[worst] || DT_CHIP.idle;
+  return `<span class="dt-status-chip ${cls}">${lbl}${count > 1 ? ` \xd7${count}` : ''}</span>`;
 }
 
-// ── API helpers ──────────────────────────────────────────────────────────────
+// ── API helpers ───────────────────────────────────────────────────────────────
 async function dtApiSaveTask(entry) {
   try {
     await api('/api/downtime/tasks', 'POST', entry);
@@ -13563,56 +13568,64 @@ async function dtApiLoadLog() {
     const data = await api('/api/downtime/tasks');
     dtLog = (data.tasks || []).map(t => ({
       ...t,
-      events:   (typeof t.events   === 'string') ? JSON.parse(t.events)   : (t.events   || []),
-      dtEvents: (typeof t.dt_events === 'string') ? JSON.parse(t.dt_events): (t.dtEvents || []),
+      events:   (typeof t.events    === 'string') ? JSON.parse(t.events)    : (t.events   || []),
+      dtEvents: (typeof t.dt_events === 'string') ? JSON.parse(t.dt_events) : (t.dtEvents || []),
     }));
     dtLogLoaded = true;
   } catch(e) {
     console.warn('[Downtime] Could not load log from API:', e.message);
-    dtLogLoaded = true; // don't keep retrying
+    dtLogLoaded = true;
   } finally {
     dtLogLoading = false;
   }
 }
 
-// Save the live state of one team's active task to D1 (fire-and-forget).
-// Called after every user action so a refresh can restore from here.
-function dtApiSaveSession(team) {
-  const s = dtState[team];
-  if (!s.active) return;
-  // Commit elapsed seconds up to now so the snapshot is accurate,
-  // then restart the segment clock so timing isn't lost.
-  const elapsed = s.segStart ? Math.floor((Date.now() - s.segStart) / 1000) : 0;
-  const snapshot = {
-    active:         s.active,
-    status:         s.status,
-    task:           s.task,
-    startTime:      s.startTime,
-    workSecs:       s.workSecs  + (s.status === 'working'  ? elapsed : 0),
-    downSecs:       s.downSecs  + (s.status === 'downtime' ? elapsed : 0),
-    breakSecs:      s.breakSecs + (s.status === 'break'    ? elapsed : 0),
-    segStart:       s.segStart, // preserve so timer picks up correctly on restore
-    events:         [...s.events],
-    dtEvents:       [...s.dtEvents],
-    currentDtStart: s.currentDtStart,
-    currentDtDesc:  s.status === 'downtime' ? (document.getElementById(`dtcmt-${team}`)?.value || '') : '',
-    currentDtCat:   s.status === 'downtime' ? (document.getElementById(`dtcat-${team}`)?.value || '') : '',
-    breakCount:     s.breakCount,
-    savedAt:        Date.now(),
-  };
-  // Non-blocking — we don't await, errors are swallowed silently
-  api('/api/downtime/active', 'PUT', { team, session: JSON.stringify(snapshot) })
+// Snapshot all active tasks for a team to D1 (array format)
+function dtApiSaveSession(team, tid) {
+  const snapshots = Object.entries(dtState[team]).map(([id, s]) => {
+    const elapsed = s.segStart ? Math.floor((Date.now() - s.segStart) / 1000) : 0;
+    const isThis = id === tid;
+    return {
+      tid: id,
+      active:         s.active,
+      status:         s.status,
+      task:           s.task,
+      startTime:      s.startTime,
+      workSecs:       s.workSecs  + (s.status === 'working'  ? elapsed : 0),
+      downSecs:       s.downSecs  + (s.status === 'downtime' ? elapsed : 0),
+      breakSecs:      s.breakSecs + (s.status === 'break'    ? elapsed : 0),
+      segStart:       s.segStart,
+      events:         [...s.events],
+      dtEvents:       [...s.dtEvents],
+      currentDtStart: s.currentDtStart,
+      currentDtDesc:  isThis && s.status === 'downtime'
+        ? (document.getElementById(`dtcmt-${team}-${id}`)?.value || s.currentDtDesc || '')
+        : s.currentDtDesc,
+      currentDtCat:   isThis && s.status === 'downtime'
+        ? (document.getElementById(`dtcat-${team}-${id}`)?.value || s.currentDtCat || '')
+        : s.currentDtCat,
+      breakCount:     s.breakCount,
+      savedAt:        Date.now(),
+    };
+  });
+  api('/api/downtime/active', 'PUT', { team, session: JSON.stringify(snapshots) })
     .catch(e => console.warn('[Downtime] Session save failed:', e.message));
 }
 
-// Clear a team's active session from D1 once the task is complete.
 function dtApiClearSession(team) {
   api('/api/downtime/active', 'DELETE', { team })
     .catch(e => console.warn('[Downtime] Session clear failed:', e.message));
 }
 
-// On page load: fetch any persisted active sessions and restore them into dtState.
-// If a session was in an active segment, we extrapolate the elapsed time from savedAt.
+function dtApiSaveOrClearSession(team) {
+  if (Object.keys(dtState[team]).length === 0) {
+    dtApiClearSession(team);
+  } else {
+    dtApiSaveSession(team, null);
+  }
+}
+
+// Restore all active task sessions from D1 on page load
 let dtSessionsRestored = false;
 async function dtRestoreSessions() {
   if (dtSessionsRestored) return;
@@ -13622,69 +13635,65 @@ async function dtRestoreSessions() {
     const active = data.active || {};
     let anyRestored = false;
     for (const team of ['lifting', 'external']) {
-      const snap = active[team];
-      if (!snap || !snap.active) continue;
-
-      // Compute seconds that ticked by while the page was away
-      const gapMs = snap.segStart && snap.savedAt
-        ? Math.max(0, Date.now() - snap.savedAt)
-        : 0;
-      const gapSecs = Math.floor(gapMs / 1000);
-
-      const s = dtState[team];
-      s.active         = true;
-      s.status         = snap.status;
-      s.task           = snap.task;
-      s.startTime      = snap.startTime;
-      s.workSecs       = snap.workSecs  + (snap.status === 'working'  ? gapSecs : 0);
-      s.downSecs       = snap.downSecs  + (snap.status === 'downtime' ? gapSecs : 0);
-      s.breakSecs      = snap.breakSecs + (snap.status === 'break'    ? gapSecs : 0);
-      s.segStart       = snap.segStart ? Date.now() : null; // restart from now
-      s.events         = snap.events   || [];
-      s.dtEvents       = snap.dtEvents || [];
-      s.currentDtStart = snap.currentDtStart || null;
-      s.currentDtDesc  = snap.currentDtDesc  || '';
-      s.currentDtCat   = snap.currentDtCat   || '';
-      s.breakCount     = snap.breakCount || 0;
-
-      // Add a restore marker to the timeline so we can see the page was refreshed
-      s.events.push({ time: Date.now(), type: 'p', label: 'Page refreshed', note: `(gap: ${dtFmt(gapSecs)})` });
-
-      anyRestored = true;
-      console.log('[Downtime] Restored active session for team:', team, snap.status);
+      const raw = active[team];
+      if (!raw) continue;
+      // Support old single-object format and new array format
+      const snaps = Array.isArray(raw) ? raw : (raw.active ? [{ ...raw, tid: raw.tid || ('dt_r_' + Date.now()) }] : []);
+      for (const snap of snaps) {
+        if (!snap || !snap.active) continue;
+        const tid = snap.tid || ('dt_r_' + Math.random().toString(36).slice(2,8));
+        const gapMs   = snap.segStart && snap.savedAt ? Math.max(0, Date.now() - snap.savedAt) : 0;
+        const gapSecs = Math.floor(gapMs / 1000);
+        const s = dtNewTaskState();
+        s.status         = snap.status;
+        s.task           = snap.task;
+        s.startTime      = snap.startTime;
+        s.workSecs       = snap.workSecs  + (snap.status === 'working'  ? gapSecs : 0);
+        s.downSecs       = snap.downSecs  + (snap.status === 'downtime' ? gapSecs : 0);
+        s.breakSecs      = snap.breakSecs + (snap.status === 'break'    ? gapSecs : 0);
+        s.segStart       = snap.segStart ? Date.now() : null;
+        s.events         = snap.events   || [];
+        s.dtEvents       = snap.dtEvents || [];
+        s.currentDtStart = snap.currentDtStart || null;
+        s.currentDtDesc  = snap.currentDtDesc  || '';
+        s.currentDtCat   = snap.currentDtCat   || '';
+        s.breakCount     = snap.breakCount || 0;
+        s.events.push({ time: Date.now(), type: 'p', label: 'Page refreshed', note: `(gap: ${dtFmt(gapSecs)})` });
+        dtState[team][tid] = s;
+        anyRestored = true;
+      }
     }
     if (anyRestored) {
       dtStartTick();
       if (activeTab === 'downtime') render();
-      else showSuccess('⏱ Active downtime task restored — check the Downtime tab.');
+      else showSuccess('\u23f1 Active downtime tasks restored \u2014 check the Downtime tab.');
     }
   } catch(e) {
     console.warn('[Downtime] Could not restore sessions:', e.message);
   }
 }
 
-// ── Tick ─────────────────────────────────────────────────────────────────────
+// ── Tick ──────────────────────────────────────────────────────────────────────
 function dtStartTick() {
   if (dtTickHandle) return;
   dtTickHandle = setInterval(dtTick, 1000);
 }
 
 function dtStopTick() {
-  if (!dtState.lifting.active && !dtState.external.active) {
+  if (dtAllTasks().length === 0) {
     clearInterval(dtTickHandle);
     dtTickHandle = null;
   }
 }
 
 function dtTick() {
-  ['lifting','external'].forEach(team => {
-    const s = dtState[team];
-    if (!s.active || !s.segStart) return;
-    const el = Math.floor((Date.now() - s.segStart) / 1000);
-    const upd = (id, val) => { const el2=document.getElementById(id); if(el2) el2.textContent=val; };
-    if (s.status === 'working')  upd(`dtw-${team}`, dtFmt(s.workSecs + el));
-    if (s.status === 'downtime') upd(`dtd-${team}`, dtFmt(s.downSecs + el));
-    if (s.status === 'break')    upd(`dtb-${team}`, dtFmt(s.breakSecs + el));
+  dtAllTasks().forEach(({ team, tid, s }) => {
+    if (!s.segStart) return;
+    const el  = Math.floor((Date.now() - s.segStart) / 1000);
+    const upd = (id, val) => { const el2 = document.getElementById(id); if (el2) el2.textContent = val; };
+    if (s.status === 'working')  upd(`dtw-${team}-${tid}`, dtFmt(s.workSecs + el));
+    if (s.status === 'downtime') upd(`dtd-${team}-${tid}`, dtFmt(s.downSecs + el));
+    if (s.status === 'break')    upd(`dtb-${team}-${tid}`, dtFmt(s.breakSecs + el));
   });
 }
 
@@ -13694,165 +13703,165 @@ function dtStartTask(team) {
   const ref  = document.getElementById(`dtref-${team}`)?.value.trim();
   if (!desc) { showError('Please enter a task description.'); return; }
 
-  Object.assign(dtState[team], dtNewTeamState());
-  const s = dtState[team];
-  s.active = true;
-  s.status = 'working';
-  s.task = { desc, ref: ref || '' };
+  const tid = 'dt_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,6);
+  const s   = dtNewTaskState();
+  s.task      = { desc, ref: ref || '' };
   s.startTime = Date.now();
-  s.segStart = Date.now();
-  dtPushEv(team, 'w', 'Started');
+  s.segStart  = Date.now();
+  s.events.push({ time: Date.now(), type: 'w', label: 'Started', note: '' });
+  dtState[team][tid] = s;
+
+  const descEl = document.getElementById(`dtdesc-${team}`);
+  const refEl  = document.getElementById(`dtref-${team}`);
+  if (descEl) descEl.value = '';
+  if (refEl)  refEl.value  = '';
 
   dtStartTick();
-  dtApiSaveSession(team);
-  dtRenderTeamPanel(team);
+  dtApiSaveSession(team, tid);
+  render();
 }
 
-function dtPauseTask(team) {
-  const dur = dtCommit(team);
-  dtPushEv(team, 'p', 'Paused', `after ${dtFmt(dur)}`);
-  dtState[team].status = 'paused';
-  dtApiSaveSession(team);
-  dtRenderTeamPanel(team);
+function dtPauseTask(team, tid) {
+  const dur = dtCommit(team, tid);
+  dtPushEv(team, tid, 'p', 'Paused', `after ${dtFmt(dur)}`);
+  dtState[team][tid].status = 'paused';
+  dtApiSaveSession(team, tid);
+  render();
 }
 
-function dtResumeTask(team) {
-  dtPushEv(team, 'w', 'Resumed');
-  dtState[team].status = 'working';
-  dtState[team].segStart = Date.now();
-  dtApiSaveSession(team);
-  dtRenderTeamPanel(team);
+function dtResumeTask(team, tid) {
+  dtPushEv(team, tid, 'w', 'Resumed');
+  dtState[team][tid].status   = 'working';
+  dtState[team][tid].segStart = Date.now();
+  dtApiSaveSession(team, tid);
+  render();
 }
 
-function dtStartBreak(team) {
-  dtCommit(team);
-  dtState[team].breakCount++;
-  dtPushEv(team, 'b', `Break ${dtState[team].breakCount} started`);
-  dtState[team].status = 'break';
-  dtState[team].segStart = Date.now();
-  dtApiSaveSession(team);
-  dtRenderTeamPanel(team);
+function dtStartBreak(team, tid) {
+  dtCommit(team, tid);
+  dtState[team][tid].breakCount++;
+  dtPushEv(team, tid, 'b', `Break ${dtState[team][tid].breakCount} started`);
+  dtState[team][tid].status   = 'break';
+  dtState[team][tid].segStart = Date.now();
+  dtApiSaveSession(team, tid);
+  render();
 }
 
-function dtEndBreak(team) {
-  const dur = dtCommit(team);
-  dtPushEv(team, 'w', `Break ${dtState[team].breakCount} ended`, `(${dtFmt(dur)})`);
-  dtState[team].status = 'working';
-  dtState[team].segStart = Date.now();
-  dtApiSaveSession(team);
-  dtRenderTeamPanel(team);
+function dtEndBreak(team, tid) {
+  const dur = dtCommit(team, tid);
+  dtPushEv(team, tid, 'w', `Break ${dtState[team][tid].breakCount} ended`, `(${dtFmt(dur)})`);
+  dtState[team][tid].status   = 'working';
+  dtState[team][tid].segStart = Date.now();
+  dtApiSaveSession(team, tid);
+  render();
 }
 
-function dtStartDowntime(team) {
-  dtCommit(team);
-  dtState[team].currentDtStart = Date.now();
-  dtPushEv(team, 'd', 'Downtime started');
-  dtState[team].status = 'downtime';
-  dtState[team].segStart = Date.now();
-  dtApiSaveSession(team);
-  dtRenderTeamPanel(team);
+function dtStartDowntime(team, tid) {
+  dtCommit(team, tid);
+  dtState[team][tid].currentDtStart = Date.now();
+  dtPushEv(team, tid, 'd', 'Downtime started');
+  dtState[team][tid].status   = 'downtime';
+  dtState[team][tid].segStart = Date.now();
+  dtApiSaveSession(team, tid);
+  render();
 }
 
-function dtResolveDowntime(team) {
-  const s = dtState[team];
-  const cat = document.getElementById(`dtcat-${team}`)?.value || 'Uncategorised';
-  const cmt = document.getElementById(`dtcmt-${team}`)?.value.trim() || '(no description)';
-  const dur = dtCommit(team);
+function dtResolveDowntime(team, tid) {
+  const s   = dtState[team][tid];
+  const cat = document.getElementById(`dtcat-${team}-${tid}`)?.value || 'Uncategorised';
+  const cmt = document.getElementById(`dtcmt-${team}-${tid}`)?.value.trim() || '(no description)';
+  const dur = dtCommit(team, tid);
   s.dtEvents.push({ start: s.currentDtStart, end: Date.now(), category: cat, comment: cmt, durSecs: dur });
-  dtPushEv(team, 'd', 'Downtime resolved', `${dtFmt(dur)} — [${cat}] ${cmt}`);
+  dtPushEv(team, tid, 'd', 'Downtime resolved', `${dtFmt(dur)} \u2014 [${cat}] ${cmt}`);
   s.currentDtStart = null;
-  s.status = 'working';
+  s.currentDtDesc  = '';
+  s.currentDtCat   = '';
+  s.status   = 'working';
   s.segStart = Date.now();
-  dtApiSaveSession(team);
-  dtRenderTeamPanel(team);
+  dtApiSaveSession(team, tid);
+  render();
 }
 
-function dtStopTask(team) {
-  const s = dtState[team];
-  if (!s.active) return;
+function dtStopTask(team, tid) {
+  const s = dtState[team][tid];
+  if (!s) return;
 
   if (s.status === 'downtime') {
-    const cat = document.getElementById(`dtcat-${team}`)?.value || 'Uncategorised';
-    const cmt = document.getElementById(`dtcmt-${team}`)?.value.trim() || '(no description — task stopped)';
-    const dur = dtCommit(team);
+    const cat = document.getElementById(`dtcat-${team}-${tid}`)?.value || 'Uncategorised';
+    const cmt = document.getElementById(`dtcmt-${team}-${tid}`)?.value.trim() || '(no description \u2014 task stopped)';
+    const dur = dtCommit(team, tid);
     s.dtEvents.push({ start: s.currentDtStart, end: Date.now(), category: cat, comment: cmt, durSecs: dur });
-    dtPushEv(team, 'd', 'Downtime closed on stop', `${dtFmt(dur)} — [${cat}] ${cmt}`);
+    dtPushEv(team, tid, 'd', 'Downtime closed on stop', `${dtFmt(dur)} \u2014 [${cat}] ${cmt}`);
     s.currentDtStart = null;
   } else {
-    dtCommit(team);
+    dtCommit(team, tid);
   }
-  dtPushEv(team, 'e', 'Task stopped');
+  dtPushEv(team, tid, 'e', 'Task stopped');
 
   const entry = {
-    id: 'dt_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,6),
+    id:           'dt_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,6),
     team,
-    task_desc: s.task.desc,
-    task_ref: s.task.ref,
-    start_time: s.startTime,
-    end_time: Date.now(),
-    work_secs: s.workSecs,
-    down_secs: s.downSecs,
-    break_secs: s.breakSecs,
-    break_count: s.breakCount,
+    task_desc:    s.task.desc,
+    task_ref:     s.task.ref,
+    start_time:   s.startTime,
+    end_time:     Date.now(),
+    work_secs:    s.workSecs,
+    down_secs:    s.downSecs,
+    break_secs:   s.breakSecs,
+    break_count:  s.breakCount,
     task_comment: '',
-    // Serialised for D1
-    events:    [...s.events],
-    dtEvents:  [...s.dtEvents],
+    events:       [...s.events],
+    dtEvents:     [...s.dtEvents],
   };
 
-  // Show stop modal
   const modal = document.getElementById('dt-stop-modal');
   const mname = document.getElementById('dt-modal-name');
   const mcmt  = document.getElementById('dt-modal-comment');
   if (modal && mname && mcmt) {
-    mname.textContent = `"${s.task.desc}"${s.task.ref ? ' · ' + s.task.ref : ''}`;
+    mname.textContent = `"${s.task.desc}"${s.task.ref ? ' \xb7 ' + s.task.ref : ''}`;
     mcmt.value = '';
     modal.classList.add('open');
   }
-  dtPending = { team, entry };
+  dtPending = { team, tid, entry };
 }
 
 function dtCancelStop() {
   if (!dtPending) return;
-  const { team } = dtPending;
-  const s = dtState[team];
-  s.active = true;
-  s.status = 'working';
-  s.segStart = Date.now();
-  s.events = s.events.filter(e => e.label !== 'Task stopped');
+  const { team, tid } = dtPending;
+  const s = dtState[team][tid];
+  if (s) {
+    s.active   = true;
+    s.status   = 'working';
+    s.segStart = Date.now();
+    s.events   = s.events.filter(e => e.label !== 'Task stopped');
+    dtApiSaveSession(team, tid);
+  }
   document.getElementById('dt-stop-modal')?.classList.remove('open');
   dtPending = null;
-  dtApiSaveSession(team); // re-persist resumed state
-  dtRenderTeamPanel(team);
+  render();
 }
 
 async function dtConfirmStop() {
   if (!dtPending) return;
-  const { team, entry } = dtPending;
+  const { team, tid, entry } = dtPending;
   const mcmt = document.getElementById('dt-modal-comment');
   entry.task_comment = mcmt?.value.trim() || '';
 
-  // Add to local log immediately
   dtLog.push(entry);
-
-  // Persist to D1
   await dtApiSaveTask({
     ...entry,
-    events:   JSON.stringify(entry.events),
+    events:    JSON.stringify(entry.events),
     dt_events: JSON.stringify(entry.dtEvents),
   });
 
-  // Clear persisted session and reset team state
-  dtApiClearSession(team);
-  Object.assign(dtState[team], dtNewTeamState());
+  delete dtState[team][tid];
+  dtApiSaveOrClearSession(team);
   dtStopTick();
 
   document.getElementById('dt-stop-modal')?.classList.remove('open');
   dtPending = null;
-
-  // Switch to log tab to show the new entry
   dtInnerTab[team] = 'log';
-  render(); // re-render the whole downtime tab
+  render();
 }
 
 async function dtDeleteLogEntry(id, ev) {
@@ -13929,115 +13938,139 @@ function dtSwitchInner(team, tab) {
   render();
 }
 
-// ── Render: one team's panel (re-used for live updates via render()) ──────────
+// ── Render: one team's view ───────────────────────────────────────────────────
 function dtRenderTeamView(team) {
-  const s = dtState[team];
-  const iL = team === 'lifting';
+  const iL      = team === 'lifting';
   const cardCls = iL ? 'dt-lift-card' : 'dt-ext-card';
   const onCls   = iL ? 'dti-on-l'    : 'dti-on-e';
-  const tab = dtInnerTab[team];
+  const tab     = dtInnerTab[team];
   const logEntries = dtLog.filter(e => e.team === team);
+  const activeTasks = Object.entries(dtState[team]); // [[tid, s], ...]
 
   return `
   <div class="dt-inner-tabs">
-    <button class="dt-inner-tab ${tab==='task'?onCls:''}" onclick="dtSwitchInner('${team}','task')">New Task</button>
-    <button class="dt-inner-tab ${tab==='log' ?onCls:''}" onclick="dtSwitchInner('${team}','log')">
+    <button class="dt-inner-tab ${tab==='task'?onCls:''}" onclick="dtSwitchInner('${team}','task')">
+      Tasks${activeTasks.length ? ` (${activeTasks.length} active)` : ''}
+    </button>
+    <button class="dt-inner-tab ${tab==='log'?onCls:''}" onclick="dtSwitchInner('${team}','log')">
       Activity Log (${logEntries.length})
     </button>
   </div>
 
-  ${tab === 'task' ? dtRenderNewTaskPanel(team, cardCls, s) : ''}
+  ${tab === 'task' ? dtRenderTasksPanel(team, cardCls, activeTasks) : ''}
   ${tab === 'log'  ? dtRenderLog(team, logEntries) : ''}
   `;
 }
 
-function dtRenderNewTaskPanel(team, cardCls, s) {
-  const savedCat = s.currentDtCat || '';
-  const catOpts = DT_CATEGORIES.map(c => `<option value="${c}"${c === savedCat ? ' selected' : ''}>${c}</option>`).join('');
+// ── Render: the Tasks panel — start form + all active task cards ──────────────
+function dtRenderTasksPanel(team, cardCls, activeTasks) {
+  const placeholder = team === 'lifting'
+    ? 'e.g. Replace sling on Crane A'
+    : 'e.g. Repair fence section B';
 
-  // ── Active task section ──
-  let activeHtml = '';
-  if (s.active) {
-    const pauseBtn = s.status === 'paused'
-      ? `<button class="dt-btn dtb-resume" onclick="dtResumeTask('${team}')">▶ Resume</button>`
-      : `<button class="dt-btn dtb-pause"  onclick="dtPauseTask('${team}')" ${s.status==='break'||s.status==='downtime'?'disabled':''}>⏸ Pause</button>`;
-
-    const brkBtn = `<button class="dt-btn dtb-break" onclick="dtStartBreak('${team}')" ${s.status==='downtime'?'disabled':''}>☕ Break</button>`;
-    const dtBtn  = `<button class="dt-btn dtb-dt"    onclick="dtStartDowntime('${team}')" ${s.status!=='working'?'disabled':''}>⚠ Downtime</button>`;
-    const stopBtn= `<button class="dt-btn dtb-stop"  onclick="dtStopTask('${team}')">⏹ Stop Task</button>`;
-
-    const downtimePanelHtml = s.status === 'downtime' ? `
-      <div class="dt-dt-panel">
-        <h5>⚠ Active Downtime</h5>
-        <div class="dt-form-row">
-          <div class="dt-fg">
-            <label>Category</label>
-            <select id="dtcat-${team}" onchange="dtApiSaveSession('${team}')">${catOpts}</select>
-          </div>
-        </div>
-        <div class="dt-form-row" style="margin-bottom:8px">
-          <div class="dt-fg">
-            <label>Description</label>
-            <textarea id="dtcmt-${team}" placeholder="What caused the downtime?" oninput="dtApiSaveSession('${team}')">${esc(s.currentDtDesc)}</textarea>
-          </div>
-        </div>
-        <button class="dt-btn dtb-res" onclick="dtResolveDowntime('${team}')">✔ Resolve Downtime</button>
-      </div>` : `<div id="dtcat-${team}" style="display:none"></div><div id="dtcmt-${team}" style="display:none"></div>`;
-
-    const brkPanelHtml = s.status === 'break' ? `
-      <div class="dt-brk-panel">
-        ☕ Team on break — timers paused
-        <button class="dt-btn dtb-ebrk" style="margin-left:auto" onclick="dtEndBreak('${team}')">▶ End Break</button>
-      </div>` : '';
-
-    activeHtml = `
-    <div class="dt-active-card">
-      <div class="dt-at-title">${s.task.desc}</div>
-      ${s.task.ref ? `<div class="dt-at-ref">Ref: ${s.task.ref}</div>` : '<div style="margin-bottom:12px"></div>'}
-      <div class="dt-timers">
-        <div class="dt-tblk">
-          <div class="dt-tlbl">Working</div>
-          <div class="dt-tval dt-tv-w ${s.status==='working'?'dt-pulse':''}" id="dtw-${team}">${dtFmt(s.workSecs)}</div>
-        </div>
-        <div class="dt-tblk">
-          <div class="dt-tlbl">Downtime</div>
-          <div class="dt-tval dt-tv-d" id="dtd-${team}">${dtFmt(s.downSecs)}</div>
-        </div>
-        <div class="dt-tblk">
-          <div class="dt-tlbl">Breaks</div>
-          <div class="dt-tval dt-tv-b" id="dtb-${team}">${dtFmt(s.breakSecs)}</div>
-        </div>
-      </div>
-      <div class="dt-btn-row">${pauseBtn}${brkBtn}${dtBtn}${stopBtn}</div>
-    </div>
-    ${downtimePanelHtml}
-    ${brkPanelHtml}`;
-  }
-
-  return `
+  const startForm = `
   <div class="dt-new-card ${cardCls}">
     <div class="dt-form-row">
       <div class="dt-fg" style="flex:2">
         <label>Task Description</label>
-        <input id="dtdesc-${team}" placeholder="${team==='lifting'?'e.g. Replace sling on Crane A':'e.g. Repair fence section B'}" ${s.active?'disabled':''} value="${s.active?s.task.desc:''}" />
+        <input id="dtdesc-${team}" placeholder="${placeholder}" />
       </div>
       <div class="dt-fg" style="flex:1">
         <label>Item / Ref No.</label>
-        <input id="dtref-${team}" placeholder="e.g. CAGE-042" ${s.active?'disabled':''} value="${s.active?s.task.ref:''}" />
+        <input id="dtref-${team}" placeholder="e.g. CAGE-042" />
       </div>
     </div>
     <div class="dt-btn-row" style="margin-top:0">
-      <button class="dt-btn dtb-go" onclick="dtStartTask('${team}')" ${s.active?'disabled':''}>▶ Go</button>
+      <button class="dt-btn dtb-go" onclick="dtStartTask('${team}')">&#9654; Start Task</button>
     </div>
-  </div>
-  ${activeHtml}`;
+  </div>`;
+
+  const taskCards = activeTasks.map(([tid, s]) => dtRenderActiveTaskCard(team, tid, s)).join('');
+
+  return startForm + (activeTasks.length
+    ? `<div style="margin-top:12px">${taskCards}</div>`
+    : `<div class="dt-log-empty" style="padding:20px 0">No active tasks — start one above.</div>`
+  );
 }
 
-// Re-render just the team panel in place without a full render() (for timer updates we use dtTick)
+// ── Render: one active task card ─────────────────────────────────────────────
+function dtRenderActiveTaskCard(team, tid, s) {
+  const savedCat = s.currentDtCat || '';
+  const catOpts  = DT_CATEGORIES.map(cat =>
+    `<option value="${cat}"${cat === savedCat ? ' selected' : ''}>${cat}</option>`
+  ).join('');
+
+  const pauseBtn = s.status === 'paused'
+    ? `<button class="dt-btn dtb-resume" onclick="dtResumeTask('${team}','${tid}')">&#9654; Resume</button>`
+    : `<button class="dt-btn dtb-pause"  onclick="dtPauseTask('${team}','${tid}')"
+         ${s.status==='break'||s.status==='downtime'?'disabled':''}>&#9646;&#9646; Pause</button>`;
+
+  const brkBtn  = `<button class="dt-btn dtb-break" onclick="dtStartBreak('${team}','${tid}')"
+      ${s.status==='downtime'?'disabled':''}>&#9749; Break</button>`;
+  const dtBtn   = `<button class="dt-btn dtb-dt"    onclick="dtStartDowntime('${team}','${tid}')"
+      ${s.status!=='working'?'disabled':''}>\u26a0 Downtime</button>`;
+  const stopBtn = `<button class="dt-btn dtb-stop"  onclick="dtStopTask('${team}','${tid}')">&#9632; Stop</button>`;
+
+  const downtimePanel = s.status === 'downtime' ? `
+    <div class="dt-dt-panel">
+      <h5>\u26a0 Active Downtime</h5>
+      <div class="dt-form-row">
+        <div class="dt-fg">
+          <label>Category</label>
+          <select id="dtcat-${team}-${tid}" onchange="dtApiSaveSession('${team}','${tid}')">${catOpts}</select>
+        </div>
+      </div>
+      <div class="dt-form-row" style="margin-bottom:8px">
+        <div class="dt-fg">
+          <label>Description</label>
+          <textarea id="dtcmt-${team}-${tid}" placeholder="What caused the downtime?"
+            oninput="dtApiSaveSession('${team}','${tid}')">${esc(s.currentDtDesc)}</textarea>
+        </div>
+      </div>
+      <button class="dt-btn dtb-res" onclick="dtResolveDowntime('${team}','${tid}')">&#10004; Resolve Downtime</button>
+    </div>` : '';
+
+  const breakPanel = s.status === 'break' ? `
+    <div class="dt-brk-panel">
+      &#9749; On break \u2014 timers paused
+      <button class="dt-btn dtb-ebrk" style="margin-left:auto"
+        onclick="dtEndBreak('${team}','${tid}')">&#9654; End Break</button>
+    </div>` : '';
+
+  const statusDot = {working:'dt-tv-w dt-pulse', paused:'dt-tv-b', break:'dt-tv-b', downtime:'dt-tv-d'}[s.status] || '';
+
+  return `
+  <div class="dt-active-card" style="margin-bottom:12px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
+      <div>
+        <div class="dt-at-title">${esc(s.task.desc)}</div>
+        ${s.task.ref ? `<div class="dt-at-ref">Ref: ${esc(s.task.ref)}</div>` : ''}
+      </div>
+      <span class="dt-status-chip ${(DT_CHIP[s.status]||DT_CHIP.idle)[0]}">${(DT_CHIP[s.status]||DT_CHIP.idle)[1]}</span>
+    </div>
+    <div class="dt-timers">
+      <div class="dt-tblk">
+        <div class="dt-tlbl">Working</div>
+        <div class="dt-tval dt-tv-w ${s.status==='working'?'dt-pulse':''}" id="dtw-${team}-${tid}">${dtFmt(s.workSecs)}</div>
+      </div>
+      <div class="dt-tblk">
+        <div class="dt-tlbl">Downtime</div>
+        <div class="dt-tval dt-tv-d ${s.status==='downtime'?'dt-pulse':''}" id="dtd-${team}-${tid}">${dtFmt(s.downSecs)}</div>
+      </div>
+      <div class="dt-tblk">
+        <div class="dt-tlbl">Breaks</div>
+        <div class="dt-tval dt-tv-b" id="dtb-${team}-${tid}">${dtFmt(s.breakSecs)}</div>
+      </div>
+    </div>
+    <div class="dt-btn-row">${pauseBtn}${brkBtn}${dtBtn}${stopBtn}</div>
+    ${downtimePanel}
+    ${breakPanel}
+  </div>`;
+}
+
+// Re-render just the team panel in place without a full render()
 function dtRenderTeamPanel(team) {
-  if (activeTab === 'downtime' && dtTeamTab === team) {
-    render();
-  }
+  if (activeTab === 'downtime' && dtTeamTab === team) render();
 }
 
 // ── Render: log ───────────────────────────────────────────────────────────────
