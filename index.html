@@ -13454,18 +13454,7 @@ function dd_showModalSummary(type,msg) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── In-memory state (active tasks only — completed go to D1) ────────────────
-const DT_CATEGORIES = [
-  '— Select category —',
-  'Winded Off',
-  'Waiting for Permit',
-  'Equipment Fault',
-  'Missing Parts / Materials',
-  'Waiting for Instruction',
-  'Access Restricted',
-  'Weather Hold',
-  'Third Party Delay',
-  'Other',
-];
+const DT_CATEGORIES = [];
 
 // Per-team live state — each team holds a map of taskId → taskState
 // allowing multiple concurrent tasks per team
