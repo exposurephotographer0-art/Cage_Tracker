@@ -1322,6 +1322,8 @@ tr.dragging { opacity: 0.4; }
 .dt-log-entry { border:1px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; margin-bottom:10px; background:var(--bg-base); }
 .dt-log-entry.dt-hdt { border-color:#fca5a5; }
 .dt-le-head { padding:10px 14px; display:flex; justify-content:space-between; align-items:flex-start; background:var(--bg-elevated); border-bottom:1px solid var(--border); }
+.dt-le-edit { background:none; border:none; cursor:pointer; font-size:14px; opacity:0.4; padding:2px 5px; border-radius:4px; line-height:1; flex-shrink:0; }
+.dt-le-edit:hover { opacity:1; background:#e0f2fe; }
 .dt-le-del { background:none; border:none; cursor:pointer; font-size:14px; opacity:0.4; padding:2px 5px; border-radius:4px; line-height:1; flex-shrink:0; }
 .dt-le-del:hover { opacity:1; background:#fee2e2; }
 .dt-hdt .dt-le-head { background:#fef2f2; border-bottom-color:#fecaca; }
@@ -13853,6 +13855,179 @@ async function dtConfirmStop() {
   render();
 }
 
+// ── Edit & Retrospective entry helpers ───────────────────────────────────────
+
+let dtEditId = null;       // null = new retrospective entry
+let dtEditTeam = null;
+let dtEditDtEvents = [];   // working copy of downtime events for the modal
+
+// Helpers to convert between epoch ms and datetime-local string
+function msToLocal(ms) {
+  if (!ms) return '';
+  const d = new Date(ms);
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function localToMs(str) {
+  if (!str) return 0;
+  return new Date(str).getTime() || 0;
+}
+
+function dtOpenEditModal(id, ev) {
+  if (ev) ev.stopPropagation();
+  const entry = dtLog.find(e => e.id === id);
+  if (!entry) return;
+  dtEditId     = id;
+  dtEditTeam   = entry.team || 'lifting';
+  dtEditDtEvents = JSON.parse(JSON.stringify(
+    (typeof entry.dt_events === 'string') ? JSON.parse(entry.dt_events) : (entry.dtEvents || [])
+  ));
+
+  document.getElementById('dt-edit-modal-title').textContent = '✏️ Edit Log Entry';
+  document.getElementById('dte-team').value    = dtEditTeam;
+  document.getElementById('dte-desc').value    = entry.task_desc || entry.taskDesc || '';
+  document.getElementById('dte-ref').value     = entry.task_ref  || entry.taskRef  || '';
+  document.getElementById('dte-start').value   = msToLocal(entry.start_time || entry.startTime);
+  document.getElementById('dte-end').value     = msToLocal(entry.end_time   || entry.endTime);
+  document.getElementById('dte-work').value    = Math.round((entry.work_secs  || entry.workSecs  || 0) / 60);
+  document.getElementById('dte-break').value   = Math.round((entry.break_secs || entry.breakSecs || 0) / 60);
+  document.getElementById('dte-bcount').value  = entry.break_count || entry.breakCount || 0;
+  document.getElementById('dte-comment').value = entry.task_comment || entry.taskComment || '';
+  dtEditRenderDtEvents();
+  document.getElementById('dt-edit-modal').classList.add('open');
+}
+
+function dtOpenRetroModal(team) {
+  dtEditId   = null;
+  dtEditTeam = team;
+  dtEditDtEvents = [];
+
+  document.getElementById('dt-edit-modal-title').textContent = '➕ Add Retrospective Entry';
+  document.getElementById('dte-team').value    = team;
+  document.getElementById('dte-desc').value    = '';
+  document.getElementById('dte-ref').value     = '';
+  // Default to today's date, current time
+  const now = msToLocal(Date.now());
+  document.getElementById('dte-start').value   = now;
+  document.getElementById('dte-end').value     = now;
+  document.getElementById('dte-work').value    = '';
+  document.getElementById('dte-break').value   = '';
+  document.getElementById('dte-bcount').value  = '0';
+  document.getElementById('dte-comment').value = '';
+  dtEditRenderDtEvents();
+  document.getElementById('dt-edit-modal').classList.add('open');
+}
+
+function dtCloseEditModal() {
+  document.getElementById('dt-edit-modal').classList.remove('open');
+  dtEditId = null;
+}
+
+function dtEditRenderDtEvents() {
+  const wrap = document.getElementById('dte-dt-events');
+  if (!dtEditDtEvents.length) {
+    wrap.innerHTML = `<div style="font-size:12px;color:var(--text-muted);padding:6px 0">No downtime events — click + Add to record one.</div>`;
+    return;
+  }
+  wrap.innerHTML = dtEditDtEvents.map((d, i) => `
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end;margin-bottom:8px;padding:8px;background:var(--bg-elevated);border-radius:var(--radius-md);border:1px solid #fca5a5">
+      <div>
+        <label style="font-size:10px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:3px">Duration (mins)</label>
+        <input type="number" min="0" value="${Math.round((d.durSecs||0)/60)}"
+          oninput="dtEditDtEvents[${i}].durSecs = (+this.value||0)*60"
+          style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+      </div>
+      <div>
+        <label style="font-size:10px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:3px">Category</label>
+        <input type="text" value="${esc(d.category||'')}" placeholder="e.g. Equipment Fault"
+          oninput="dtEditDtEvents[${i}].category = this.value"
+          style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+      </div>
+      <button onclick="dtEditRemoveDtEvent(${i})"
+        style="padding:5px 10px;border:1px solid #fca5a5;border-radius:var(--radius-md);background:#fef2f2;color:#dc2626;cursor:pointer;font-size:13px;white-space:nowrap">✕</button>
+      <div style="grid-column:1/-1">
+        <label style="font-size:10px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:3px">Description</label>
+        <input type="text" value="${esc(d.comment||'')}" placeholder="What caused the downtime?"
+          oninput="dtEditDtEvents[${i}].comment = this.value"
+          style="width:100%;padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+      </div>
+    </div>`).join('');
+}
+
+function dtEditAddDtEvent() {
+  dtEditDtEvents.push({ durSecs: 0, category: '', comment: '', start: 0, end: 0 });
+  dtEditRenderDtEvents();
+}
+
+function dtEditRemoveDtEvent(i) {
+  dtEditDtEvents.splice(i, 1);
+  dtEditRenderDtEvents();
+}
+
+async function dtSaveEditModal() {
+  const desc = document.getElementById('dte-desc').value.trim();
+  if (!desc) { showError('Task description is required.'); return; }
+
+  const team     = document.getElementById('dte-team').value;
+  const ref      = document.getElementById('dte-ref').value.trim();
+  const startMs  = localToMs(document.getElementById('dte-start').value);
+  const endMs    = localToMs(document.getElementById('dte-end').value);
+  const workMins = parseFloat(document.getElementById('dte-work').value) || 0;
+  const brkMins  = parseFloat(document.getElementById('dte-break').value) || 0;
+  const brkCount = parseInt(document.getElementById('dte-bcount').value) || 0;
+  const comment  = document.getElementById('dte-comment').value.trim();
+
+  // Derive downSecs: total elapsed minus working minus breaks (floor at 0)
+  const totalSecs = startMs && endMs ? Math.max(0, Math.floor((endMs - startMs) / 1000)) : 0;
+  const workSecs  = Math.round(workMins  * 60);
+  const brkSecs   = Math.round(brkMins   * 60);
+  const downSecs  = Math.max(0, totalSecs - workSecs - brkSecs);
+
+  const entry = {
+    team,
+    task_desc:    desc,
+    task_ref:     ref,
+    start_time:   startMs,
+    end_time:     endMs,
+    work_secs:    workSecs,
+    down_secs:    downSecs,
+    break_secs:   brkSecs,
+    break_count:  brkCount,
+    task_comment: comment,
+    events:       '[]',
+    dt_events:    JSON.stringify(dtEditDtEvents),
+  };
+
+  try {
+    if (dtEditId) {
+      // Update existing
+      await api(`/api/downtime/tasks/${dtEditId}`, 'PUT', entry);
+      const idx = dtLog.findIndex(e => e.id === dtEditId);
+      if (idx !== -1) {
+        dtLog[idx] = { ...dtLog[idx], ...entry,
+          dtEvents: dtEditDtEvents,
+          events: dtLog[idx].events || [],
+        };
+      }
+    } else {
+      // New retrospective entry
+      const id = 'dt_retro_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,6);
+      entry.id = id;
+      await api('/api/downtime/tasks', 'POST', entry);
+      dtLog.push({ ...entry, id, dtEvents: dtEditDtEvents, events: [] });
+      // Keep log sorted by start time
+      dtLog.sort((a,b) => (a.start_time||0) - (b.start_time||0));
+    }
+    dtCloseEditModal();
+    // Switch to log tab for the right team
+    dtInnerTab[team] = 'log';
+    dtTeamTab = team;
+    render();
+  } catch(e) {
+    showError('Failed to save: ' + e.message);
+  }
+}
+
 async function dtDeleteLogEntry(id, ev) {
   if (ev) ev.stopPropagation();
   if (!confirm('Delete this downtime log entry? This cannot be undone.')) return;
@@ -13911,6 +14086,77 @@ function renderDowntime() {
       <div class="dt-modal-btns">
         <button class="dt-btn dtb-cancel" onclick="dtCancelStop()">✕ Cancel</button>
         <button class="dt-btn dtb-save"   onclick="dtConfirmStop()">💾 Save to Log</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit / Retrospective entry modal (write PIN only) -->
+  <div class="dt-modal-bg" id="dt-edit-modal">
+    <div class="dt-modal" style="max-width:560px;width:95%">
+      <h3 id="dt-edit-modal-title">✏️ Edit Log Entry</h3>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Team</label>
+          <select id="dte-team" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px">
+            <option value="lifting">🏗️ Lifting</option>
+            <option value="external">🔧 External Works</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Ref / Item No.</label>
+          <input id="dte-ref" type="text" placeholder="e.g. CAGE-042" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+        </div>
+      </div>
+
+      <div style="margin-bottom:10px">
+        <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Task Description</label>
+        <input id="dte-desc" type="text" placeholder="What was the task?" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Start Time</label>
+          <input id="dte-start" type="datetime-local" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">End Time</label>
+          <input id="dte-end" type="datetime-local" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Working (mins)</label>
+          <input id="dte-work" type="number" min="0" placeholder="0" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Break (mins)</label>
+          <input id="dte-break" type="number" min="0" placeholder="0" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Break Count</label>
+          <input id="dte-bcount" type="number" min="0" placeholder="0" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+        </div>
+      </div>
+
+      <!-- Downtime events list -->
+      <div style="margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <label style="font-size:11px;font-weight:600;color:var(--text-muted)">Downtime Events</label>
+          <button onclick="dtEditAddDtEvent()" style="font-size:11px;padding:3px 10px;border:1px solid var(--accent);border-radius:var(--radius-md);background:none;color:var(--accent);cursor:pointer">+ Add</button>
+        </div>
+        <div id="dte-dt-events"></div>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Overall Notes</label>
+        <textarea id="dte-comment" placeholder="Optional overall notes…" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;resize:vertical;min-height:56px;box-sizing:border-box"></textarea>
+      </div>
+
+      <div class="dt-modal-btns">
+        <button class="dt-btn dtb-cancel" onclick="dtCloseEditModal()">✕ Cancel</button>
+        <button class="dt-btn dtb-save"   onclick="dtSaveEditModal()">💾 Save Changes</button>
       </div>
     </div>
   </div>
@@ -14074,10 +14320,16 @@ function dtRenderLog(team, entries) {
       Loading activity log…
     </div>`;
   }
+  const retroBtn = getAccessLevel() === 'write'
+    ? `<div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+        <button class="dt-btn dtb-go" style="font-size:12px;padding:6px 14px"
+          onclick="dtOpenRetroModal('${team}')">+ Add Retrospective Entry</button>
+       </div>`
+    : '';
   if (!entries.length) {
-    return `<div class="dt-log-empty">No completed tasks yet.</div>`;
+    return retroBtn + `<div class="dt-log-empty">No completed tasks yet.</div>`;
   }
-  return entries.map((e, i) => dtBuildEntry(e, i + 1)).join('');
+  return retroBtn + entries.map((e, i) => dtBuildEntry(e, i + 1)).join('');
 }
 
 function dtBuildEntry(e, num) {
@@ -14114,8 +14366,11 @@ function dtBuildEntry(e, num) {
     `<span class="dt-cat-tag">⚠ ${d.category||'Uncategorised'} — ${dtFmt(d.durSecs||0)}</span>`
   ).join('') : '';
 
-  const canDelete = getAccessLevel() === 'write';
-  const deleteBtn = canDelete && e.id
+  const canWrite  = getAccessLevel() === 'write';
+  const editBtn   = canWrite && e.id
+    ? `<button class="dt-le-edit" onclick="dtOpenEditModal('${e.id}',event)" title="Edit this log entry">✏️</button>`
+    : '';
+  const deleteBtn = canWrite && e.id
     ? `<button class="dt-le-del" onclick="dtDeleteLogEntry('${e.id}',event)" title="Delete this log entry">🗑</button>`
     : '';
 
@@ -14129,7 +14384,7 @@ function dtBuildEntry(e, num) {
       </div>
       <div style="display:flex;align-items:flex-start;gap:6px">
         <div class="dt-le-tr">${dtTsm(stMs)} – ${dtTsm(enMs)}</div>
-        ${deleteBtn}
+        ${editBtn}${deleteBtn}
       </div>
     </div>
     <div class="dt-le-stats">
