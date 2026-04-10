@@ -13996,9 +13996,9 @@ function dtRenderTasksPanel(team, cardCls, activeTasks) {
 // ── Render: one active task card ─────────────────────────────────────────────
 function dtRenderActiveTaskCard(team, tid, s) {
   const savedCat = s.currentDtCat || '';
-  const catOpts  = DT_CATEGORIES.map(cat =>
-    `<option value="${cat}"${cat === savedCat ? ' selected' : ''}>${cat}</option>`
-  ).join('');
+  const catListId = `dtcat-list-${team}-${tid}`;
+  const catOpts   = DT_CATEGORIES.filter(c => c !== '— Select category —')
+    .map(cat => `<option value="${cat}"></option>`).join('');
 
   const pauseBtn = s.status === 'paused'
     ? `<button class="dt-btn dtb-resume" onclick="dtResumeTask('${team}','${tid}')">&#9654; Resume</button>`
@@ -14017,7 +14017,11 @@ function dtRenderActiveTaskCard(team, tid, s) {
       <div class="dt-form-row">
         <div class="dt-fg">
           <label>Category</label>
-          <select id="dtcat-${team}-${tid}" onchange="dtApiSaveSession('${team}','${tid}')">${catOpts}</select>
+          <input id="dtcat-${team}-${tid}" list="${catListId}"
+            placeholder="Type or choose a category…"
+            value="${esc(savedCat)}"
+            oninput="dtApiSaveSession('${team}','${tid}')" />
+          <datalist id="${catListId}">${catOpts}</datalist>
         </div>
       </div>
       <div class="dt-form-row" style="margin-bottom:8px">
