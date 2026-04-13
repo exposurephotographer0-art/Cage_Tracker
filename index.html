@@ -11076,10 +11076,6 @@ function renderCustomTabItem(item, ro) {
           ${ro ? 'disabled' : `onblur="ctSaveTitle('${item.id}',this.value)"`}
           onkeydown="if(event.key==='Enter')this.blur()">
         ${!ro ? `
-        <button class="btn btn-secondary btn-xs ct-move-btn" onclick="ctMoveItem('${item.id}','${item.tabId}',-1)"
-          style="flex-shrink:0" title="Move up">▲</button>
-        <button class="btn btn-secondary btn-xs ct-move-btn" onclick="ctMoveItem('${item.id}','${item.tabId}',1)"
-          style="flex-shrink:0" title="Move down">▼</button>
         <button class="btn btn-secondary btn-xs" onclick="ctCopyItemPicker(event,'${item.id}')"
           style="flex-shrink:0" title="Copy to another tab">⎘ Copy to…</button>
         <button class="btn btn-secondary btn-xs" onclick="ctDeleteItem('${item.id}')"
@@ -11288,7 +11284,7 @@ function ctRenderTable(item, ro) {
         ${!ro && ci === 0 ? `<div class="ct-row-resize-handle" onmousedown="ctRowResizeStart(event,'${item.id}',${ri})" title="Drag to resize row"></div>` : ''}
       </td>`;
     }).join('');
-    return `<tr style="${minH}">${cells}${!ro ? `<td style="width:28px;padding:6px 4px;vertical-align:top"><button class="btn btn-secondary btn-xs" style="color:var(--red)" onclick="ctTableDeleteRow('${item.id}',${ri})">✕</button></td>` : ''}</tr>`;
+    return `<tr style="${minH}">${cells}${!ro ? `<td style="width:52px;padding:4px 3px;vertical-align:top"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><button class="btn btn-secondary btn-xs" style="font-size:9px;padding:1px 5px;color:var(--text-muted)" onclick="ctTableMoveRow('${item.id}',${ri},-1)" title="Move row up">▲</button><button class="btn btn-secondary btn-xs" style="font-size:9px;padding:1px 5px;color:var(--text-muted)" onclick="ctTableMoveRow('${item.id}',${ri},1)" title="Move row down">▼</button><button class="btn btn-secondary btn-xs" style="color:var(--red);padding:1px 5px" onclick="ctTableDeleteRow('${item.id}',${ri})">✕</button></div></td>` : ''}</tr>`;
   }).join('');
 
   return `
@@ -11709,6 +11705,27 @@ async function ctTableDeleteRow(itemId, ri) {
   item.metadata.rows.splice(ri, 1);
   await apiUpdateCustomTabItem(item);
   ctRefreshItem(item);
+}
+
+async function ctTableMoveRow(itemId, ri, direction) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item || !item.metadata.rows) return;
+  const rows = item.metadata.rows;
+  const swapIdx = ri + direction;
+  if (swapIdx < 0 || swapIdx >= rows.length) return;
+  const tmp = rows[ri];
+  rows[ri] = rows[swapIdx];
+  rows[swapIdx] = tmp;
+  // Also swap rowHeights if present
+  if (item.metadata.rowHeights) {
+    const rh = item.metadata.rowHeights;
+    const tmpH = rh[ri];
+    rh[ri] = rh[swapIdx];
+    rh[swapIdx] = tmpH;
+  }
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+  setTimeout(() => ctTableInitResize(itemId), 30);
 }
 
 // ── Links ─────────────────────────────────────────────────────────────────
