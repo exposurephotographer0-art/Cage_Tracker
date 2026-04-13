@@ -164,6 +164,8 @@ body {
 .ai-plan-table tr:hover td { background:var(--bg-elevated); }
 .ai-plan-row-del { background:none; border:none; color:var(--text-muted); cursor:pointer; padding:2px 5px; border-radius:3px; font-size:14px; }
 .ai-plan-row-del:hover { color:var(--red); background:var(--bg-elevated); }
+.ct-move-btn { font-size:10px !important; padding:2px 6px !important; color:var(--text-muted) !important; }
+.ct-move-btn:hover { color:var(--accent) !important; background:var(--accent-dim) !important; }
 .ai-warn-box { background:#fff8e6; border:1px solid #f0d080; border-radius:var(--radius); padding:10px 14px; font-size:12px; color:#7a5a00; margin-bottom:14px; }
 .ai-warn-box ul { margin:4px 0 0 16px; padding:0; }
 .ai-warn-box li { margin-bottom:2px; }
@@ -11074,6 +11076,10 @@ function renderCustomTabItem(item, ro) {
           ${ro ? 'disabled' : `onblur="ctSaveTitle('${item.id}',this.value)"`}
           onkeydown="if(event.key==='Enter')this.blur()">
         ${!ro ? `
+        <button class="btn btn-secondary btn-xs ct-move-btn" onclick="ctMoveItem('${item.id}','${item.tabId}',-1)"
+          style="flex-shrink:0" title="Move up">▲</button>
+        <button class="btn btn-secondary btn-xs ct-move-btn" onclick="ctMoveItem('${item.id}','${item.tabId}',1)"
+          style="flex-shrink:0" title="Move down">▼</button>
         <button class="btn btn-secondary btn-xs" onclick="ctCopyItemPicker(event,'${item.id}')"
           style="flex-shrink:0" title="Copy to another tab">⎘ Copy to…</button>
         <button class="btn btn-secondary btn-xs" onclick="ctDeleteItem('${item.id}')"
@@ -11831,6 +11837,28 @@ async function ctDeleteItem(itemId) {
   await apiDeleteCustomTabItem(itemId);
   const card = document.getElementById('ct-item-' + itemId);
   if (card) card.remove();
+}
+
+async function ctMoveItem(itemId, tabId, direction) {
+  const items = getCustomTabItems(tabId).slice().sort((a,b) => a.sortOrder - b.sortOrder);
+  const idx = items.findIndex(i => i.id === itemId);
+  if (idx === -1) return;
+  const swapIdx = idx + direction;
+  if (swapIdx < 0 || swapIdx >= items.length) return;
+  const tmp = items[idx].sortOrder;
+  items[idx].sortOrder = items[swapIdx].sortOrder;
+  items[swapIdx].sortOrder = tmp;
+  items.sort((a,b) => a.sortOrder - b.sortOrder);
+  items.forEach((it, i) => { it.sortOrder = i; });
+  await Promise.all([apiUpdateCustomTabItem(items[idx]), apiUpdateCustomTabItem(items[swapIdx])]);
+  const container = document.getElementById('ct-items-' + tabId);
+  if (container) {
+    container.innerHTML = getCustomTabItems(tabId)
+      .sort((a,b) => a.sortOrder - b.sortOrder)
+      .map(i => renderCustomTabItem(i, false))
+      .join('');
+    getCustomTabItems(tabId).filter(i => i.type === 'table').forEach(i => ctTableInitResize(i.id));
+  }
 }
 
 // ── Copy item to another tab ──────────────────────────────────────────────
