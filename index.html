@@ -562,6 +562,11 @@ tr.dragging { opacity: 0.4; }
   display: flex; align-items: flex-start; justify-content: center; padding-top: 80px;
   backdrop-filter: blur(3px);
 }
+@media (max-width: 600px) {
+  .search-overlay { padding-top: 12px; align-items: flex-start; }
+  .search-modal { border-radius: 10px; }
+  .search-input-row input { font-size: 16px !important; } /* prevents iOS auto-zoom */
+}
 .search-modal {
   background: var(--bg-card); border: 1px solid var(--border-light);
   border-radius: 14px; width: 600px; max-width: 92vw;
@@ -2487,8 +2492,7 @@ function renderWarningsPanel() {
 // ═══════════════════════════════════════════════════════════════════════════════
 function openGlobalSearch() {
   globalSearchOpen = true; globalSearchQuery = ''; globalSearchIdx = 0;
-  renderSearchModal();
-  setTimeout(() => { const inp = document.getElementById('gs-input'); if(inp) inp.focus(); }, 50);
+  renderSearchModal(); // focus is handled inside renderSearchModal on first build
 }
 function closeGlobalSearch() {
   globalSearchOpen = false;
@@ -2516,49 +2520,64 @@ function globalSearchResults(q) {
   });
   return results.slice(0, 12);
 }
-function renderSearchModal() {
-  const existing = document.getElementById('gs-overlay'); if(existing) existing.remove();
-  if (!globalSearchOpen) return;
+function gsResultsHTML() {
   const results = globalSearchResults(globalSearchQuery);
+  if (globalSearchQuery.length === 0)
+    return `<div style="padding:18px;text-align:center;color:var(--text-muted);font-size:12px">Type to search cages, frames, or trips…</div>`;
+  if (results.length === 0)
+    return `<div style="padding:18px;text-align:center;color:var(--text-muted);font-size:12px">No results for "${esc(globalSearchQuery)}"</div>`;
+  return results.map((r,i) => `
+    <div class="search-result-item ${i===globalSearchIdx?'active':''}" id="gsr-${i}" onclick="gsSelectResult(${i})">
+      <div style="flex:1;min-width:0">
+        <div class="search-result-name">${esc(r.name)}</div>
+        <div class="search-result-meta">${esc(r.meta)}</div>
+      </div>
+      <span class="badge badge-${r.badge} search-result-badge" style="font-size:10px">${esc(r.badgeLabel)}</span>
+    </div>`).join('');
+}
+function renderSearchModal() {
+  if (!globalSearchOpen) { const ex=document.getElementById('gs-overlay'); if(ex) ex.remove(); return; }
+
+  // If modal already exists, only update the results panel — keeps the input
+  // element alive so the mobile keyboard never dismisses.
+  const existing = document.getElementById('gs-overlay');
+  if (existing) {
+    const resultsEl = document.getElementById('gs-results');
+    if (resultsEl) resultsEl.innerHTML = gsResultsHTML();
+    return;
+  }
 
   const overlay = document.createElement('div');
   overlay.id = 'gs-overlay'; overlay.className = 'search-overlay';
   overlay.onclick = e => { if(e.target===overlay) closeGlobalSearch(); };
 
-  const itemsHTML = globalSearchQuery.length === 0
-    ? `<div style="padding:18px;text-align:center;color:var(--text-muted);font-size:12px">Type to search cages, frames, or trips…</div>`
-    : results.length === 0
-    ? `<div style="padding:18px;text-align:center;color:var(--text-muted);font-size:12px">No results for "${esc(globalSearchQuery)}"</div>`
-    : results.map((r,i) => `
-      <div class="search-result-item ${i===globalSearchIdx?'active':''}" id="gsr-${i}" onclick="gsSelectResult(${i})">
-        <div style="flex:1;min-width:0">
-          <div class="search-result-name">${esc(r.name)}</div>
-          <div class="search-result-meta">${esc(r.meta)}</div>
-        </div>
-        <span class="badge badge-${r.badge} search-result-badge" style="font-size:10px">${esc(r.badgeLabel)}</span>
-      </div>`).join('');
-
   overlay.innerHTML = `<div class="search-modal">
     <div class="search-input-row">
       <span class="search-icon">🔍</span>
-      <input id="gs-input" placeholder="Search cages, frames, trips…" value="${esc(globalSearchQuery)}"
+      <input id="gs-input" placeholder="Search cages, frames, trips…"
+        inputmode="search" enterkeyhint="search" autocomplete="off"
+        autocorrect="off" autocapitalize="off" spellcheck="false"
         oninput="gsOnInput(this.value)"
         onkeydown="gsOnKey(event)"/>
-      <button class="btn btn-secondary btn-sm" onclick="closeGlobalSearch()">✕</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeGlobalSearch()" style="flex-shrink:0">✕</button>
     </div>
-    <div class="search-results" id="gs-results">${itemsHTML}</div>
+    <div class="search-results" id="gs-results">${gsResultsHTML()}</div>
     <div class="search-hint"><span class="search-kbd">↑↓</span> navigate &nbsp; <span class="search-kbd">Enter</span> jump to &nbsp; <span class="search-kbd">Esc</span> close</div>
   </div>`;
   document.body.appendChild(overlay);
+  // Focus after appending — single focus call, no re-render needed
+  setTimeout(() => { const inp = document.getElementById('gs-input'); if(inp) inp.focus(); }, 50);
 }
 function gsOnInput(val) {
-  globalSearchQuery = val; globalSearchIdx = 0; renderSearchModal();
-  setTimeout(() => { const inp = document.getElementById('gs-input'); if(inp){ inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length); }}, 10);
+  globalSearchQuery = val; globalSearchIdx = 0;
+  // Update only the results list, NOT the whole modal (keeps keyboard open on mobile)
+  const resultsEl = document.getElementById('gs-results');
+  if (resultsEl) resultsEl.innerHTML = gsResultsHTML();
 }
 function gsOnKey(e) {
   const results = globalSearchResults(globalSearchQuery);
-  if (e.key === 'ArrowDown') { globalSearchIdx = Math.min(globalSearchIdx+1, results.length-1); renderSearchModal(); setTimeout(()=>{const inp=document.getElementById('gs-input');if(inp){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}},10); e.preventDefault(); }
-  else if (e.key === 'ArrowUp') { globalSearchIdx = Math.max(globalSearchIdx-1, 0); renderSearchModal(); setTimeout(()=>{const inp=document.getElementById('gs-input');if(inp){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}},10); e.preventDefault(); }
+  if (e.key === 'ArrowDown') { globalSearchIdx = Math.min(globalSearchIdx+1, results.length-1); const r=document.getElementById('gs-results'); if(r) r.innerHTML=gsResultsHTML(); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { globalSearchIdx = Math.max(globalSearchIdx-1, 0); const r=document.getElementById('gs-results'); if(r) r.innerHTML=gsResultsHTML(); e.preventDefault(); }
   else if (e.key === 'Enter') { gsSelectResult(globalSearchIdx); }
   else if (e.key === 'Escape') { closeGlobalSearch(); }
 }
