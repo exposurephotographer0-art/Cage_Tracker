@@ -11284,7 +11284,7 @@ function ctRenderTable(item, ro) {
         ${!ro && ci === 0 ? `<div class="ct-row-resize-handle" onmousedown="ctRowResizeStart(event,'${item.id}',${ri})" title="Drag to resize row"></div>` : ''}
       </td>`;
     }).join('');
-    return `<tr style="${minH}">${cells}${!ro ? `<td style="width:52px;padding:4px 3px;vertical-align:top"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><button class="btn btn-secondary btn-xs" style="font-size:9px;padding:1px 5px;color:var(--text-muted)" onclick="ctTableMoveRow('${item.id}',${ri},-1)" title="Move row up">▲</button><button class="btn btn-secondary btn-xs" style="font-size:9px;padding:1px 5px;color:var(--text-muted)" onclick="ctTableMoveRow('${item.id}',${ri},1)" title="Move row down">▼</button><button class="btn btn-secondary btn-xs" style="color:var(--red);padding:1px 5px" onclick="ctTableDeleteRow('${item.id}',${ri})">✕</button></div></td>` : ''}</tr>`;
+    return `<tr style="${minH}">${cells}${!ro ? `<td style="width:52px;padding:4px 3px;vertical-align:top"><div style="display:flex;flex-direction:column;gap:2px;align-items:center"><button class="btn btn-secondary btn-xs" style="font-size:9px;padding:1px 5px;color:var(--text-muted)" onclick="ctTableMoveRow('${item.id}',${ri},-1)" title="Move row up">▲</button><button class="btn btn-secondary btn-xs" style="font-size:9px;padding:1px 5px;color:var(--text-muted)" onclick="ctTableMoveRow('${item.id}',${ri},1)" title="Move row down">▼</button><button class="btn btn-secondary btn-xs" style="font-size:9px;padding:1px 5px;color:var(--accent)" onclick="ctTableInsertRow('${item.id}',${ri})" title="Insert row below">＋</button><button class="btn btn-secondary btn-xs" style="color:var(--red);padding:1px 5px" onclick="ctTableDeleteRow('${item.id}',${ri})">✕</button></div></td>` : ''}</tr>`;
   }).join('');
 
   return `
@@ -11681,6 +11681,19 @@ async function ctTableAddRow(itemId) {
   item.metadata.rows.push(Array(cols).fill(''));
   await apiUpdateCustomTabItem(item);
   ctRefreshItem(item);
+  setTimeout(() => ctTableInitResize(itemId), 30);
+}
+
+async function ctTableInsertRow(itemId, afterIdx) {
+  const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  const cols = (item.metadata.headers || []).length || 3;
+  if (!item.metadata.rows) item.metadata.rows = [];
+  item.metadata.rows.splice(afterIdx + 1, 0, Array(cols).fill(''));
+  if (item.metadata.rowHeights) item.metadata.rowHeights.splice(afterIdx + 1, 0, undefined);
+  await apiUpdateCustomTabItem(item);
+  ctRefreshItem(item);
+  setTimeout(() => ctTableInitResize(itemId), 30);
 }
 async function ctTableAddCol(itemId) {
   const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
