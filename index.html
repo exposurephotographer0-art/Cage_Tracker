@@ -10044,6 +10044,15 @@ function renderMovementsDayView() {
     }
   });
 
+  // ── Mark cages as shipped if their proposedShipDay is on or before the viewed day ──
+  // This removes them from the map and counts — they are on the boat after that date.
+  STATE.cages.forEach(c => {
+    if (c.proposedShipDay && c.proposedShipDay <= mvDayDate && c.location !== 'shipped') {
+      cageLocSim.set(c.id, { location:'shipped', locationDetail:'On boat', frameId:null });
+      simRmdRemoveCage(c.id); // also clear from simulated RMD slots
+    }
+  });
+
   // Build simulated frame occupancy from final cageLocSim
   const simFrameCages = {};
   STATE.frames.forEach(f => { simFrameCages[f.id] = []; });
@@ -10055,10 +10064,13 @@ function renderMovementsDayView() {
   });
 
   // ── Location totals for end-of-day banner ────────────────────────────────────
-  // cageLocSim = start-of-day; clone and apply today's pending moves to get end-of-day.
+  // cageLocSim = start-of-day (with shipped cages removed); clone and apply today's
+  // pending moves to get end-of-day positions, then also remove shipped cages.
   const eodLocSim = new Map(Array.from(cageLocSim.entries()).map(([k,v]) => [k, {...v}]));
   dayMoves.filter(m => !m.completed).forEach(m => {
     if (!m.cageId) return;
+    // Skip if cage is already marked as shipped (departed on/before this day)
+    if (eodLocSim.get(m.cageId)?.location === 'shipped') return;
     if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'facility-to-frame' || m.typeKey === 'frame-to-frame') {
       eodLocSim.set(m.cageId, { location:'frame', locationDetail: getFrame(m.frameId)?.name||'', frameId: m.frameId||null });
     } else if (m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') {
@@ -10066,6 +10078,12 @@ function renderMovementsDayView() {
       eodLocSim.set(m.cageId, { location:'rmd', locationDetail: slot, frameId:null });
     } else if (m.typeKey === 'frame-to-rss' || m.typeKey === 'rmd-to-rss') {
       eodLocSim.set(m.cageId, { location:'rss', locationDetail:'Roof Slab Storage', frameId:null });
+    }
+  });
+  // Also apply shipping to eodLocSim — a cage whose ship day is today counts as gone by end of day
+  STATE.cages.forEach(c => {
+    if (c.proposedShipDay && c.proposedShipDay <= mvDayDate && c.location !== 'shipped') {
+      eodLocSim.set(c.id, { location:'shipped', locationDetail:'On boat', frameId:null });
     }
   });
   let _rmdCount = 0, _frameFacCount = 0, _frameBoatCount = 0, _rssCount = 0;
