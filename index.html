@@ -1400,6 +1400,12 @@ function hDot(h) {
   const glow = c === 'Short' ? '0 0 6px 2px rgba(34,197,94,0.85)' : c === 'Medium' ? '0 0 6px 2px rgba(250,204,21,0.95)' : '0 0 6px 2px rgba(239,68,68,0.85)';
   return `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${col};box-shadow:${glow};margin-right:3px;flex-shrink:0;vertical-align:middle"></span>`;
 }
+function tagDot(cage) {
+  if (!cage || !cage.tagColour) return '';
+  const col = cage.tagColour === 'green' ? '#22c55e' : '#ef4444';
+  const glow = cage.tagColour === 'green' ? '0 0 5px 1px rgba(34,197,94,0.7)' : '0 0 5px 1px rgba(239,68,68,0.7)';
+  return `<span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:${col};box-shadow:${glow};margin-left:2px;margin-right:1px;flex-shrink:0;vertical-align:middle"></span>`;
+}
 function cageLabel(c) { return `${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
 function cageLabelRaw(c) { return `${c.name} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
 function locBadge(l) { return {facility:'blue', rmd:'green', rss:'blue', frame:'orange', shipped:'purple'}[l] || 'accent'; }
@@ -2583,7 +2589,7 @@ function renderDashboard() {
       return `<div class="rmd-slot" onclick="toggleShipPref('${cage.id}')" style="cursor:pointer;${slotBg}" title="${cage.shippingPreference ? 'Click to remove shipping preference' : 'Click to set shipping preference'}">
         <span class="rmd-slot-label">${posLabel}</span>
         <div class="rmd-slot-content">
-          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${nameColor}">${hDot(cage.height)}${esc(cage.name)}${cage.shippingPreference ? ' ★' : ''}${cage.shippingPreference2 ? ' <span style="font-size:9px;color:#3b82f6">●</span>' : ''}</span><span class="rmd-cage-detail" style="${detailColor}">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</span></span>
+          <span class="rmd-cage-info"><span class="rmd-cage-name" style="${nameColor}">${hDot(cage.height)}${tagDot(cage)}${esc(cage.name)}${cage.shippingPreference ? ' ★' : ''}${cage.shippingPreference2 ? ' <span style="font-size:9px;color:#3b82f6">●</span>' : ''}</span><span class="rmd-cage-detail" style="${detailColor}">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</span></span>
         </div>
       </div>`;
     } else {
@@ -2980,6 +2986,11 @@ function renderCages() {
         <div><label>Into RMD</label><input id="cf-into-rmd" type="date"/></div>
         <div><label>Out of RMD</label><input id="cf-out-rmd" type="date"/></div>
         <div><label>Notes</label><input id="cf-notes"/></div>
+        <div><label>Tag Colour</label><select id="cf-tag">
+          <option value="">None</option>
+          <option value="green">🟩 Green Tag</option>
+          <option value="red">🟥 Red Tag</option>
+        </select></div>
       </div>
       <div class="form-actions">
         <button class="btn btn-primary" onclick="addCage()">Save Cage</button>
@@ -3063,6 +3074,11 @@ function renderCages() {
           <td>—</td>
           <td style="text-align:center"><input type="checkbox" id="ce-sp-${c.id}" ${c.shippingPreference?'checked':''} style="width:15px;height:15px;accent-color:#e8b800" title="Shipping Preference"/></td>
           <td style="text-align:center"><input type="checkbox" id="ce-sp2-${c.id}" ${c.shippingPreference2?'checked':''} style="width:15px;height:15px;accent-color:#3b82f6" title="Shipping Preference 2"/></td>
+          <td><select id="ce-tag-${c.id}" style="font-size:11px;padding:3px 6px">
+            <option value="" ${!c.tagColour?'selected':''}>None</option>
+            <option value="green" ${c.tagColour==='green'?'selected':''}>🟩 Green</option>
+            <option value="red" ${c.tagColour==='red'?'selected':''}>🟥 Red</option>
+          </select></td>
           <td colspan="2" style="white-space:nowrap">
             <button class="btn btn-primary btn-xs" onclick="saveCageEdit('${c.id}')">✓ Save</button>
             <button class="btn btn-secondary btn-xs" style="margin-left:4px" onclick="cageEditing=null;render()">Cancel</button>
@@ -3193,8 +3209,9 @@ async function addCage() {
   const notes = document.getElementById('cf-notes').value.trim();
   const intoRmd = document.getElementById('cf-into-rmd').value || null;
   const outOfRmd = document.getElementById('cf-out-rmd').value || null;
+  const tagColour = document.getElementById('cf-tag').value || null;
   if (!name||isNaN(h)||isNaN(w)||isNaN(l)||isNaN(wt)) return alert('Please fill all required fields.');
-  const cage = {id:uid(),name,height:h,width:w,length:l,weight:wt,notes,intoRmd,outOfRmd,departureDate:null,location:'facility',locationDetail:'',createdAt:new Date().toISOString()};
+  const cage = {id:uid(),name,height:h,width:w,length:l,weight:wt,notes,intoRmd,outOfRmd,tagColour:tagColour||null,departureDate:null,location:'facility',locationDetail:'',createdAt:new Date().toISOString()};
   STATE.cages.push(cage);
   cageFormOpen = false;
   render();
@@ -3355,6 +3372,8 @@ function saveCageEdit(id) {
   if (outOfRmdEl) c.outOfRmd = outOfRmdEl.value || null;
   if (spEl) c.shippingPreference = spEl.checked;
   if (sp2El) c.shippingPreference2 = sp2El.checked;
+  const tagEl = document.getElementById('ce-tag-'+id);
+  if (tagEl) c.tagColour = tagEl.value || null;
   cageEditing = null;
   render();
   saveCage(c);
@@ -4157,7 +4176,7 @@ function renderRSSPanel(avail) {
       <span class="rmd-slot-label" style="width:28px;font-size:10px;color:var(--text-muted)">${i+1}</span>
       <div class="rmd-slot-content">
         <span class="rmd-cage-info">
-          <span class="rmd-cage-name">${hDot(cage.height)}${esc(cage.name)}</span>
+          <span class="rmd-cage-name">${hDot(cage.height)}${tagDot(cage)}${esc(cage.name)}</span>
           <span class="rmd-cage-detail">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</span>
         </span>
         <button class="remove-btn" onclick="removeFromRSS('${cage.id}')">×</button>
@@ -4686,7 +4705,7 @@ function renderPlanner() {
               const minFrame = FRAME_WIDTHS.find(w => w >= c.width) || FRAME_WIDTHS[FRAME_WIDTHS.length-1];
               const walerNote = needsWaler(c) ? ' + waler' : '';
               return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;${_rBg}background:rgba(37,99,176,0.06);border-radius:4px;margin-bottom:2px">
-                <span style="font:600 11px var(--font-mono);${_rNc}">${hDot(c.height)}${esc(c.name)}</span>
+                <span style="font:600 11px var(--font-mono);${_rNc}">${hDot(c.height)}${tagDot(c)}${esc(c.name)}</span>
                 <span style="font-size:9px;background:#fdf5dc;color:var(--yellow);border:1px solid #e0d8a0;border-radius:3px;padding:1px 5px;margin-left:4px" title="Min frame for shipping">▣ ${minFrame}m${walerNote}</span>
               </div>`;
             }).join('');
@@ -9500,6 +9519,21 @@ function renderMovementsDayView() {
         cageLocSim.set(m.cageId, { location:'frame', locationDetail: getFrame(srcFrameId)?.name||'', frameId: srcFrameId });
       }
     }
+    else if (m.typeKey === 'frame-to-rss') {
+      // Cage was in a frame before — restore it there
+      const prevFrameId = m.frameId || null;
+      if (prevFrameId) {
+        cageLocSim.set(m.cageId, { location:'frame', locationDetail: getFrame(prevFrameId)?.name||'', frameId: prevFrameId });
+      } else {
+        cageLocSim.set(m.cageId, { location:'facility', locationDetail:'', frameId:null });
+      }
+    }
+    else if (m.typeKey === 'rmd-to-rss') {
+      // Cage was in RMD before — restore
+      simRmdAddCage(m);
+      const slot = m.rmdNumber != null ? `RMD-${m.rmdNumber}${m.rmdSide||''}` : (m.rmdSlot||'RMD');
+      cageLocSim.set(m.cageId, { location:'rmd', locationDetail: slot, frameId:null });
+    }
   });
 
   // Step 2: APPLY prior pending moves forward (these haven't happened yet in STATE)
@@ -9512,6 +9546,9 @@ function renderMovementsDayView() {
       const slot = m.rmdNumber != null ? `RMD-${m.rmdNumber}${m.rmdSide||''}` : (m.rmdSlot||'RMD');
       cageLocSim.set(m.cageId, { location:'rmd', locationDetail: slot, frameId:null });
       simRmdAddCage(m);
+    } else if (m.typeKey === 'frame-to-rss' || m.typeKey === 'rmd-to-rss') {
+      simRmdRemoveCage(m.cageId);
+      cageLocSim.set(m.cageId, { location:'rss', locationDetail:'Roof Slab Storage', frameId:null });
     }
   });
 
@@ -9691,7 +9728,7 @@ function renderMovementsMap(dayCtx) {
           const hasMoves = STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length > 0;
           const isPickedCage = mvPick && mvPick.cageId === cid;
           const pickBtnHTML = `<button onclick="mvPickCage('${cid}')" title="Click to plan movement for cage ${esc(cage.name)}" style="border:none;background:${isPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${isPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${isPickedCage?'✓':'🏷'}</button>`;
-          const cageNameHTML = `<span style="font:600 10px var(--font-mono);${nameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${cid}')" title="Click to view/edit movements for cage ${esc(cage.name)}">${hDot(cage.height)}${esc(cage.name)}${hasMoves?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length}</span>`:''}</span>${pickBtnHTML}`;
+          const cageNameHTML = `<span style="font:600 10px var(--font-mono);${nameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${cid}')" title="Click to view/edit movements for cage ${esc(cage.name)}">${hDot(cage.height)}${tagDot(cage)}${esc(cage.name)}${hasMoves?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length}</span>`:''}</span>${pickBtnHTML}`;
           slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;background:var(--bg-input);margin-bottom:2px;${bg}">
             <div style="display:flex;align-items:center;">${arrow}${slotTag}${cageNameHTML}</div>
             <div style="font-size:9px;padding-left:${arrow?'14':'0'}px;${detailStyle||'color:var(--text-muted);'}">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</div>
@@ -9738,9 +9775,11 @@ function renderMovementsMap(dayCtx) {
 
   // ── RSS card HTML ──
   function buildRssCard() {
-    const rssCages = (STATE.rssCages || []).map(id => getCage(id)).filter(Boolean);
+    const rssCages = isDayView
+      ? [...dayCtx.cageLocSim.entries()].filter(([,loc]) => loc.location==='rss').map(([cid]) => getCage(cid)).filter(Boolean)
+      : (STATE.rssCages || []).map(id => getCage(id)).filter(Boolean);
     const pendingOut = filtered.filter(m => m.typeKey === 'rss-to-frame');
-    const pendingIn  = filtered.filter(m => m.typeKey === 'facility-to-rss' || (m.typeKey === 'frame-to-rmd' && m.rmdSlot === 'RSS'));
+    const pendingIn  = filtered.filter(m => m.typeKey === 'facility-to-rss' || m.typeKey === 'frame-to-rss' || m.typeKey === 'rmd-to-rss' || (m.typeKey === 'frame-to-rmd' && m.rmdSlot === 'RSS'));
     const isActive = pendingOut.length > 0 || pendingIn.length > 0;
     const border = isActive ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);' : 'border:1px solid #a0c8e8;';
     let html = '';
@@ -9755,7 +9794,7 @@ function renderMovementsMap(dayCtx) {
         const isPickedCage = mvPick && mvPick.cageId === cage.id;
         const pickBtn = `<button onclick="mvPickCage('${cage.id}')" title="Plan movement for cage ${esc(cage.name)}" style="border:none;background:${isPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${isPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${isPickedCage?'✓':'🏷'}</button>`;
         html += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;margin-bottom:2px;${bg}">
-          <div style="display:flex;align-items:center;">${mvOut?'<span style="color:#c08520;font-weight:800;margin-right:4px">→</span>':''}<span style="font:600 10px var(--font-mono);${nameStyle}">${hDot(cage.height)}${esc(cage.name)}</span>${pickBtn}</div>
+          <div style="display:flex;align-items:center;">${mvOut?'<span style="color:#c08520;font-weight:800;margin-right:4px">→</span>':''}<span style="font:600 10px var(--font-mono);${nameStyle}">${hDot(cage.height)}${tagDot(cage)}${esc(cage.name)}</span>${pickBtn}</div>
           <div style="font-size:9px;color:var(--text-muted)">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</div>
         </div>`;
       });
@@ -9821,7 +9860,7 @@ function renderMovementsMap(dayCtx) {
       const fIsPickedCage = mvPick && mvPick.cageId === c.id;
       const fPickBtn = `<button onclick="event.stopPropagation();mvPickCage('${c.id}')" title="Plan movement for cage ${esc(c.name)}" style="border:none;background:${fIsPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${fIsPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${fIsPickedCage?'✓':'🏷'}</button>`;
       html += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${fBg}">
-        <div style="display:flex;align-items:center;gap:2px;">${out?'<span style="color:#c08520;font-weight:800">→</span>':''}<span style="font:600 10px var(--font-mono);${fNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span>${fPickBtn}</div>
+        <div style="display:flex;align-items:center;gap:2px;">${out?'<span style="color:#c08520;font-weight:800">→</span>':''}<span style="font:600 10px var(--font-mono);${fNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span>${fPickBtn}</div>
         <div style="font-size:9px;padding-left:${out?'13':'0'}px;${fDetailStyle}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
       </div>`;
     });
@@ -9846,7 +9885,7 @@ function renderMovementsMap(dayCtx) {
         ? `<span style="color:#27a060;font-weight:800">←</span><span style="color:#c08520;font-weight:800">→</span>`
         : `<span style="color:#27a060;font-weight:800">←</span>`;
       html+=`<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${iBg}">
-        <div style="display:flex;align-items:center;gap:2px;">${iArrow}<span style="font:600 10px var(--font-mono);${iNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${esc(c.name)}${iMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${iMoveCount}</span>`:''}</span>${iPickBtn}</div>
+        <div style="display:flex;align-items:center;gap:2px;">${iArrow}<span style="font:600 10px var(--font-mono);${iNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${iMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${iMoveCount}</span>`:''}</span>${iPickBtn}</div>
         <div style="font-size:9px;padding-left:13px;${iDetailStyle}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
       </div>`;
     });
@@ -10150,7 +10189,7 @@ function renderMovementsMap(dayCtx) {
                           return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid ${hasPlan?'#93c5fd':'var(--border)'};background:${hasPlan?'#eff6ff':'var(--bg-input)'};margin-bottom:2px;">
                             <div style="display:flex;align-items:center;gap:3px;">
                               ${hasPlan ? '<span style="color:#2563b0;font-weight:800;flex-shrink:0">→</span>' : '<span style="width:9px;flex-shrink:0"></span>'}
-                              ${hDot(c.height)}<span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
+                              ${hDot(c.height)}${tagDot(c)}<span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
                               <span style="color:${datCol};font-size:9px;margin-left:auto;white-space:nowrap">${isOverdue ? '⚠' : ''}${fmt(c.departureDate)}</span>
                               <button onclick="mvPickCage('${c.id}')" title="Plan movement for cage ${esc(c.name)}" style="border:none;background:${mvPick&&mvPick.cageId===c.id?'var(--accent)':'rgba(192,133,32,0.15)'};color:${mvPick&&mvPick.cageId===c.id?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;font-weight:700">${mvPick&&mvPick.cageId===c.id?'✓':'🏷'}</button>
                             </div>
