@@ -6424,6 +6424,23 @@ function getAlDates() {
   (STATE.auditEvents || []).forEach(ev => {
     if (ev.timestamp) dateSet.add(new Date(ev.timestamp).toISOString().slice(0,10));
   });
+
+  // Expand to include every working day (Mon–Fri) between the earliest and latest known date
+  if (dateSet.size > 0) {
+    const knownDates = [...dateSet].sort();
+    const rangeStart = alDateFrom || knownDates[0];
+    const rangeEnd   = alDateTo   || knownDates[knownDates.length - 1];
+    const cur = new Date(rangeStart + 'T12:00:00');
+    const end = new Date(rangeEnd   + 'T12:00:00');
+    while (cur <= end) {
+      const dow = cur.getDay();
+      if (dow !== 0 && dow !== 6) {           // Mon–Fri only
+        dateSet.add(cur.toISOString().slice(0, 10));
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+  }
+
   let dates = [...dateSet].sort((a,b) => b.localeCompare(a));
   if (alDateFrom) dates = dates.filter(d => d >= alDateFrom);
   if (alDateTo)   dates = dates.filter(d => d <= alDateTo);
