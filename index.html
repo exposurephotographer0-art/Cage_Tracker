@@ -12436,7 +12436,8 @@ function bdr_parseTsv(raw) {
 function bdr_parseHs(raw) {
   // HS-BDR: user copies H3:AC3 and down
   // Row 0 = header row, rows 1+ = data
-  // Hidden columns may shift positional indices — use header names only
+  // Hidden columns (O, Q, T, U, V, Z) are excluded from paste — use header names only
+  // Col H = "Production no", Col AA = " Delivery date " (leading space in original)
   if (!raw.trim()) return { rows: [], error: 'No data pasted.' };
   const rows = bdr_parseTsv(raw);
   if (rows.length < 2) return { rows: [], error: 'Need at least a header row and one data row.' };
@@ -12444,12 +12445,16 @@ function bdr_parseHs(raw) {
   const hdr = rows[0];
   let colProd = -1, colDel = -1;
   for (let i = 0; i < hdr.length; i++) {
-    const h = (hdr[i]||'').toLowerCase().replace(/\s+/g,' ').trim();
+    const raw_h = hdr[i] || '';
+    const h = raw_h.toLowerCase().replace(/\s+/g, ' ').trim();
     if (h === 'production no' || h === 'production no.') colProd = i;
-    if (h === 'delivery date') colDel = i;
+    // Col AA header is " Delivery date " — match it specifically to avoid
+    // matching col O "Delivery Date " which has no leading space.
+    // After normalise both become "delivery date" so we check the original for leading space.
+    if (h === 'delivery date' && raw_h.startsWith(' ')) colDel = i;
   }
   if (colProd < 0) colProd = 0; // fallback: first col is always production no
-  if (colDel < 0) return { rows: [], error: 'Could not find a "Delivery Date" column header in the pasted data. Make sure row 3 (the header row) is included in your copy.' };
+  if (colDel < 0) return { rows: [], error: 'Could not find the " Delivery date " column header (col AA) in the pasted data. Make sure row 3 (the header row) is included in your copy.' };
 
   const cutoff = bdr_cutoffDate();
   const result = [];
@@ -12465,7 +12470,7 @@ function bdr_parseHs(raw) {
     if (delDate < cutoff) continue;
     result.push({ prodNo, deliveryDate: delDate, deliveryDateRaw: delRaw.trim(), source: 'HS', rowIdx: i });
   }
-  if (!result.length) return { rows: [], error: 'No valid rows found. Rows must have a delivery date within the last 7 days or future. Check the "Delivery Date" column has values and you copied from H3 down.' };
+  if (!result.length) return { rows: [], error: 'No valid rows found. Rows must have a delivery date within the last 7 days or future. Check the " Delivery date " column has values and you copied from H3 down.' };
   return { rows: result, error: null };
 }
 
