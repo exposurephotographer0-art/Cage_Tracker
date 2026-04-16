@@ -4224,6 +4224,8 @@ const MOVE_TYPES = [
   {value:'rmd-to-frame', label:'RMD/Roof Slab → Frame'},
   {value:'facility-to-rss', label:'Facility → Roof Slab Storage'},
   {value:'rss-to-frame', label:'Roof Slab Storage → Frame'},
+  {value:'rmd-to-rss', label:'RMD → Roof Slab Storage'},
+  {value:'rss-to-rmd', label:'Roof Slab Storage → RMD'},
   {value:'frame-fix-shipping', label:'Fix cage to frame for shipping'},
   {value:'frame-return-from-client', label:'Frame returns from client → Facility'},
 ];
@@ -4357,10 +4359,17 @@ function buildPlanFormHTML() {
     }).join('');
     showRmd = false;
   } else if (planFormType === 'facility-to-rss') {
-    // Cages in facility going to Roof Slab Storage
     cageOpts = [...STATE.cages.filter(c=>c.location==='facility')].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(c=>`<option value="${c.id}">${esc(c.name)} (${hCat(c.height)}, ${c.width}m)</option>`).join('');
     showFrame = false;
     showRmd = false;
+  } else if (planFormType === 'rmd-to-rss') {
+    cageOpts = [...STATE.cages.filter(c=>c.location==='rmd')].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(c=>`<option value="${c.id}">${esc(c.name)} (${c.locationDetail})</option>`).join('');
+    showFrame = false;
+    showRmd = false;
+  } else if (planFormType === 'rss-to-rmd') {
+    cageOpts = [...STATE.cages.filter(c=>c.location==='rss')].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(c=>`<option value="${c.id}">${esc(c.name)} (Roof Slab Storage)</option>`).join('');
+    showFrame = false;
+    showRmd = true;
   } else if (planFormType === 'frame-fix-shipping') {
     // Only cages that are alone in a frame (exactly 1 cage in frame)
     const singleCageFrames = STATE.frames.filter(f=>f.location==='facility' && f.cages.length===1 && !f.fixedForShipping);
@@ -4380,7 +4389,7 @@ function buildPlanFormHTML() {
 
   // Build RMD slot dropdown options for Frame-to-RMD — show ALL slots so multi-move planning works
   let rmdSlotOpts = '';
-  if (planFormType === 'frame-to-rmd') {
+  if (planFormType === 'frame-to-rmd' || planFormType === 'rss-to-rmd') {
     const sortedRmd = [...STATE.rmdSlots].sort((a,b)=>a.number-b.number);
     // Count planned frame-to-rmd moves per side key so we can show how many are already queued
     const plannedToRmd = {};
@@ -4804,9 +4813,14 @@ async function addMovement() {
     const srcFrame = STATE.frames.find(f => f.cages.includes(cageId));
     if(srcFrame) parts.push(srcFrame.name + frameWidthTag(srcFrame));
     if(frame) parts.push(frame.name + frameWidthTag(frame));
-  } else if (effectiveType === 'facility-to-rss') {
+  } else if (effectiveType === 'facility-to-rss' || effectiveType === 'rmd-to-rss') {
+    if(cage) parts.push(cage.name);
+    if(effectiveType === 'rmd-to-rss') parts.push(cage?.locationDetail || 'RMD');
+    parts.push('Roof Slab Storage');
+  } else if (effectiveType === 'rss-to-rmd') {
     if(cage) parts.push(cage.name);
     parts.push('Roof Slab Storage');
+    if(rmdSlot && rmdSlot !== 'RSS') parts.push('RMD-'+rmdSlot);
   } else if (effectiveType === 'rss-to-frame') {
     if(cage) parts.push(cage.name);
     parts.push('Roof Slab Storage');
@@ -4848,6 +4862,8 @@ async function completeMove(id) {
     else if (m.typeKey === 'rss-to-frame' && frame) recordLocationChange(cage, 'frame', frame.name);
     else if (m.typeKey === 'frame-to-rmd' && m.rmdSlot) recordLocationChange(cage, 'rmd', 'RMD-' + m.rmdSlot);
     else if (m.typeKey === 'facility-to-rss') recordLocationChange(cage, 'rss', 'Roof Slab Storage');
+    else if (m.typeKey === 'rmd-to-rss') recordLocationChange(cage, 'rss', 'Roof Slab Storage');
+    else if (m.typeKey === 'rss-to-rmd') recordLocationChange(cage, 'rmd', m.rmdSlot ? 'RMD-'+m.rmdSlot : 'RMD');
     else if (m.typeKey === 'facility-to-rmd' && m.rmdNumber != null) recordLocationChange(cage, 'rmd', `RMD-${m.rmdNumber}${m.rmdSide||''}`);
     else if (m.typeKey === 'frame-to-frame' && frame) recordLocationChange(cage, 'frame', frame.name);
   }
@@ -4882,11 +4898,44 @@ async function completeMove(id) {
     await api('/api/frames', 'PUT', frame);
   }
   else if (m.typeKey === 'facility-to-rss' && cage) {
-    // Move cage from facility to Roof Slab Storage
     if (!STATE.rssCages) STATE.rssCages = [];
     if (!STATE.rssCages.includes(cage.id)) STATE.rssCages.push(cage.id);
     cage.location = 'rss';
     cage.locationDetail = 'Roof Slab Storage';
+    await saveRSS();
+  }
+  else if (m.typeKey === 'rmd-to-rss' && cage) {
+    // Move cage from RMD slot to Roof Slab Storage
+    STATE.rmdSlots.forEach(r => { SIDES.forEach(s => { if(r[s].cage1===cage.id) r[s].cage1=null; if(r[s].cage2===cage.id) r[s].cage2=null; }); });
+    if (!STATE.rssCages) STATE.rssCages = [];
+    if (!STATE.rssCages.includes(cage.id)) STATE.rssCages.push(cage.id);
+    cage.location = 'rss';
+    cage.locationDetail = 'Roof Slab Storage';
+    await saveRMD();
+    await saveRSS();
+  }
+  else if (m.typeKey === 'rss-to-rmd' && cage) {
+    // Move cage from Roof Slab Storage to an RMD slot
+    if (STATE.rssCages) STATE.rssCages = STATE.rssCages.filter(id => id !== cage.id);
+    // Determine target RMD slot
+    const rmdSlotStr = m.rmdSlot ? String(m.rmdSlot) : '';
+    const rmdMatch = rmdSlotStr.match(/(\d+)([ABab]?)/);
+    if (rmdMatch) {
+      const rmdNum = parseInt(rmdMatch[1]);
+      const side = (rmdMatch[2] || 'A').toUpperCase();
+      const rmdIdx = STATE.rmdSlots.findIndex(r => r.number === rmdNum);
+      if (rmdIdx >= 0) {
+        const r = STATE.rmdSlots[rmdIdx];
+        const slot = !r[side].cage1 ? 'cage1' : !r[side].cage2 ? 'cage2' : 'cage1';
+        r[side][slot] = cage.id;
+        cage.location = 'rmd';
+        cage.locationDetail = `RMD-${rmdNum}${side}`;
+        await saveRMD();
+      }
+    } else {
+      cage.location = 'facility';
+      cage.locationDetail = '';
+    }
     await saveRSS();
   }
   else if (m.typeKey === 'frame-to-rmd' && cage) {
@@ -9547,6 +9596,8 @@ function renderMovementsMap(dayCtx) {
     {k:'facility-to-rmd',label:`Facility → RMD (${ct['facility-to-rmd']||0})`},
     {k:'facility-to-rss',label:`Facility → Roof Slab (${ct['facility-to-rss']||0})`},
     {k:'rss-to-frame',   label:`Roof Slab → Frame (${ct['rss-to-frame']||0})`},
+    {k:'rmd-to-rss',    label:`RMD → Roof Slab (${ct['rmd-to-rss']||0})`},
+    {k:'rss-to-rmd',    label:`Roof Slab → RMD (${ct['rss-to-rmd']||0})`},
     {k:'frame-fix-shipping',label:`Fix Shipping (${ct['frame-fix-shipping']||0})`},
     {k:'frame-return-from-client',label:`🚢 Frame Return (${ct['frame-return-from-client']||0})`},
   ].map(b=>`<button class="filter-btn ${mvFilter===b.k?'active':''}" onclick="mvFilter='${b.k}';render()">${b.label}</button>`).join('');
@@ -9834,7 +9885,7 @@ function renderMovementsMap(dayCtx) {
   const boatMoves = filtered.filter(m => m.typeKey === 'frame-return-from-client');
 
   // ── Movement list sidebar ──
-  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','facility-to-frame':'#2563b0','facility-to-rmd':'#0d9488','frame-fix-shipping':'#c08520'};
+  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','facility-to-frame':'#2563b0','facility-to-rmd':'#0d9488','frame-fix-shipping':'#c08520','rss-to-frame':'#0891b2','facility-to-rss':'#0891b2','rmd-to-rss':'#0891b2','rss-to-rmd':'#7c3aed','rss-to-frame':'#0891b2'};
   const moveListHTML = filtered.map((m,i)=>{
     const col = MVCOLS[m.typeKey]||'var(--accent)';
     const cage = getCage(m.cageId);
@@ -10015,6 +10066,8 @@ function renderMovementsMap(dayCtx) {
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:14px;height:14px;background:#3b1d6e;border-radius:3px;display:inline-block"></span>Next shipment</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:14px;height:14px;background:#c8b8e8;border-radius:3px;display:inline-block"></span>2nd shipment</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:14px;height:14px;background:#fff8c5;border:1px solid #e8d850;border-radius:3px;display:inline-block"></span>Ship preference</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#0891b2;border-radius:2px;display:inline-block"></span>Roof Slab in/out</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#7c3aed;border-radius:2px;display:inline-block"></span>Roof Slab → RMD</span>
       <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">${filtered.length} movement${filtered.length!==1?'s':''}</span>
     </div>
 
@@ -10304,6 +10357,10 @@ function mvRedraw() {
     'frame-fix-shipping':  '#c08520',
     'frame-return-from-client': '#0e7490',
     'cage-to-boat-frame':  '#b45309',
+    'rss-to-frame':         '#0891b2',
+    'facility-to-rss':      '#0891b2',
+    'rmd-to-rss':           '#0891b2',
+    'rss-to-rmd':           '#7c3aed',
   };
 
   const cRect = container.getBoundingClientRect();
@@ -10701,6 +10758,90 @@ function mvRedraw() {
         const lblTxt = svgEl('text', { x: bx, y: by + 18, fill: color, 'font-size': '10', 'font-weight': 'bold', 'font-family': 'monospace', 'text-anchor': 'middle', 'dominant-baseline': 'hanging' });
         lblTxt.textContent = cLabel;
         svg.appendChild(lblTxt);
+      }
+
+    } else if (['rss-to-frame','facility-to-rss','rmd-to-rss','rss-to-rmd'].includes(m.typeKey)) {
+      // All RSS arrows — connect mv-rss-card with a frame/RMD/facility box
+      const rssPos = getPos('mv-rss-card');
+      if (!rssPos) return;
+
+      let srcPos = null, dstPos = null, dashed = false;
+
+      if (m.typeKey === 'rss-to-frame') {
+        // RSS → Frame
+        const fk = String(m.frameId||'');
+        const fPos = getPos('mvf-' + fk) || getPos('mvboat-' + fk);
+        if (!fPos) return;
+        srcPos = rssPos; dstPos = fPos;
+      } else if (m.typeKey === 'facility-to-rss' || m.typeKey === 'rmd-to-rss') {
+        // Facility/RMD → RSS
+        if (m.typeKey === 'rmd-to-rss') {
+          const rk = cleanRk(m.rmdSlot || (m.rmdNumber != null ? String(m.rmdNumber) : ''));
+          const rPos = rk ? getPos('mvr-' + rk) : null;
+          srcPos = rPos || getPos('mv-facility-box');
+        } else {
+          srcPos = getPos('mv-facility-box');
+        }
+        dstPos = rssPos;
+        dashed = true;
+      } else if (m.typeKey === 'rss-to-rmd') {
+        // RSS → RMD
+        const rk = cleanRk(m.rmdSlot || '');
+        const rPos = rk ? getPos('mvr-' + rk) : null;
+        if (!rPos) return;
+        srcPos = rssPos; dstPos = rPos;
+      }
+
+      if (!srcPos || !dstPos) return;
+
+      // Draw bezier: from bottom-right of source to top-left of dest (or side edges)
+      // Use right edge of source and left edge of dest for horizontal connections,
+      // or vertical edges if they're stacked
+      const sameRow = Math.abs(srcPos.cy - dstPos.cy) < 60;
+      let sx, sy, ex, ey;
+      if (sameRow) {
+        // horizontal connection
+        if (srcPos.cx < dstPos.cx) { sx=srcPos.right; sy=srcPos.cy; ex=dstPos.left; ey=dstPos.cy; }
+        else                        { sx=srcPos.left;  sy=srcPos.cy; ex=dstPos.right; ey=dstPos.cy; }
+      } else if (srcPos.cy < dstPos.cy) {
+        // src above dst
+        sx=srcPos.cx; sy=srcPos.bottom; ex=dstPos.cx; ey=dstPos.top;
+      } else {
+        // src below dst
+        sx=srcPos.cx; sy=srcPos.top; ex=dstPos.cx; ey=dstPos.bottom;
+      }
+
+      const gap = Math.max(Math.abs(ex-sx), Math.abs(ey-sy));
+      const cpOff = Math.max(gap * 0.35, 40);
+      const isVert = Math.abs(ey-sy) > Math.abs(ex-sx);
+      const c1x = isVert ? sx : sx + (ex>sx?cpOff:-cpOff);
+      const c1y = isVert ? sy + (ey>sy?cpOff:-cpOff) : sy;
+      const c2x = isVert ? ex : ex - (ex>sx?cpOff:-cpOff);
+      const c2y = isVert ? ey - (ey>sy?cpOff:-cpOff) : ey;
+
+      const path = svgEl('path', {
+        d: `M${sx},${sy} C${c1x},${c1y} ${c2x},${c2y} ${ex},${ey}`,
+        stroke: color, 'stroke-width': '2.5', fill: 'none',
+        'stroke-linecap': 'round',
+        ...(dashed ? {'stroke-dasharray':'7,4'} : {}),
+        'marker-end': `url(#arrow-${m.typeKey})`
+      });
+      svg.appendChild(path);
+
+      // Midpoint numbered circle + cage label
+      const mt = 0.5;
+      const bx = (1-mt)**3*sx + 3*(1-mt)**2*mt*c1x + 3*(1-mt)*mt**2*c2x + mt**3*ex;
+      const by = (1-mt)**3*sy + 3*(1-mt)**2*mt*c1y + 3*(1-mt)*mt**2*c2y + mt**3*ey;
+      const circle = svgEl('circle', { cx:bx, cy:by, r:'12', fill:color, stroke:'#fff', 'stroke-width':'2' });
+      svg.appendChild(circle);
+      const numText = svgEl('text', { x:bx, y:by, fill:'#fff', 'font-size':'11', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', 'dominant-baseline':'central' });
+      numText.textContent = String(num);
+      svg.appendChild(numText);
+      if (cLabel) {
+        const lbg = svgEl('text', { x:bx, y:by+18, fill:'#fff', 'font-size':'10', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', 'dominant-baseline':'hanging', stroke:'#fff', 'stroke-width':'3', 'paint-order':'stroke' });
+        lbg.textContent = cLabel; svg.appendChild(lbg);
+        const ltx = svgEl('text', { x:bx, y:by+18, fill:color, 'font-size':'10', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', 'dominant-baseline':'hanging' });
+        ltx.textContent = cLabel; svg.appendChild(ltx);
       }
 
     } else if (m.typeKey === 'cage-to-boat-frame') {
