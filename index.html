@@ -10458,6 +10458,13 @@ function renderMovementsMap(dayCtx) {
       </div>`;
     });
     if(!html) html='<div style="font-size:10px;color:var(--text-muted);font-style:italic">empty</div>';
+
+    // In day view: hide facility frame if it has no simulated cages and no planned moves in/out
+    if (isDayView) {
+      const simCageIds = dayCtx.simFrameCages ? (dayCtx.simFrameCages[f.id] || []) : f.cages;
+      if (simCageIds.length === 0 && outIds.length === 0 && inIds.length === 0) return '';
+    }
+
     const border = isActive ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);' : mvPick ? 'border:2px dashed #e8a830;cursor:pointer;' : 'border:1px solid var(--border);';
     const frameClickHandler = mvPick ? `onclick="mvPickDestination('frame','${f.id}','${esc(f.name)} [${f.width}m]')"` : '';
     const framePickHint = mvPick ? `<div style="font-size:9px;color:#e8a830;font-weight:600;margin-top:4px;text-align:center">▶ Move here</div>` : '';
@@ -10805,10 +10812,14 @@ function renderMovementsMap(dayCtx) {
               <!-- Boat / Client divider and frames -->
               ${(() => {
                 const framesWithReturn = STATE.frames
-                  .filter(f =>
-                    (f.location==='client'||f.location==='boat') &&
-                    (f.returnDate || activeFrames.has(f.id)) &&
-                    !(isDayView && dayCtx.simReturnedFrameIds && dayCtx.simReturnedFrameIds.has(f.id)))
+                  .filter(f => {
+                    if (!(f.location==='client'||f.location==='boat')) return false;
+                    if (isDayView && dayCtx.simReturnedFrameIds && dayCtx.simReturnedFrameIds.has(f.id)) return false;
+                    // In day view: show ALL away frames that are still away (returnDate >= mvDayDate)
+                    // or have movements planned. In all-movements view keep original logic.
+                    if (isDayView) return f.returnDate ? f.returnDate >= mvDayDate : activeFrames.has(f.id);
+                    return f.returnDate || activeFrames.has(f.id);
+                  })
                   .sort((a,b) => (a.returnDate||'').localeCompare(b.returnDate||''));
                 const hasAny = framesWithReturn.length > 0;
 
