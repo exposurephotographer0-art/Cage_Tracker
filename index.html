@@ -10805,20 +10805,10 @@ function renderMovementsMap(dayCtx) {
               <!-- Boat / Client divider and frames -->
               ${(() => {
                 const framesWithReturn = STATE.frames
-                  .filter(f => {
-                    if (!(f.location==='client'||f.location==='boat')) return false;
-                    if (isDayView && dayCtx.simReturnedFrameIds && dayCtx.simReturnedFrameIds.has(f.id)) return false;
-                    // In day view: hide this frame if it has no simulated cages AND no planned moves into it today
-                    if (isDayView && mvDayDate) {
-                      const simCages = dayCtx.simFrameCages ? (dayCtx.simFrameCages[f.id] || []) : f.cages;
-                      const plannedIncoming = filtered.filter(m =>
-                        (m.typeKey === 'facility-to-frame' || m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-return-from-client') &&
-                        m.frameId === f.id
-                      );
-                      if (simCages.length === 0 && plannedIncoming.length === 0) return false;
-                    }
-                    return true;
-                  })
+                  .filter(f =>
+                    (f.location==='client'||f.location==='boat') &&
+                    (f.returnDate || activeFrames.has(f.id)) &&
+                    !(isDayView && dayCtx.simReturnedFrameIds && dayCtx.simReturnedFrameIds.has(f.id)))
                   .sort((a,b) => (a.returnDate||'').localeCompare(b.returnDate||''));
                 const hasAny = framesWithReturn.length > 0;
 
@@ -10907,6 +10897,17 @@ function renderMovementsMap(dayCtx) {
                     </div>`;
                   });
                   if (!cageHTML) cageHTML = '<div style="font-size:10px;color:var(--text-muted);font-style:italic">away</div>';
+
+                  // In day view: if all cages have shipped (simFrameCages is empty and no planned
+                  // incoming moves into this frame today), hide the whole frame card
+                  if (isDayView) {
+                    const simCageIds = dayCtx.simFrameCages ? (dayCtx.simFrameCages[f.id] || []) : f.cages;
+                    const hasPlannedIn = plannedIntoCages.length > 0;
+                    const hasExiting   = exitingCages.length > 0;
+                    const hasReturning = returningMoves.length > 0;
+                    if (simCageIds.length === 0 && !hasPlannedIn && !hasExiting && !hasReturning) return '';
+                  }
+
                   const boatBorder = isActive
                     ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);'
                     : mvPick
@@ -10927,6 +10928,7 @@ function renderMovementsMap(dayCtx) {
 
                 if (!hasAny) return '';
                 const boatFramesHTML = framesWithReturn.map(f => buildBoatFrameCard(f)).join('');
+                if (!boatFramesHTML.trim()) return '';
                 return `
                   <div style="border-top:2px dashed #a5f3fc;margin:20px 0 16px;position:relative">
                     <span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--bg-deep);padding:0 12px;font:600 10px var(--font-mono);color:#0e7490;letter-spacing:.06em">🚢 FRAMES AT BOAT / CLIENT</span>
