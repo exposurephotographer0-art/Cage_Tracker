@@ -10054,9 +10054,22 @@ function renderMovementsDayView() {
       simFrameCages[loc.frameId].push(cid);
   });
 
-  // ── Location totals for the start-of-day banner ─────────────────────────────
+  // ── Location totals for end-of-day banner ────────────────────────────────────
+  // cageLocSim = start-of-day; clone and apply today's pending moves to get end-of-day.
+  const eodLocSim = new Map(Array.from(cageLocSim.entries()).map(([k,v]) => [k, {...v}]));
+  dayMoves.filter(m => !m.completed).forEach(m => {
+    if (!m.cageId) return;
+    if (m.typeKey === 'rmd-to-frame' || m.typeKey === 'facility-to-frame' || m.typeKey === 'frame-to-frame') {
+      eodLocSim.set(m.cageId, { location:'frame', locationDetail: getFrame(m.frameId)?.name||'', frameId: m.frameId||null });
+    } else if (m.typeKey === 'frame-to-rmd' || m.typeKey === 'facility-to-rmd') {
+      const slot = m.rmdNumber != null ? `RMD-${m.rmdNumber}${m.rmdSide||''}` : (m.rmdSlot||'RMD');
+      eodLocSim.set(m.cageId, { location:'rmd', locationDetail: slot, frameId:null });
+    } else if (m.typeKey === 'frame-to-rss' || m.typeKey === 'rmd-to-rss') {
+      eodLocSim.set(m.cageId, { location:'rss', locationDetail:'Roof Slab Storage', frameId:null });
+    }
+  });
   let _rmdCount = 0, _frameFacCount = 0, _frameBoatCount = 0;
-  cageLocSim.forEach((loc) => {
+  eodLocSim.forEach((loc) => {
     if (loc.location === 'rmd') { _rmdCount++; }
     else if (loc.location === 'frame' && loc.frameId) {
       const _f = STATE.frames.find(f => f.id === loc.frameId);
@@ -10069,7 +10082,7 @@ function renderMovementsDayView() {
   });
   const dayLocationBannerHTML = `
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-lg);align-items:center">
-      <span style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;flex-shrink:0">Start of day position:</span>
+      <span style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;flex-shrink:0">End of day (if all moves done):</span>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:8px;background:#e6f0fa;border:1px solid #a0c8e8">
           <span style="font-size:14px">▦</span>
@@ -10084,7 +10097,7 @@ function renderMovementsDayView() {
         ${_frameBoatCount > 0 ? `<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:8px;background:#e6f0fa;border:1px solid #a0c8e8">
           <span style="font-size:14px">🚢</span>
           <span style="font:700 18px var(--font-mono);color:var(--blue)">${_frameBoatCount}</span>
-          <span style="font:600 11px var(--font-display);color:var(--blue)">Frames at Boat</span>
+          <span style="font:600 11px var(--font-display);color:var(--blue)">in Frames at Boat</span>
         </span>` : ''}
       </div>
     </div>`;
