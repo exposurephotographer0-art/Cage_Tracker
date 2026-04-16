@@ -4881,6 +4881,32 @@ function openMovementsWindow() {
   });
 }
 
+function simOpenPreviewWindow(slotIndex) {
+  const sims = simLoadAll();
+  const sim = sims[slotIndex];
+  if (!sim) { showError('No simulation in that slot.'); return; }
+  const html = document.documentElement.outerHTML;
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, 'ct-sim-preview-' + slotIndex, 'width=1400,height=900,scrollbars=yes,resizable=yes');
+  if (!win) { alert('Pop-up blocked. Please allow pop-ups for this page.'); return; }
+  win.addEventListener('load', () => {
+    const inject = () => {
+      try {
+        if (!win.STATE || !win.render) { setTimeout(inject, 150); return; }
+        const completed = win.STATE.plannedMovements.filter(m => m.completed);
+        win.STATE.plannedMovements = [...completed, ...JSON.parse(JSON.stringify(sim.movements))];
+        win._simPreviewName = sim.name;
+        win._simPreviewSlot = slotIndex;
+        win.activeTab = 'movements';
+        win.mvDayView = false;
+        win.render();
+      } catch(e) { setTimeout(inject, 150); }
+    };
+    setTimeout(inject, 250);
+  });
+}
+
 async function addMovement() {
   const type = document.getElementById('pf-type').value;
   const cageId = document.getElementById('pf-cage').value;
@@ -5537,6 +5563,10 @@ function renderSimManager() {
           title="Overwrite with current pending movements" ${pendingCount===0?'disabled':''}>
           🔄 Update
         </button>
+        <button class="btn btn-secondary btn-sm" onclick="simOpenPreviewWindow(${i})"
+          title="Open this simulation in a pop-out Movements Map window">
+          🗺 Preview
+        </button>
         <button class="btn btn-secondary btn-sm" onclick="simApply(${i});simCloseManager()"
           title="Load this simulation as your active plan (replaces current pending moves)">
           ▶ Apply
@@ -5689,7 +5719,10 @@ function renderSimComparePanel() {
     <div class="sim-compare-col col-1">
       <div class="sim-compare-hdr hdr-1">
         <span>A: ${esc(simA.name)} <span style="font-weight:400;font-size:10px">(${totalA} moves)</span></span>
-        <button class="btn btn-primary btn-sm" onclick="simApply(${simCompareA})" title="Apply this simulation as your active plan">▶ Apply This</button>
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-secondary btn-sm" onclick="simOpenPreviewWindow(${simCompareA})" title="Open this simulation in a pop-out map window">🗺 Preview</button>
+          <button class="btn btn-primary btn-sm" onclick="simApply(${simCompareA})" title="Apply this simulation as your active plan">▶ Apply This</button>
+        </div>
       </div>
       <div class="sim-compare-body">${moveSummary(simA.movements, simB?.movements, 'A')}</div>
     </div>` : `<div class="sim-compare-col col-1" style="display:flex;align-items:center;justify-content:center;min-height:100px;color:var(--text-muted);font-size:13px">No simulation selected for A</div>`;
@@ -5698,7 +5731,10 @@ function renderSimComparePanel() {
     <div class="sim-compare-col col-2">
       <div class="sim-compare-hdr hdr-2">
         <span>B: ${esc(simB.name)} <span style="font-weight:400;font-size:10px">(${totalB} moves)</span></span>
-        <button class="btn btn-primary btn-sm" onclick="simApply(${simCompareB})" title="Apply this simulation as your active plan">▶ Apply This</button>
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-secondary btn-sm" onclick="simOpenPreviewWindow(${simCompareB})" title="Open this simulation in a pop-out map window">🗺 Preview</button>
+          <button class="btn btn-primary btn-sm" onclick="simApply(${simCompareB})" title="Apply this simulation as your active plan">▶ Apply This</button>
+        </div>
       </div>
       <div class="sim-compare-body">${moveSummary(simB.movements, simA?.movements, 'B')}</div>
     </div>` : `<div class="sim-compare-col col-2" style="display:flex;align-items:center;justify-content:center;min-height:100px;color:var(--text-muted);font-size:13px">No simulation selected for B</div>`;
@@ -10508,6 +10544,15 @@ function renderMovementsMap(dayCtx) {
       <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="mvDayDate=null;mvDayView=true;render()">📅 Day-by-Day View</button>
     </div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Arrows show all planned, not-yet-actioned movements between RMD storage and frames. Use <strong>Day-by-Day View</strong> to step through one day at a time.</div>
+    ${window._simPreviewName ? `
+    <div style="display:flex;align-items:center;gap:10px;background:#1a2235;border:2px solid var(--purple);border-radius:8px;padding:10px 16px;margin-bottom:14px;flex-wrap:wrap">
+      <span style="font-size:20px">🧪</span>
+      <div style="flex:1;min-width:0">
+        <div style="font:700 13px var(--font-display);color:#c4b5fd">Simulation Preview — ${esc(window._simPreviewName)}</div>
+        <div style="font-size:11px;color:#9ca3af;margin-top:2px">This window shows the simulation's movements. Your live plan in the main window is unchanged. Close this window when done.</div>
+      </div>
+      <span style="font:700 11px var(--font-mono);padding:4px 10px;border-radius:6px;background:rgba(112,64,192,0.25);color:#c4b5fd;border:1px solid rgba(112,64,192,0.5)">${STATE.plannedMovements.filter(m=>!m.completed).length} moves</span>
+    </div>` : ''}
     ${renderSimBar()}
     ${simManagerOpen ? renderSimManager() : ''}
     ${renderSimComparePanel()}
