@@ -10394,7 +10394,8 @@ function renderMovementsMap(dayCtx) {
   const relevantFrames = STATE.frames.filter(f =>
     f.location === 'facility' ||
     (activeFrames.has(f.id) && f.location !== 'client' && f.location !== 'boat') ||
-    (isDayView && dayCtx.simFrameCages && (dayCtx.simFrameCages[f.id]?.length > 0) && f.location !== 'client'));
+    (isDayView && dayCtx.simFrameCages && (dayCtx.simFrameCages[f.id]?.length > 0) && f.location !== 'client') ||
+    (isDayView && (f.location === 'boat' || f.location === 'client') && f.returnDate && f.returnDate < mvDayDate));
   const sortedFrames = [...relevantFrames].sort((a,b)=>{
     return (activeFrames.has(b.id)?1:0)-(activeFrames.has(a.id)?1:0);
   });
@@ -10460,9 +10461,11 @@ function renderMovementsMap(dayCtx) {
     if(!html) html='<div style="font-size:10px;color:var(--text-muted);font-style:italic">empty</div>';
 
     // In day view: hide facility frame if it has no simulated cages and no planned moves in/out
+    // Exception: frames that have just returned from boat (returnDate < mvDayDate) should always show
     if (isDayView) {
       const simCageIds = dayCtx.simFrameCages ? (dayCtx.simFrameCages[f.id] || []) : f.cages;
-      if (simCageIds.length === 0 && outIds.length === 0 && inIds.length === 0) return '';
+      const isJustReturned = (f.location === 'boat' || f.location === 'client') && f.returnDate && f.returnDate < mvDayDate;
+      if (simCageIds.length === 0 && outIds.length === 0 && inIds.length === 0 && !isJustReturned) return '';
     }
 
     const border = isActive ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);' : mvPick ? 'border:2px dashed #e8a830;cursor:pointer;' : 'border:1px solid var(--border);';
@@ -10911,16 +10914,15 @@ function renderMovementsMap(dayCtx) {
                   });
                   if (!cageHTML) cageHTML = '<div style="font-size:10px;color:var(--text-muted);font-style:italic">away</div>';
 
-                  // In day view: hide this frame card only if its cages have all shipped AND
-                  // its return date is strictly before the viewed day (it's already back at facility).
-                  // If returnDate >= mvDayDate, always show it — it's still away or coming back.
+                  // In day view: hide from boat section once returnDate has passed (frame is back at facility).
+                  // It will appear in the facility frames section instead.
                   if (isDayView) {
                     const simCageIds = dayCtx.simFrameCages ? (dayCtx.simFrameCages[f.id] || []) : f.cages;
                     const hasPlannedIn = plannedIntoCages.length > 0;
                     const hasExiting   = exitingCages.length > 0;
                     const hasReturning = returningMoves.length > 0;
-                    const stillAway    = !f.returnDate || f.returnDate >= mvDayDate;
-                    if (simCageIds.length === 0 && !hasPlannedIn && !hasExiting && !hasReturning && !stillAway) return '';
+                    const hasReturned  = f.returnDate && f.returnDate < mvDayDate;
+                    if (hasReturned && simCageIds.length === 0 && !hasPlannedIn && !hasExiting && !hasReturning) return '';
                   }
 
                   const boatBorder = isActive
