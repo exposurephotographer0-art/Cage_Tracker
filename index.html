@@ -10761,87 +10761,118 @@ function mvRedraw() {
       }
 
     } else if (['rss-to-frame','facility-to-rss','rmd-to-rss','rss-to-rmd'].includes(m.typeKey)) {
-      // All RSS arrows — connect mv-rss-card with a frame/RMD/facility box
       const rssPos = getPos('mv-rss-card');
       if (!rssPos) return;
 
-      let srcPos = null, dstPos = null, dashed = false;
-
       if (m.typeKey === 'rss-to-frame') {
-        // RSS → Frame
+        // RSS → Frame: identical pattern to rmd-to-frame
+        // RSS card sits in the same top zone as RMD, frames are below.
+        // FROM RSS (bottom edge) TO Frame (top edge), bezier curving down.
         const fk = String(m.frameId||'');
         const fPos = getPos('mvf-' + fk) || getPos('mvboat-' + fk);
         if (!fPos) return;
-        srcPos = rssPos; dstPos = fPos;
-      } else if (m.typeKey === 'facility-to-rss' || m.typeKey === 'rmd-to-rss') {
-        // Facility/RMD → RSS
-        if (m.typeKey === 'rmd-to-rss') {
-          const rk = cleanRk(m.rmdSlot || (m.rmdNumber != null ? String(m.rmdNumber) : ''));
-          const rPos = rk ? getPos('mvr-' + rk) : null;
-          srcPos = rPos || getPos('mv-facility-box');
-        } else {
-          srcPos = getPos('mv-facility-box');
+
+        const sx = rssPos.cx; const sy = rssPos.bottom;
+        const ex = fPos.cx;   const ey = fPos.top;
+        const gap = Math.abs(ey - sy);
+        const cpOff = Math.max(gap * 0.35, 40);
+
+        svg.appendChild(svgEl('path', {
+          d: `M${sx},${sy} C${sx},${sy+cpOff} ${ex},${ey-cpOff} ${ex},${ey}`,
+          stroke: color, 'stroke-width': '2.5', fill: 'none', 'stroke-linecap': 'round',
+          'marker-end': `url(#arrow-rss-to-frame)`
+        }));
+        const mt = 0.5;
+        const bx = (1-mt)**3*sx + 3*(1-mt)**2*mt*sx + 3*(1-mt)*mt**2*ex + mt**3*ex;
+        const by = (1-mt)**3*sy + 3*(1-mt)**2*mt*(sy+cpOff) + 3*(1-mt)*mt**2*(ey-cpOff) + mt**3*ey;
+        svg.appendChild(svgEl('circle', { cx:bx, cy:by, r:'12', fill:color, stroke:'#fff', 'stroke-width':'2' }));
+        const nt = svgEl('text', { x:bx, y:by, fill:'#fff', 'font-size':'11', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', 'dominant-baseline':'central' });
+        nt.textContent = String(num); svg.appendChild(nt);
+        if (cLabel) {
+          const lb = svgEl('text', { x:bx, y:by+18, fill:'#fff', 'font-size':'10', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', 'dominant-baseline':'hanging', stroke:'#fff', 'stroke-width':'3', 'paint-order':'stroke' });
+          lb.textContent = cLabel; svg.appendChild(lb);
+          const lt = svgEl('text', { x:bx, y:by+18, fill:color, 'font-size':'10', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', 'dominant-baseline':'hanging' });
+          lt.textContent = cLabel; svg.appendChild(lt);
         }
-        dstPos = rssPos;
-        dashed = true;
+
+      } else if (m.typeKey === 'facility-to-rss') {
+        // Facility → RSS: dashed, same as facility-to-frame but targeting RSS card bottom edge
+        // Facility box is to the right of the canvas; RSS is in the top zone.
+        // FROM Facility (bottom edge) TO RSS (bottom edge — facility box is lower on screen)
+        // Actually use bottom of facility → bottom of RSS card since both are visible
+        const facPos = getPos('mv-facility-box');
+        if (!facPos) return;
+        // RSS is above-left of facility. Arrow: bottom of facility → bottom of RSS
+        const sx = facPos.cx; const sy = facPos.bottom;
+        const ex = rssPos.cx; const ey = rssPos.bottom;
+        const gap = Math.abs(ey - sy) || 60;
+        const cpOff = Math.max(gap * 0.4, 40);
+        svg.appendChild(svgEl('path', {
+          d: `M${sx},${sy} C${sx},${sy+cpOff} ${ex},${ey+cpOff} ${ex},${ey}`,
+          stroke: color, 'stroke-width': '2.5', fill: 'none', 'stroke-linecap': 'round',
+          'stroke-dasharray': '7,4', 'marker-end': `url(#arrow-facility-to-rss)`
+        }));
+        const mt = 0.5;
+        const bx = (1-mt)**3*sx + 3*(1-mt)**2*mt*sx + 3*(1-mt)*mt**2*ex + mt**3*ex;
+        const by = (1-mt)**3*sy + 3*(1-mt)**2*mt*(sy+cpOff) + 3*(1-mt)*mt**2*(ey+cpOff) + mt**3*ey;
+        svg.appendChild(svgEl('circle', { cx:bx, cy:by, r:'12', fill:color, stroke:'#fff', 'stroke-width':'2' }));
+        const nt = svgEl('text', { x:bx, y:by, fill:'#fff', 'font-size':'11', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', 'dominant-baseline':'central' });
+        nt.textContent = String(num); svg.appendChild(nt);
+        if (cLabel) {
+          const lb = svgEl('text', { x:bx, y:by+18, fill:'#fff', 'font-size':'10', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', 'dominant-baseline':'hanging', stroke:'#fff', 'stroke-width':'3', 'paint-order':'stroke' });
+          lb.textContent = cLabel; svg.appendChild(lb);
+          const lt = svgEl('text', { x:bx, y:by+18, fill:color, 'font-size':'10', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', 'dominant-baseline':'hanging' });
+          lt.textContent = cLabel; svg.appendChild(lt);
+        }
+
+      } else if (m.typeKey === 'rmd-to-rss') {
+        // RMD → RSS: both in same top row, draw horizontal bezier
+        // FROM right edge of RMD card TO left edge of RSS card
+        const rk = cleanRk(m.rmdSlot || (m.rmdNumber != null ? String(m.rmdNumber) : ''));
+        const rPos = rk ? getPos('mvr-' + rk) : null;
+        if (!rPos) return;
+        const sx = rPos.right;  const sy = rPos.cy;
+        const ex = rssPos.left; const ey = rssPos.cy;
+        const cpOff = Math.max(Math.abs(ex - sx) * 0.5, 30);
+        svg.appendChild(svgEl('path', {
+          d: `M${sx},${sy} C${sx+cpOff},${sy} ${ex-cpOff},${ey} ${ex},${ey}`,
+          stroke: color, 'stroke-width': '2.5', fill: 'none', 'stroke-linecap': 'round',
+          'marker-end': `url(#arrow-rmd-to-rss)`
+        }));
+        const bx = (sx+ex)/2; const by = Math.min(sy,ey) - 18;
+        svg.appendChild(svgEl('circle', { cx:bx, cy:by, r:'12', fill:color, stroke:'#fff', 'stroke-width':'2' }));
+        const nt = svgEl('text', { x:bx, y:by, fill:'#fff', 'font-size':'11', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', 'dominant-baseline':'central' });
+        nt.textContent = String(num); svg.appendChild(nt);
+        if (cLabel) {
+          const lb = svgEl('text', { x:bx, y:by-14, fill:'#fff', 'font-size':'10', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', stroke:'#fff', 'stroke-width':'3', 'paint-order':'stroke' });
+          lb.textContent = cLabel; svg.appendChild(lb);
+          const lt = svgEl('text', { x:bx, y:by-14, fill:color, 'font-size':'10', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle' });
+          lt.textContent = cLabel; svg.appendChild(lt);
+        }
+
       } else if (m.typeKey === 'rss-to-rmd') {
-        // RSS → RMD
+        // RSS → RMD: horizontal bezier from left edge of RSS → right edge of RMD card
         const rk = cleanRk(m.rmdSlot || '');
         const rPos = rk ? getPos('mvr-' + rk) : null;
         if (!rPos) return;
-        srcPos = rssPos; dstPos = rPos;
-      }
-
-      if (!srcPos || !dstPos) return;
-
-      // Draw bezier: from bottom-right of source to top-left of dest (or side edges)
-      // Use right edge of source and left edge of dest for horizontal connections,
-      // or vertical edges if they're stacked
-      const sameRow = Math.abs(srcPos.cy - dstPos.cy) < 60;
-      let sx, sy, ex, ey;
-      if (sameRow) {
-        // horizontal connection
-        if (srcPos.cx < dstPos.cx) { sx=srcPos.right; sy=srcPos.cy; ex=dstPos.left; ey=dstPos.cy; }
-        else                        { sx=srcPos.left;  sy=srcPos.cy; ex=dstPos.right; ey=dstPos.cy; }
-      } else if (srcPos.cy < dstPos.cy) {
-        // src above dst
-        sx=srcPos.cx; sy=srcPos.bottom; ex=dstPos.cx; ey=dstPos.top;
-      } else {
-        // src below dst
-        sx=srcPos.cx; sy=srcPos.top; ex=dstPos.cx; ey=dstPos.bottom;
-      }
-
-      const gap = Math.max(Math.abs(ex-sx), Math.abs(ey-sy));
-      const cpOff = Math.max(gap * 0.35, 40);
-      const isVert = Math.abs(ey-sy) > Math.abs(ex-sx);
-      const c1x = isVert ? sx : sx + (ex>sx?cpOff:-cpOff);
-      const c1y = isVert ? sy + (ey>sy?cpOff:-cpOff) : sy;
-      const c2x = isVert ? ex : ex - (ex>sx?cpOff:-cpOff);
-      const c2y = isVert ? ey - (ey>sy?cpOff:-cpOff) : ey;
-
-      const path = svgEl('path', {
-        d: `M${sx},${sy} C${c1x},${c1y} ${c2x},${c2y} ${ex},${ey}`,
-        stroke: color, 'stroke-width': '2.5', fill: 'none',
-        'stroke-linecap': 'round',
-        ...(dashed ? {'stroke-dasharray':'7,4'} : {}),
-        'marker-end': `url(#arrow-${m.typeKey})`
-      });
-      svg.appendChild(path);
-
-      // Midpoint numbered circle + cage label
-      const mt = 0.5;
-      const bx = (1-mt)**3*sx + 3*(1-mt)**2*mt*c1x + 3*(1-mt)*mt**2*c2x + mt**3*ex;
-      const by = (1-mt)**3*sy + 3*(1-mt)**2*mt*c1y + 3*(1-mt)*mt**2*c2y + mt**3*ey;
-      const circle = svgEl('circle', { cx:bx, cy:by, r:'12', fill:color, stroke:'#fff', 'stroke-width':'2' });
-      svg.appendChild(circle);
-      const numText = svgEl('text', { x:bx, y:by, fill:'#fff', 'font-size':'11', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', 'dominant-baseline':'central' });
-      numText.textContent = String(num);
-      svg.appendChild(numText);
-      if (cLabel) {
-        const lbg = svgEl('text', { x:bx, y:by+18, fill:'#fff', 'font-size':'10', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', 'dominant-baseline':'hanging', stroke:'#fff', 'stroke-width':'3', 'paint-order':'stroke' });
-        lbg.textContent = cLabel; svg.appendChild(lbg);
-        const ltx = svgEl('text', { x:bx, y:by+18, fill:color, 'font-size':'10', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', 'dominant-baseline':'hanging' });
-        ltx.textContent = cLabel; svg.appendChild(ltx);
+        const sx = rssPos.left; const sy = rssPos.cy;
+        const ex = rPos.right;  const ey = rPos.cy;
+        const cpOff = Math.max(Math.abs(ex - sx) * 0.5, 30);
+        svg.appendChild(svgEl('path', {
+          d: `M${sx},${sy} C${sx-cpOff},${sy} ${ex+cpOff},${ey} ${ex},${ey}`,
+          stroke: color, 'stroke-width': '2.5', fill: 'none', 'stroke-linecap': 'round',
+          'marker-end': `url(#arrow-rss-to-rmd)`
+        }));
+        const bx = (sx+ex)/2; const by = Math.min(sy,ey) - 18;
+        svg.appendChild(svgEl('circle', { cx:bx, cy:by, r:'12', fill:color, stroke:'#fff', 'stroke-width':'2' }));
+        const nt = svgEl('text', { x:bx, y:by, fill:'#fff', 'font-size':'11', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', 'dominant-baseline':'central' });
+        nt.textContent = String(num); svg.appendChild(nt);
+        if (cLabel) {
+          const lb = svgEl('text', { x:bx, y:by-14, fill:'#fff', 'font-size':'10', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', stroke:'#fff', 'stroke-width':'3', 'paint-order':'stroke' });
+          lb.textContent = cLabel; svg.appendChild(lb);
+          const lt = svgEl('text', { x:bx, y:by-14, fill:color, 'font-size':'10', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle' });
+          lt.textContent = cLabel; svg.appendChild(lt);
+        }
       }
 
     } else if (m.typeKey === 'cage-to-boat-frame') {
