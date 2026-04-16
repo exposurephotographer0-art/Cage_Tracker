@@ -1879,8 +1879,10 @@ function shipPref2DetailColor(cage) {
 async function cycleCageStatus(cageId) {
   const c = getCage(cageId);
   if (!c) return;
-  const cycle = { null: 'green', green: 'red', red: null };
-  c.cageStatus = cycle[c.cageStatus] ?? cycle['null'];
+  // Cycle: null → green → red → null
+  if (!c.cageStatus) c.cageStatus = 'green';
+  else if (c.cageStatus === 'green') c.cageStatus = 'red';
+  else c.cageStatus = null;
   render();
   await saveCage(c);
 }
@@ -2958,6 +2960,8 @@ function renderCages() {
     if (cageFilter === 'has-departure') return !!c.departureDate;
     if (cageFilter === 'has-shipday') return !!c.proposedShipDay;
     if (cageFilter === 'ship-pref') return !!c.shippingPreference;
+    if (cageFilter === 'status-green') return c.cageStatus === 'green';
+    if (cageFilter === 'status-red') return c.cageStatus === 'red';
     if (cageFilter !== 'all' && c.location !== cageFilter) return false;
     if (cageHeightFilter === 'short' && hCat(c.height) !== 'Short') return false;
     if (cageHeightFilter === 'medium' && hCat(c.height) !== 'Medium') return false;
@@ -3167,6 +3171,8 @@ function renderCages() {
       <button class="filter-btn ${cageFilter==='has-departure'?'active':''}" onclick="cageFilter='has-departure';render()" title="Cages with a Leaves Facility date set">📅 Has Departure</button>
       <button class="filter-btn ${cageFilter==='has-shipday'?'active':''}" onclick="cageFilter='has-shipday';render()" title="Cages with a Proposed Ship Day set">🚢 Has Ship Day</button>
       <button class="filter-btn ${cageFilter==='ship-pref'?'active':''}" onclick="cageFilter='ship-pref';render()" title="Cages marked as Shipping Preference">🟡 Ship Pref</button>
+      <button class="filter-btn ${cageFilter==='status-green'?'active':''}" onclick="cageFilter='status-green';render()" title="Cages with Green status tag" style="color:var(--green)">🟩 Green Status</button>
+      <button class="filter-btn ${cageFilter==='status-red'?'active':''}" onclick="cageFilter='status-red';render()" title="Cages with Red status tag" style="color:var(--red)">🟥 Red Status</button>
       <button class="filter-btn ${cageHideShipped?'active':''}" onclick="cageHideShipped=!cageHideShipped;render()" title="Toggle visibility of shipped cages" style="${cageHideShipped?'':'opacity:0.6'}">🚫 Hide Shipped</button>
       <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
       <span style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;white-space:nowrap">Height:</span>
@@ -9770,7 +9776,7 @@ function renderMovementsMap(dayCtx) {
         incomingBySide[side].forEach(m => {
           const c = getCage(m.cageId); if (!c) return;
           slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #4aad72;background:#f0faf4;margin-bottom:2px;">
-            <div style="display:flex;align-items:center;gap:3px;"><span style="color:#27a060;font-weight:800;margin-right:2px">←</span><span style="font:600 10px var(--font-mono)">${esc(c.name)}</span></div>
+            <div style="display:flex;align-items:center;gap:3px;"><span style="color:#27a060;font-weight:800;margin-right:2px">←</span><span style="font:600 10px var(--font-mono);display:inline-flex;align-items:center;">${hDot(c.height)}${tagDot(c)}${esc(c.name)}</span></div>
             <div style="color:var(--text-muted);font-size:9px;padding-left:14px">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
           </div>`;
         });
@@ -9813,7 +9819,7 @@ function renderMovementsMap(dayCtx) {
       pendingIn.forEach(m => {
         const cage = getCage(m.cageId); if (!cage || rssCages.find(x=>x.id===cage.id)) return;
         html += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #4aad72;background:#f0faf4;margin-bottom:2px;">
-          <div style="display:flex;align-items:center;gap:3px;"><span style="color:#27a060;font-weight:800">←</span><span style="font:600 10px var(--font-mono)">${esc(cage.name)}</span></div>
+          <div style="display:flex;align-items:center;gap:3px;"><span style="color:#27a060;font-weight:800">←</span><span style="font:600 10px var(--font-mono);display:inline-flex;align-items:center;">${hDot(cage.height)}${tagDot(cage)}${esc(cage.name)}</span></div>
           <div style="color:var(--text-muted);font-size:9px;padding-left:14px">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</div>
         </div>`;
       });
