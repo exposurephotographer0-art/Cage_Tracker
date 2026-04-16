@@ -10815,10 +10815,12 @@ function renderMovementsMap(dayCtx) {
                   .filter(f => {
                     if (!(f.location==='client'||f.location==='boat')) return false;
                     if (isDayView && dayCtx.simReturnedFrameIds && dayCtx.simReturnedFrameIds.has(f.id)) return false;
-                    // In day view: show ALL away frames that are still away (returnDate >= mvDayDate)
-                    // or have movements planned. In all-movements view keep original logic.
-                    if (isDayView) return f.returnDate ? f.returnDate >= mvDayDate : activeFrames.has(f.id);
-                    return f.returnDate || activeFrames.has(f.id);
+                    if (!isDayView) return f.returnDate || activeFrames.has(f.id);
+                    // Day view: show frame if it still has simulated cages, has planned moves,
+                    // has a returnDate on/after the viewed day, or is in activeFrames
+                    const simCages = dayCtx.simFrameCages?.[f.id]?.length > 0;
+                    const hasReturnDate = f.returnDate && f.returnDate >= mvDayDate;
+                    return simCages || activeFrames.has(f.id) || hasReturnDate;
                   })
                   .sort((a,b) => (a.returnDate||'').localeCompare(b.returnDate||''));
                 const hasAny = framesWithReturn.length > 0;
