@@ -1401,9 +1401,9 @@ function hDot(h) {
   return `<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${col};box-shadow:${glow};margin-right:3px;flex-shrink:0;vertical-align:middle"></span>`;
 }
 function tagDot(cage) {
-  if (!cage || !cage.tagColour) return '';
-  const col = cage.tagColour === 'green' ? '#22c55e' : '#ef4444';
-  const glow = cage.tagColour === 'green' ? '0 0 5px 1px rgba(34,197,94,0.7)' : '0 0 5px 1px rgba(239,68,68,0.7)';
+  if (!cage || !cage.cageStatus) return '';
+  const col = cage.cageStatus === 'green' ? '#22c55e' : '#ef4444';
+  const glow = cage.cageStatus === 'green' ? '0 0 5px 1px rgba(34,197,94,0.7)' : '0 0 5px 1px rgba(239,68,68,0.7)';
   return `<span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:${col};box-shadow:${glow};margin-left:2px;margin-right:1px;flex-shrink:0;vertical-align:middle"></span>`;
 }
 function cageLabel(c) { return `${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
@@ -1669,6 +1669,7 @@ function normaliseCage(c) {
     locationHistory: c.locationHistory || [],
     intoRmd: c.into_rmd || c.intoRmd || null,
     outOfRmd: c.out_of_rmd || c.outOfRmd || null,
+    cageStatus: c.cage_status || c.cageStatus || null,
   };
 }
 
@@ -1873,6 +1874,15 @@ function shipPref2NameColor(cage) {
 function shipPref2DetailColor(cage) {
   if (!cage || !cage.shippingPreference2) return '';
   return 'color:#3b82f6;';
+}
+
+async function cycleCageStatus(cageId) {
+  const c = getCage(cageId);
+  if (!c) return;
+  const cycle = { null: 'green', green: 'red', red: null };
+  c.cageStatus = cycle[c.cageStatus] ?? cycle['null'];
+  render();
+  await saveCage(c);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -2986,7 +2996,7 @@ function renderCages() {
         <div><label>Into RMD</label><input id="cf-into-rmd" type="date"/></div>
         <div><label>Out of RMD</label><input id="cf-out-rmd" type="date"/></div>
         <div><label>Notes</label><input id="cf-notes"/></div>
-        <div><label>Tag Colour</label><select id="cf-tag">
+        <div><label>Cage Status</label><select id="cf-cstatus">
           <option value="">None</option>
           <option value="green">🟩 Green Tag</option>
           <option value="red">🟥 Red Tag</option>
@@ -3074,10 +3084,10 @@ function renderCages() {
           <td>—</td>
           <td style="text-align:center"><input type="checkbox" id="ce-sp-${c.id}" ${c.shippingPreference?'checked':''} style="width:15px;height:15px;accent-color:#e8b800" title="Shipping Preference"/></td>
           <td style="text-align:center"><input type="checkbox" id="ce-sp2-${c.id}" ${c.shippingPreference2?'checked':''} style="width:15px;height:15px;accent-color:#3b82f6" title="Shipping Preference 2"/></td>
-          <td><select id="ce-tag-${c.id}" style="font-size:11px;padding:3px 6px">
-            <option value="" ${!c.tagColour?'selected':''}>None</option>
-            <option value="green" ${c.tagColour==='green'?'selected':''}>🟩 Green</option>
-            <option value="red" ${c.tagColour==='red'?'selected':''}>🟥 Red</option>
+          <td><select id="ce-cstatus-${c.id}" style="font-size:11px;padding:3px 6px">
+            <option value="" ${!c.cageStatus?'selected':''}>None</option>
+            <option value="green" ${c.cageStatus==='green'?'selected':''}>🟩 Green</option>
+            <option value="red" ${c.cageStatus==='red'?'selected':''}>🟥 Red</option>
           </select></td>
           <td colspan="2" style="white-space:nowrap">
             <button class="btn btn-primary btn-xs" onclick="saveCageEdit('${c.id}')">✓ Save</button>
@@ -3112,6 +3122,7 @@ function renderCages() {
             ? active.map(t => `<span title="${esc(t.label)}" style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${t.color};border:1px solid rgba(0,0,0,0.15);margin-right:2px;vertical-align:middle"></span>`).join('')
             : '<span style="color:var(--text-muted)">—</span>';
         })()}</td>
+        <td style="text-align:center">${c.cageStatus ? `<span title="${c.cageStatus === 'green' ? 'Green Tag' : 'Red Tag'}" style="display:inline-block;width:13px;height:13px;border-radius:3px;background:${c.cageStatus === 'green' ? '#22c55e' : '#ef4444'};box-shadow:${c.cageStatus === 'green' ? '0 0 5px 1px rgba(34,197,94,0.6)' : '0 0 5px 1px rgba(239,68,68,0.6)'};vertical-align:middle;cursor:pointer" onclick="cycleCageStatus('${c.id}')"></span>` : `<span style="color:var(--text-muted);cursor:pointer;font-size:11px" onclick="cycleCageStatus('${c.id}')" title="Click to set status">—</span>`}</td>
         <td style="text-align:center">
           <input type="checkbox" title="Shipping Preference — highlights yellow across all views" ${c.shippingPreference?'checked':''} onchange="toggleShippingPreference('${c.id}',this.checked)" style="width:15px;height:15px;cursor:pointer;accent-color:#e8b800"/>
         </td>
@@ -3192,7 +3203,7 @@ function renderCages() {
       <table>
         <thead><tr>
           <th style="width:32px"><input type="checkbox" id="cage-select-all" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)" onchange="toggleAllCages(this.checked,${JSON.stringify(filtered.map(c=>c.id))})"/></th>
-          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Boat Trip</th><th>Into RMD</th><th>Out of RMD</th><th>Category</th><th>Location</th><th>Tags</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th title="Shipping Preference 2 — highlight blue across all views">🔵 SP2</th><th>Move</th><th></th>
+          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Boat Trip</th><th>Into RMD</th><th>Out of RMD</th><th>Category</th><th>Location</th><th>Tags</th><th title="Cage Status — Red or Green tag">Status</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th title="Shipping Preference 2 — highlight blue across all views">🔵 SP2</th><th>Move</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -3209,9 +3220,9 @@ async function addCage() {
   const notes = document.getElementById('cf-notes').value.trim();
   const intoRmd = document.getElementById('cf-into-rmd').value || null;
   const outOfRmd = document.getElementById('cf-out-rmd').value || null;
-  const tagColour = document.getElementById('cf-tag').value || null;
+  const cageStatus = document.getElementById('cf-cstatus').value || null;
   if (!name||isNaN(h)||isNaN(w)||isNaN(l)||isNaN(wt)) return alert('Please fill all required fields.');
-  const cage = {id:uid(),name,height:h,width:w,length:l,weight:wt,notes,intoRmd,outOfRmd,tagColour:tagColour||null,departureDate:null,location:'facility',locationDetail:'',createdAt:new Date().toISOString()};
+  const cage = {id:uid(),name,height:h,width:w,length:l,weight:wt,notes,intoRmd,outOfRmd,cageStatus:cageStatus||null,departureDate:null,location:'facility',locationDetail:'',createdAt:new Date().toISOString()};
   STATE.cages.push(cage);
   cageFormOpen = false;
   render();
@@ -3372,8 +3383,8 @@ function saveCageEdit(id) {
   if (outOfRmdEl) c.outOfRmd = outOfRmdEl.value || null;
   if (spEl) c.shippingPreference = spEl.checked;
   if (sp2El) c.shippingPreference2 = sp2El.checked;
-  const tagEl = document.getElementById('ce-tag-'+id);
-  if (tagEl) c.tagColour = tagEl.value || null;
+  const tagEl = document.getElementById('ce-cstatus-'+id);
+  if (tagEl) c.cageStatus = tagEl.value || null;
   cageEditing = null;
   render();
   saveCage(c);
