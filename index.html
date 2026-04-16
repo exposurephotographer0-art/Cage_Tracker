@@ -1375,6 +1375,67 @@ tr.dragging { opacity: 0.4; }
 @keyframes dt-pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
 .dt-pulse { animation:dt-pulse 1.4s infinite; }
 
+/* ═══ BDR Deliveries & BDRs Tabs ═══════════════════════════════════════════ */
+.bdr-wrap { display:flex; height:calc(100vh - 56px); overflow:hidden; }
+.bdr-left { width:360px; min-width:280px; background:var(--bg-card); border-right:1px solid var(--border); display:flex; flex-direction:column; padding:16px; gap:10px; overflow-y:auto; flex-shrink:0; }
+.bdr-left h2 { font-size:0.78rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.08em; margin:0; }
+.bdr-instructions { background:var(--bg-elevated); border-radius:8px; padding:10px 12px; font-size:0.75rem; color:var(--text-muted); line-height:1.6; }
+.bdr-instructions strong { color:var(--text-primary); }
+.bdr-source-tabs { display:flex; gap:4px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:var(--radius); padding:3px; }
+.bdr-src-tab { flex:1; padding:6px 8px; border:none; background:transparent; font:600 12px var(--font-display); color:var(--text-muted); border-radius:5px; cursor:pointer; transition:all 0.12s; text-align:center; }
+.bdr-src-tab:hover { color:var(--text-secondary); }
+.bdr-src-tab.active { background:var(--bg-base); color:var(--accent); box-shadow:0 1px 4px rgba(0,0,0,0.1); }
+.bdr-paste { flex:1; min-height:160px; background:var(--bg-elevated); border:2px dashed var(--border); border-radius:8px; padding:10px; font-size:0.72rem; font-family:var(--font-mono); color:var(--text-muted); resize:none; outline:none; transition:border-color 0.2s; }
+.bdr-paste:focus { border-color:var(--accent); }
+.bdr-paste::placeholder { color:var(--border); }
+.bdr-status { font-size:0.75rem; padding:8px 10px; border-radius:6px; display:none; line-height:1.5; white-space:pre-wrap; }
+.bdr-status.success { background:#e6f5ec; color:#1a7a40; border:1px solid #b0dcc0; display:block; }
+.bdr-status.error   { background:#fce8e8; color:#c93030; border:1px solid #e8b0b0; display:block; }
+.bdr-status.info    { background:#e6f0fa; color:#2060a0; border:1px solid #a0c8e8; display:block; }
+.bdr-btn-import { background:var(--accent); color:#1a1f2e; border:none; border-radius:8px; padding:10px; font-size:0.85rem; font-weight:700; cursor:pointer; transition:opacity 0.15s; }
+.bdr-btn-import:hover { opacity:0.88; }
+.bdr-btn-clear { background:var(--bg-elevated); color:var(--text-muted); border:1px solid var(--border); border-radius:8px; padding:8px; font-size:0.78rem; font-weight:600; cursor:pointer; transition:all 0.12s; }
+.bdr-btn-clear:hover { color:var(--red); border-color:rgba(201,48,48,0.3); }
+.bdr-right-wrap { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+.bdr-preview-hdr { padding:12px 18px; border-bottom:1px solid var(--border); background:var(--bg-elevated); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.bdr-preview-hdr-title { font:700 12px var(--font-mono); color:var(--text-muted); text-transform:uppercase; letter-spacing:0.07em; }
+.bdr-preview-scroll { flex:1; overflow-y:auto; padding:16px 20px; }
+.bdr-preview-tbl { width:100%; border-collapse:collapse; font-size:0.8rem; }
+.bdr-preview-tbl th { background:var(--bg-elevated); color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; font-size:0.68rem; font-weight:600; padding:8px 12px; text-align:left; border-bottom:2px solid var(--border); position:sticky; top:0; z-index:2; }
+.bdr-preview-tbl td { padding:7px 12px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.bdr-preview-tbl tr:hover td { background:var(--bg-elevated); }
+.bdr-empty { text-align:center; padding:48px 20px; color:var(--text-muted); }
+.bdr-empty-icon { font-size:2.5rem; margin-bottom:12px; }
+.bdr-empty h3 { font-size:1rem; color:var(--text-muted); margin-bottom:6px; }
+.bdr-empty p { font-size:0.78rem; line-height:1.6; }
+.bdr-prod-badge { display:inline-flex; align-items:center; background:var(--accent-dim); border:1px solid var(--accent); color:var(--accent); border-radius:5px; padding:2px 9px; font-weight:600; font-size:0.8rem; font-family:var(--font-mono); letter-spacing:0.04em; }
+.bdr-src-chip { display:inline-block; border-radius:4px; padding:2px 8px; font-size:0.7rem; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; }
+.bdr-src-hs { background:#e6f0fa; color:#2060a0; border:1px solid #a0c8e8; }
+.bdr-src-ni { background:#f0e8fa; color:#6030b0; border:1px solid #c0a0e8; }
+.bdr-date-chip { font-family:var(--font-mono); font-size:0.78rem; color:var(--text-secondary); }
+.bdr-matched { color:var(--green); font-weight:600; font-size:0.75rem; }
+.bdr-unmatched { color:var(--text-muted); font-size:0.75rem; font-style:italic; }
+/* BDRs tab */
+.bdr-tab-wrap { padding:0; }
+.bdr-tab-toolbar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:14px 20px; border-bottom:1px solid var(--border); background:var(--bg-elevated); }
+.bdr-tab-search { background:var(--bg-base); border:1px solid var(--border); color:var(--text-primary); border-radius:6px; padding:6px 10px; font-size:0.77rem; outline:none; width:200px; transition:border-color 0.2s; }
+.bdr-tab-search:focus { border-color:var(--accent); }
+.bdr-filter-btn { padding:5px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg-base); color:var(--text-muted); cursor:pointer; font:500 12px var(--font-display); transition:all 0.12s; }
+.bdr-filter-btn.active { background:#f5e6c8; color:var(--accent); border-color:#e0c880; font-weight:600; }
+.bdr-records-scroll { overflow-y:auto; height:calc(100vh - 56px - 57px); }
+.bdr-records-tbl { width:100%; border-collapse:collapse; font-size:0.8rem; }
+.bdr-records-tbl th { background:var(--bg-elevated); color:var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; font-size:0.68rem; font-weight:600; padding:9px 14px; text-align:left; border-bottom:2px solid var(--border); position:sticky; top:0; z-index:2; }
+.bdr-records-tbl td { padding:9px 14px; border-bottom:1px solid var(--border); vertical-align:middle; }
+.bdr-records-tbl tr:hover td { background:var(--bg-elevated); }
+.bdr-del-row-btn { background:none; border:none; color:var(--text-muted); cursor:pointer; padding:2px 5px; border-radius:3px; font-size:14px; }
+.bdr-del-row-btn:hover { color:var(--red); background:#fce8e8; }
+.bdr-stats-row { display:flex; gap:10px; flex-wrap:wrap; padding:14px 20px; border-bottom:1px solid var(--border); background:var(--bg-base); }
+.bdr-stat { background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:10px 16px; flex:1; min-width:100px; }
+.bdr-stat-label { font-size:0.7rem; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.07em; }
+.bdr-stat-value { font-size:1.5rem; font-weight:700; color:var(--text-primary); margin-top:2px; }
+
+
+
 </style>
 <script>
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1412,6 +1473,8 @@ const TABS = [
   {id:'settings', label:'Settings', icon:'⚙'},
   {id:'departuredash', label:'Departure Dashboard', icon:'📦'},
   {id:'ai', label:'AI Planner', icon:'🤖'},
+  {id:'bdrdeliveries', label:'BDR Deliveries', icon:'📋'},
+  {id:'bdrs', label:'BDRs', icon:'🔍'},
 ];
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
@@ -2058,6 +2121,8 @@ function renderTab(id) {
     case 'audit': return renderAuditLog();
     case 'settings': return renderSettings();
     case 'departuredash': return renderDepartureDashTab();
+    case 'bdrdeliveries': return renderBdrDeliveriesTab();
+    case 'bdrs':          return renderBdrsTab();
     case 'ai': return renderAITab();
     default: return '';
   }
@@ -12209,6 +12274,15 @@ let dd_pushLogSkipped  = [];
 let dd_pasteContent    = '';
 let dd_innerTab        = 'schedule'; // 'schedule' | 'changes' | 'skipped'
 let dd_tabsVisible     = false;
+
+// ── BDR Deliveries state ───────────────────────────────────────────────────
+let bdr_activeSource   = 'hs';      // 'hs' | 'ni'
+let bdr_hsPaste        = '';
+let bdr_niPaste        = '';
+let bdr_previewRows    = [];        // parsed preview rows before import
+let bdr_records        = [];        // [{id, prodNo, deliveryDate, source, importedAt}]
+let bdr_searchTerm     = '';
+let bdr_filterSource   = 'ALL';     // 'ALL' | 'HS' | 'NI'
 const DD_SHIFT_ORDER   = { AM:0, MID:1, PM:2, N:3 };
 const DD_API           = 'https://cage-tracker-api.exposurephotographer0.workers.dev';
 
@@ -12289,6 +12363,356 @@ The app finds Shift, VST 110, VST 120, VST 130, VST 140 columns automatically.">
 }
 
 function dd_esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BDR DELIVERIES TAB
+// ══════════════════════════════════════════════════════════════════════════════
+
+function bdr_esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function bdr_fmtDate(v) {
+  if (!v) return '—';
+  if (v instanceof Date || (typeof v === 'string' && v.match(/^\d{4}-\d{2}-\d{2}/))) {
+    const d = v instanceof Date ? v : new Date(v);
+    if (!isNaN(d)) return d.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
+  }
+  // Try Excel serial
+  if (typeof v === 'number' && v > 10000) {
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    if (!isNaN(d)) return d.toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
+  }
+  return String(v);
+}
+
+function bdr_toISODate(v) {
+  if (!v) return null;
+  if (typeof v === 'string' && v.match(/^\d{4}-\d{2}-\d{2}/)) return v.slice(0,10);
+  if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
+  if (typeof v === 'number' && v > 10000) {
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    if (!isNaN(d)) return d.toISOString().slice(0,10);
+  }
+  // Try parsing date strings like "15/04/2025" or "15-Apr-25"
+  if (typeof v === 'string') {
+    const parts = v.split(/[\/\-\.]/);
+    if (parts.length === 3) {
+      const d = new Date(v);
+      if (!isNaN(d)) return d.toISOString().slice(0,10);
+    }
+  }
+  return null;
+}
+
+function bdr_parseTsv(raw) {
+  // Parse tab-separated values pasted from Excel
+  const lines = raw.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(l => l.trim());
+  return lines.map(l => l.split('\t').map(c => c.trim()));
+}
+
+function bdr_parseHs(raw) {
+  // HS-BDR: user copies H3:AC3 and down
+  // After copy: row 0 = headers (row3), rows 1+ = data
+  // Col 0 (H) = Production no
+  // Col 7 (O) = Delivery Date
+  if (!raw.trim()) return { rows: [], error: 'No data pasted.' };
+  const rows = bdr_parseTsv(raw);
+  if (rows.length < 2) return { rows: [], error: 'Need at least a header row and one data row.' };
+
+  const hdr = rows[0];
+  // Find "Production no" column
+  let colProd = -1, colDel = -1;
+  for (let i = 0; i < hdr.length; i++) {
+    const h = (hdr[i]||'').toLowerCase().trim();
+    if (h === 'production no') colProd = i;
+    if (h === 'delivery date' || h === 'delivery date ') colDel = i;
+  }
+  // Fallback to positional: H=col0, O=col7 (0-indexed from col H)
+  if (colProd < 0) colProd = 0;
+  if (colDel < 0)  colDel  = 7;
+
+  const result = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const prodRaw = r[colProd] || '';
+    const delRaw  = r[colDel]  || '';
+    if (!prodRaw.trim()) continue;
+    const prodNo = String(prodRaw).trim();
+    const delDate = bdr_toISODate(delRaw) || (delRaw.trim() ? delRaw.trim() : null);
+    result.push({ prodNo, deliveryDate: delDate, deliveryDateRaw: delRaw.trim(), source: 'HS', rowIdx: i });
+  }
+  if (!result.length) return { rows: [], error: 'No rows with a Production No found. Check you copied from H3 down.' };
+  return { rows: result, error: null };
+}
+
+function bdr_parseNi(raw) {
+  // NI-BDR: user copies H1:AC1 and down
+  // Row 0 = headers (row1), rows 1+ = data
+  // Col 0 (H) = Production no, Col 5 (M) = Delivery Date
+  if (!raw.trim()) return { rows: [], error: 'No data pasted.' };
+  const rows = bdr_parseTsv(raw);
+  if (rows.length < 2) return { rows: [], error: 'Need at least a header row and one data row.' };
+
+  const hdr = rows[0];
+  let colProd = -1, colDel = -1;
+  for (let i = 0; i < hdr.length; i++) {
+    const h = (hdr[i]||'').toLowerCase().trim();
+    if (h === 'production no') colProd = i;
+    if (h === 'delivery date' || h === 'delivery date ') colDel = i;
+  }
+  if (colProd < 0) colProd = 0;
+  if (colDel < 0)  colDel  = 5;
+
+  const result = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const prodRaw = r[colProd] || '';
+    const delRaw  = r[colDel]  || '';
+    if (!prodRaw.trim()) continue;
+    const prodNo = String(prodRaw).trim();
+    const delDate = bdr_toISODate(delRaw) || (delRaw.trim() ? delRaw.trim() : null);
+    result.push({ prodNo, deliveryDate: delDate, deliveryDateRaw: delRaw.trim(), source: 'NI', rowIdx: i });
+  }
+  if (!result.length) return { rows: [], error: 'No rows with a Production No found. Check you copied from H1 down.' };
+  return { rows: result, error: null };
+}
+
+function renderBdrDeliveriesTab() {
+  const pasteVal = bdr_activeSource === 'hs' ? bdr_hsPaste : bdr_niPaste;
+  const prevRows = bdr_previewRows;
+  const hasPreview = prevRows.length > 0;
+
+  let previewHtml = '';
+  if (hasPreview) {
+    const trs = prevRows.map((r, i) => {
+      const matched = STATE.cages && STATE.cages.find(c => String(c.name||'').trim() === r.prodNo);
+      const matchCell = matched
+        ? `<span class="bdr-matched">✓ ${bdr_esc(matched.name)}</span>`
+        : `<span class="bdr-unmatched">No cage match</span>`;
+      return `<tr>
+        <td style="color:var(--text-muted);font-size:0.7rem">${i+1}</td>
+        <td><span class="bdr-prod-badge">${bdr_esc(r.prodNo)}</span></td>
+        <td><span class="bdr-src-chip bdr-src-${r.source.toLowerCase()}">${r.source}</span></td>
+        <td><span class="bdr-date-chip">${r.deliveryDate ? bdr_fmtDate(r.deliveryDate) : (r.deliveryDateRaw ? bdr_esc(r.deliveryDateRaw) : '<span style="color:var(--text-muted)">—</span>')}</span></td>
+        <td>${matchCell}</td>
+      </tr>`;
+    }).join('');
+    previewHtml = `<table class="bdr-preview-tbl">
+      <thead><tr><th>#</th><th>Production No</th><th>Source</th><th>Delivery Date</th><th>Cage Match</th></tr></thead>
+      <tbody>${trs}</tbody>
+    </table>`;
+  } else {
+    previewHtml = `<div class="bdr-empty">
+      <div class="bdr-empty-icon">📋</div>
+      <h3>No preview yet</h3>
+      <p>Choose the source tab (HS-BDR or NI-BDR), paste your copied cells, then click <strong>Import</strong>.</p>
+    </div>`;
+  }
+
+  return `
+<div class="bdr-wrap">
+  <!-- Left panel -->
+  <div class="bdr-left">
+    <h2>📋 BDR Deliveries Import</h2>
+    <div class="bdr-instructions">
+      <strong>HS-BDR:</strong> Copy cells <strong>H3:AC3</strong> down to last row<br>
+      <strong>NI-BDR:</strong> Copy cells <strong>H1:AC1</strong> down to last row<br><br>
+      Select the source tab below, paste the data, then click <strong>Import</strong>.
+    </div>
+
+    <div class="bdr-source-tabs">
+      <button class="bdr-src-tab ${bdr_activeSource==='hs'?'active':''}" onclick="bdr_setSource('hs')">🏗 HS-BDR</button>
+      <button class="bdr-src-tab ${bdr_activeSource==='ni'?'active':''}" onclick="bdr_setSource('ni')">🏢 NI-BDR</button>
+    </div>
+
+    <label style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px">
+      ${bdr_activeSource === 'hs' ? 'Paste HS-BDR data (H3:AC and down)' : 'Paste NI-BDR data (H1:AC and down)'}
+    </label>
+    <textarea class="bdr-paste" id="bdr_paste" placeholder="Paste your copied Excel cells here…" oninput="bdr_savePaste(this.value)">${bdr_esc(pasteVal)}</textarea>
+    <div class="bdr-status" id="bdr_status"></div>
+    <button class="bdr-btn-import" onclick="bdr_doImport()">⬆ Import ${bdr_activeSource.toUpperCase()}-BDR Data</button>
+    <button class="bdr-btn-clear" onclick="bdr_clearPaste()">✕ Clear Paste Area</button>
+  </div>
+
+  <!-- Right panel: preview -->
+  <div class="bdr-right-wrap">
+    <div class="bdr-preview-hdr">
+      <span class="bdr-preview-hdr-title">${hasPreview ? `Preview — ${prevRows.length} row${prevRows.length!==1?'s':''}` : 'Import Preview'}</span>
+      ${hasPreview ? `<span style="font-size:0.75rem;color:var(--text-muted)">${prevRows.filter(r=>STATE.cages&&STATE.cages.find(c=>String(c.name||'').trim()===r.prodNo)).length} / ${prevRows.length} cages matched</span>` : ''}
+    </div>
+    <div class="bdr-preview-scroll">${previewHtml}</div>
+  </div>
+</div>`;
+}
+
+function bdr_setSource(src) {
+  bdr_activeSource = src;
+  renderMain();
+}
+
+function bdr_savePaste(v) {
+  if (bdr_activeSource === 'hs') bdr_hsPaste = v;
+  else bdr_niPaste = v;
+}
+
+function bdr_clearPaste() {
+  if (bdr_activeSource === 'hs') bdr_hsPaste = '';
+  else bdr_niPaste = '';
+  bdr_previewRows = [];
+  renderMain();
+}
+
+function bdr_showStatus(msg, type) {
+  const e = document.getElementById('bdr_status');
+  if (e) { e.textContent = msg; e.className = 'bdr-status ' + type; }
+}
+
+function bdr_doImport() {
+  const raw = (document.getElementById('bdr_paste') || {}).value
+    || (bdr_activeSource === 'hs' ? bdr_hsPaste : bdr_niPaste);
+  if (bdr_activeSource === 'hs') bdr_hsPaste = raw;
+  else bdr_niPaste = raw;
+
+  const parsed = bdr_activeSource === 'hs' ? bdr_parseHs(raw) : bdr_parseNi(raw);
+  if (parsed.error) { bdr_showStatus(parsed.error, 'error'); bdr_previewRows = []; renderMain(); return; }
+
+  // Merge into bdr_records — update if same prodNo+source exists, else add new
+  let added = 0, updated = 0;
+  parsed.rows.forEach(r => {
+    const existing = bdr_records.find(x => x.prodNo === r.prodNo && x.source === r.source);
+    if (existing) {
+      const changed = existing.deliveryDate !== r.deliveryDate;
+      existing.deliveryDate = r.deliveryDate;
+      existing.deliveryDateRaw = r.deliveryDateRaw;
+      existing.importedAt = new Date().toISOString();
+      if (changed) updated++;
+    } else {
+      bdr_records.push({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+        prodNo: r.prodNo,
+        deliveryDate: r.deliveryDate,
+        deliveryDateRaw: r.deliveryDateRaw,
+        source: r.source,
+        importedAt: new Date().toISOString(),
+      });
+      added++;
+    }
+  });
+
+  bdr_previewRows = parsed.rows;
+  const msg = `✓ Imported ${parsed.rows.length} rows from ${bdr_activeSource.toUpperCase()}-BDR. ${added} new, ${updated} updated.`;
+  bdr_showStatus(msg, 'success');
+  renderMain();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BDRs TAB
+// ══════════════════════════════════════════════════════════════════════════════
+
+function renderBdrsTab() {
+  let records = [...bdr_records];
+
+  // Filter by source
+  if (bdr_filterSource !== 'ALL') {
+    records = records.filter(r => r.source === bdr_filterSource);
+  }
+
+  // Filter by search
+  if (bdr_searchTerm.trim()) {
+    const q = bdr_searchTerm.trim().toLowerCase();
+    records = records.filter(r =>
+      (r.prodNo||'').toLowerCase().includes(q) ||
+      (r.deliveryDateRaw||'').toLowerCase().includes(q) ||
+      (r.source||'').toLowerCase().includes(q)
+    );
+  }
+
+  // Stats
+  const totalAll = bdr_records.length;
+  const totalHs  = bdr_records.filter(r => r.source === 'HS').length;
+  const totalNi  = bdr_records.filter(r => r.source === 'NI').length;
+  const hasDate  = bdr_records.filter(r => r.deliveryDate).length;
+
+  const statsHtml = `
+    <div class="bdr-stats-row">
+      <div class="bdr-stat"><div class="bdr-stat-label">Total BDRs</div><div class="bdr-stat-value">${totalAll}</div></div>
+      <div class="bdr-stat"><div class="bdr-stat-label">HS-BDR</div><div class="bdr-stat-value" style="color:var(--blue)">${totalHs}</div></div>
+      <div class="bdr-stat"><div class="bdr-stat-label">NI-BDR</div><div class="bdr-stat-value" style="color:var(--purple)">${totalNi}</div></div>
+      <div class="bdr-stat"><div class="bdr-stat-label">With Delivery Date</div><div class="bdr-stat-value" style="color:var(--green)">${hasDate}</div></div>
+    </div>`;
+
+  const toolbarHtml = `
+    <div class="bdr-tab-toolbar">
+      <input class="bdr-tab-search" type="text" placeholder="🔍 Search production no…" oninput="bdr_setSearch(this.value)" value="${bdr_esc(bdr_searchTerm)}" />
+      <button class="bdr-filter-btn ${bdr_filterSource==='ALL'?'active':''}" onclick="bdr_setFilter('ALL')">All</button>
+      <button class="bdr-filter-btn ${bdr_filterSource==='HS'?'active':''}" onclick="bdr_setFilter('HS')">HS-BDR</button>
+      <button class="bdr-filter-btn ${bdr_filterSource==='NI'?'active':''}" onclick="bdr_setFilter('NI')">NI-BDR</button>
+      <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)">${records.length} record${records.length!==1?'s':''}</span>
+      ${bdr_records.length ? `<button class="btn btn-danger btn-sm" onclick="bdr_clearAll()" title="Remove all BDR records">🗑 Clear All</button>` : ''}
+    </div>`;
+
+  let tableHtml = '';
+  if (!bdr_records.length) {
+    tableHtml = `<div class="bdr-empty" style="padding:60px 20px">
+      <div class="bdr-empty-icon">🔍</div>
+      <h3>No BDR records yet</h3>
+      <p>Go to <strong>BDR Deliveries</strong> to import data from your Bar Discrepancy Report spreadsheet.</p>
+    </div>`;
+  } else if (!records.length) {
+    tableHtml = `<div class="bdr-empty" style="padding:60px 20px">
+      <div class="bdr-empty-icon">🔍</div>
+      <h3>No results</h3>
+      <p>Try adjusting your filters or search.</p>
+    </div>`;
+  } else {
+    const trs = records.map((r, i) => {
+      // Find matching cage
+      const cage = STATE.cages && STATE.cages.find(c => String(c.name||'').trim() === r.prodNo);
+      const cageCell = cage
+        ? `<span class="badge badge-green" style="font-size:0.7rem">${bdr_esc(cage.name)}</span>`
+        : `<span style="color:var(--text-muted);font-size:0.75rem;font-style:italic">No match</span>`;
+      const cageDep = cage && cage.departureDate
+        ? `<span style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-secondary)">${fmt(cage.departureDate)}</span>`
+        : `<span style="color:var(--text-muted);font-size:0.75rem">—</span>`;
+      const importedStr = r.importedAt ? new Date(r.importedAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+      return `<tr>
+        <td style="color:var(--text-muted);font-size:0.7rem">${i+1}</td>
+        <td><span class="bdr-prod-badge">${bdr_esc(r.prodNo)}</span></td>
+        <td><span class="bdr-src-chip bdr-src-${r.source.toLowerCase()}">${r.source}</span></td>
+        <td>${r.deliveryDate ? `<span class="bdr-date-chip">${bdr_fmtDate(r.deliveryDate)}</span>` : `<span style="color:var(--text-muted)">—</span>`}</td>
+        <td>${cageCell}</td>
+        <td>${cageDep}</td>
+        <td style="color:var(--text-muted);font-size:0.72rem">${importedStr}</td>
+        <td><button class="bdr-del-row-btn" onclick="bdr_deleteRecord('${r.id}')" title="Remove this record">✕</button></td>
+      </tr>`;
+    }).join('');
+    tableHtml = `<div class="bdr-records-scroll">
+      <table class="bdr-records-tbl">
+        <thead><tr>
+          <th>#</th><th>Production No</th><th>Source</th><th>Delivery Date</th>
+          <th>Cage Match</th><th>Leaves Facility</th><th>Imported</th><th></th>
+        </tr></thead>
+        <tbody>${trs}</tbody>
+      </table>
+    </div>`;
+  }
+
+  return `<div class="bdr-tab-wrap">${statsHtml}${toolbarHtml}${tableHtml}</div>`;
+}
+
+function bdr_setSearch(v) { bdr_searchTerm = v; renderMain(); }
+function bdr_setFilter(v) { bdr_filterSource = v; renderMain(); }
+function bdr_deleteRecord(id) {
+  bdr_records = bdr_records.filter(r => r.id !== id);
+  renderMain();
+}
+function bdr_clearAll() {
+  if (!confirm('Remove all BDR records? This cannot be undone.')) return;
+  bdr_records = [];
+  bdr_previewRows = [];
+  renderMain();
+}
+
+
 function dd_savePaste(v) { dd_pasteContent = v; }
 
 function dd_switchInner(name) {
