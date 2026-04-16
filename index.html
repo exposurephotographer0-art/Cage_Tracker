@@ -10862,7 +10862,7 @@ function renderMovementsMap(dayCtx) {
                     else { bg = 'background:#fffbeb;border-color:#fbbf24;'; nameCol = 'color:#92400e;'; detailCol = 'color:var(--text-muted);'; }
                     const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
                     cageHTML += `<div id="mvboat-cage-${c.id}-${f.id}" style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${bg}">
-                      <div style="display:flex;align-items:center;gap:2px;"><span style="color:#b45309;font-weight:800">→</span><span style="font:600 10px var(--font-mono);${nameCol}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
+                      <div style="display:flex;align-items:center;gap:2px;"><span style="color:#b45309;font-weight:800">→</span><span style="font:600 10px var(--font-mono);${nameCol}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
                       <div style="font-size:9px;padding-left:13px;${detailCol}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
                     </div>`;
                   });
@@ -10877,7 +10877,7 @@ function renderMovementsMap(dayCtx) {
                     else { bg = 'background:#f5f3ff;border-color:#c4b5fd;'; nameCol = 'color:#5b21b6;'; detailCol = 'color:var(--text-muted);'; }
                     const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
                     cageHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${bg}">
-                      <div style="display:flex;align-items:center;gap:2px;"><span style="color:#7040c0;font-weight:800">→RMD</span><span style="font:600 10px var(--font-mono);${nameCol}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
+                      <div style="display:flex;align-items:center;gap:2px;"><span style="color:#7040c0;font-weight:800">→RMD</span><span style="font:600 10px var(--font-mono);${nameCol}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
                       <div style="font-size:9px;padding-left:30px;${detailCol}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
                     </div>`;
                   });
@@ -10892,7 +10892,7 @@ function renderMovementsMap(dayCtx) {
                     else { bg = 'background:#fffbeb;border-color:#fbbf24;'; nameCol = 'color:#92400e;'; detailCol = 'color:var(--text-muted);'; }
                     const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
                     cageHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${bg}">
-                      <div style="display:flex;align-items:center;gap:2px;"><span style="font:600 10px var(--font-mono);${nameCol}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
+                      <div style="display:flex;align-items:center;gap:2px;"><span style="font:600 10px var(--font-mono);${nameCol}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
                       <div style="font-size:9px;padding-left:4px;${detailCol}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
                     </div>`;
                   });
