@@ -10807,19 +10807,15 @@ function renderMovementsMap(dayCtx) {
                 const framesWithReturn = STATE.frames
                   .filter(f => {
                     if (!(f.location==='client'||f.location==='boat')) return false;
-                    if (!(f.returnDate || activeFrames.has(f.id))) return false;
                     if (isDayView && dayCtx.simReturnedFrameIds && dayCtx.simReturnedFrameIds.has(f.id)) return false;
-                    // In day view: hide this frame if all its cages have shipped by the viewed date
+                    // In day view: hide this frame if it has no simulated cages AND no planned moves into it today
                     if (isDayView && mvDayDate) {
-                      const frameCageIds = dayCtx.simFrameCages ? (dayCtx.simFrameCages[f.id] || []) : f.cages;
-                      const allCageIds = [...new Set([...frameCageIds, ...f.cages])];
-                      if (allCageIds.length > 0) {
-                        const allShipped = allCageIds.every(cid => {
-                          const c = getCage(cid);
-                          return c && c.proposedShipDay && c.proposedShipDay <= mvDayDate;
-                        });
-                        if (allShipped) return false;
-                      }
+                      const simCages = dayCtx.simFrameCages ? (dayCtx.simFrameCages[f.id] || []) : f.cages;
+                      const plannedIncoming = filtered.filter(m =>
+                        (m.typeKey === 'facility-to-frame' || m.typeKey === 'rmd-to-frame' || m.typeKey === 'frame-return-from-client') &&
+                        m.frameId === f.id
+                      );
+                      if (simCages.length === 0 && plannedIncoming.length === 0) return false;
                     }
                     return true;
                   })
