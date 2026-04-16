@@ -1402,10 +1402,11 @@ function hDot(h) {
 }
 function cageLabel(c) { return `${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
 function cageLabelRaw(c) { return `${c.name} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
-function locBadge(l) { return {facility:'blue', rmd:'green', frame:'orange', shipped:'purple'}[l] || 'accent'; }
+function locBadge(l) { return {facility:'blue', rmd:'green', rss:'blue', frame:'orange', shipped:'purple'}[l] || 'accent'; }
 function locLabel(c) {
   if (c.location === 'facility') return 'In Facility';
   if (c.location === 'rmd') return 'RMD ' + (c.locationDetail||'');
+  if (c.location === 'rss') return 'Roof Slab Storage';
   if (c.location === 'frame') return 'Frame ' + (c.locationDetail||'');
   if (c.location === 'shipped' || c.location === 'sea') return 'Shipped';
   return c.location;
@@ -1464,6 +1465,7 @@ function initState() {
     frames: Array.from({length:FRAME_COUNT},(_,i)=>({
       id:uid(), name:`TF-${i+1}`, width:2.5, location:'facility', cages:[], fixedForShipping:false, hasWaler:false
     })),
+    rssCages: [],
     rmdSlots: Array.from({length:RMD_COUNT},(_,i)=>{
       let o={number:i+1};
       SIDES.forEach(s=>{ o[s]={cage1:null,cage2:null,overridden:false}; });
@@ -1568,6 +1570,7 @@ async function loadState() {
       A: migrateRmdSide(r.A),
       B: migrateRmdSide(r.B),
     })),
+    rssCages: PRELOAD_STATE.rssCages || [],
     plannedMovements: PRELOAD_STATE.plannedMovements || [],
     shipments: PRELOAD_STATE.shipments || [],
     boatTrips: PRELOAD_STATE.boatTrips || [],
@@ -1609,6 +1612,7 @@ async function loadState() {
         A: migrateRmdSide(r.A),
         B: migrateRmdSide(r.B),
       })),
+      rssCages: data.rssCages || [],
       plannedMovements: data.plannedMovements,
       shipments: data.shipments,
       boatTrips: data.boatTrips || [],
@@ -1722,6 +1726,10 @@ async function saveFrame(frame) {
 async function saveRMD() {
   try { await api('/api/rmd', 'PUT', STATE.rmdSlots); }
   catch(e) { showError('Failed to save RMD: ' + e.message); }
+}
+async function saveRSS() {
+  try { await api('/api/settings', 'PUT', { rss_cages: JSON.stringify(STATE.rssCages) }); }
+  catch(e) { showError('Failed to save Roof Slab Storage: ' + e.message); }
 }
 async function addMovementToAPI(m) {
   try { await api('/api/movements', 'POST', m); }
@@ -2552,6 +2560,7 @@ function renderDashboard() {
   const cages = STATE.cages;
   const inFac = cages.filter(c=>c.location==='facility').length;
   const inRMD = cages.filter(c=>c.location==='rmd').length;
+  const inRSS = cages.filter(c=>c.location==='rss').length;
   const inFrm = cages.filter(c=>c.location==='frame').length;
   const shipped = cages.filter(c=>c.location==='shipped').length;
   const fFac = STATE.frames.filter(f=>f.location==='facility').length;
@@ -3125,6 +3134,7 @@ function renderCages() {
       <button class="filter-btn ${cageFilter==='all'?'active':''}" onclick="cageFilter='all';render()">All</button>
       <button class="filter-btn ${cageFilter==='facility'?'active':''}" onclick="cageFilter='facility';render()">Facility</button>
       <button class="filter-btn ${cageFilter==='rmd'?'active':''}" onclick="cageFilter='rmd';render()">RMD</button>
+      <button class="filter-btn ${cageFilter==='rss'?'active':''}" onclick="cageFilter='rss';render()">Roof Slab</button>
       <button class="filter-btn ${cageFilter==='frame'?'active':''}" onclick="cageFilter='frame';render()">Frame</button>
       <button class="filter-btn ${cageFilter==='shipped'?'active':''}" onclick="cageFilter='shipped';cageHideShipped=false;render()">Shipped</button>
       <button class="filter-btn ${cageFilter==='has-departure'?'active':''}" onclick="cageFilter='has-departure';render()" title="Cages with a Leaves Facility date set">📅 Has Departure</button>
@@ -3724,7 +3734,7 @@ function renderFrames() {
     return a.name.localeCompare(b.name, undefined, {numeric: true});
   });
   const counts = {all:STATE.frames.length, facility:STATE.frames.filter(f=>f.location==='facility').length, boat:STATE.frames.filter(f=>f.location==='boat').length, client:STATE.frames.filter(f=>f.location==='client').length};
-  const availCages = STATE.cages.filter(c=>c.location==='facility'||c.location==='rmd').sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+  const availCages = STATE.cages.filter(c=>c.location==='facility'||c.location==='rmd'||c.location==='rss').sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
 
   let cardsHTML = sortedFiltered.map(f=>{
     const fCages = f.cages.map(cid=>getCage(cid)).filter(Boolean);
@@ -3889,6 +3899,7 @@ async function assignCageToFrame(fid,cid) {
   c.location='frame'; c.locationDetail=f.name;
   // Remove from any RMD slot
   STATE.rmdSlots.forEach(r=>{ SIDES.forEach(s=>{ if(r[s].cage1===cid) r[s].cage1=null; if(r[s].cage2===cid) r[s].cage2=null; }); });
+  if(STATE.rssCages) STATE.rssCages = STATE.rssCages.filter(id=>id!==cid);
   render();
   await saveFrame(f);
   await saveCage(c);
@@ -4080,6 +4091,7 @@ function renderRMD() {
             }).join('');
             return '<div class="rmd-site-row row-'+row.row+'">'+items+'</div>';
           }).join('')}
+          ${renderRSSPanel(avail)}
         </div>
       </div>
     </div>
@@ -4128,6 +4140,73 @@ async function removeFromRMD(idx,side,slot) {
   render();
   if(c) await saveCage(c);
   await saveRMD();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ROOF SLAB STORAGE
+// ══════════════════════════════════════════════════════════════════════════════
+
+function renderRSSPanel(avail) {
+  const rssCages = (STATE.rssCages || []).map(id => getCage(id)).filter(Boolean);
+  const allAvail = STATE.cages.filter(c => c.location === 'facility').sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true}));
+  const opts = allAvail.map(c => `<option value="${c.id}">${esc(c.name)} · ${c.width}m · ${hCat(c.height)}</option>`).join('');
+
+  const slotRows = rssCages.map((cage, i) => `
+    <div class="rmd-slot" style="margin-bottom:4px">
+      <span class="rmd-slot-label" style="width:28px;font-size:10px;color:var(--text-muted)">${i+1}</span>
+      <div class="rmd-slot-content">
+        <span class="rmd-cage-info">
+          <span class="rmd-cage-name">${hDot(cage.height)}${esc(cage.name)}</span>
+          <span class="rmd-cage-detail">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</span>
+        </span>
+        <button class="remove-btn" onclick="removeFromRSS('${cage.id}')">×</button>
+      </div>
+    </div>`).join('');
+
+  return `
+    <div class="rmd-site-row" style="margin-top:18px">
+      <div class="rmd-site-card" style="min-width:380px">
+        <div class="card">
+          <div class="flex-between" style="margin-bottom:10px">
+            <span style="font:700 16px var(--font-mono);color:var(--blue)">🏗 Roof Slab Storage</span>
+            <span style="font-size:11px;color:var(--text-muted)">${rssCages.length} cage${rssCages.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:10px">No placement rules — any cage can be stored here.</div>
+          ${slotRows}
+          <div class="rmd-slot" style="margin-top:6px">
+            <span class="rmd-slot-label" style="width:28px;font-size:10px;color:var(--text-muted)">+</span>
+            <select style="flex:1;font-size:11px;padding:4px 8px;min-width:0;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary)"
+              onchange="assignToRSS(this.value);this.value=''">
+              <option value="">— add cage —</option>${opts}
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function assignToRSS(cid) {
+  if (!cid) return;
+  const cage = getCage(cid);
+  if (!cage) return;
+  if (!STATE.rssCages) STATE.rssCages = [];
+  if (STATE.rssCages.includes(cid)) return;
+  STATE.rssCages.push(cid);
+  cage.location = 'rss';
+  cage.locationDetail = 'Roof Slab Storage';
+  render();
+  await saveCage(cage);
+  await saveRSS();
+}
+
+async function removeFromRSS(cid) {
+  if (!STATE.rssCages) return;
+  STATE.rssCages = STATE.rssCages.filter(id => id !== cid);
+  const cage = getCage(cid);
+  if (cage) { cage.location = 'facility'; cage.locationDetail = ''; }
+  render();
+  if (cage) await saveCage(cage);
+  await saveRSS();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -4255,7 +4334,7 @@ function buildPlanFormHTML() {
     showRmd = true;
   } else if (planFormType === 'rmd-to-frame') {
     // Cages in RMD
-    cageOpts = [...STATE.cages.filter(c=>c.location==='rmd')].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(c=>`<option value="${c.id}">${esc(c.name)} (${c.locationDetail})</option>`).join('');
+    cageOpts = [...STATE.cages.filter(c=>c.location==='rmd'||c.location==='rss')].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(c=>`<option value="${c.id}">${esc(c.name)} (${c.locationDetail})</option>`).join('');
     frameOpts = STATE.frames.filter(f=>(f.location==='facility'&&f.cages.length<2) || (f.returnDate && f.location !== 'facility')).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(f=>{
       if (f.location !== 'facility') {
         const returnNote = f.returnDate ? ` ↩ returns ${fmt(f.returnDate)}` : ' (away)';
@@ -5730,6 +5809,7 @@ function renderOverview() {
 
   // Stats
   const totalInRMD = STATE.cages.filter(c=>c.location==='rmd').length;
+  const totalInRSS = STATE.cages.filter(c=>c.location==='rss').length;
   const totalInFrames = STATE.cages.filter(c=>c.location==='frame').length;
   const totalReady = STATE.frames.filter(f=>f.fixedForShipping).length;
 
@@ -6917,6 +6997,7 @@ function renderReport() {
 
   const inFac  = STATE.cages.filter(c=>c.location==='facility').length;
   const inRMD  = STATE.cages.filter(c=>c.location==='rmd').length;
+  const inRSS  = STATE.cages.filter(c=>c.location==='rss').length;
   const inFrm  = STATE.cages.filter(c=>c.location==='frame').length;
   const shipped= STATE.cages.filter(c=>c.location==='shipped').length;
 
@@ -6990,6 +7071,7 @@ function renderReport() {
       <div class="report-summary-grid">
         <div class="report-summary-cell"><div class="report-summary-val" style="color:var(--blue)">${inFac}</div><div class="report-summary-lbl">In Facility</div></div>
         <div class="report-summary-cell"><div class="report-summary-val" style="color:var(--green)">${inRMD}</div><div class="report-summary-lbl">In RMD</div></div>
+        <div class="report-summary-cell"><div class="report-summary-val" style="color:var(--blue)">${inRSS}</div><div class="report-summary-lbl">Roof Slab</div></div>
         <div class="report-summary-cell"><div class="report-summary-val" style="color:var(--orange)">${inFrm}</div><div class="report-summary-lbl">In Frames</div></div>
         <div class="report-summary-cell"><div class="report-summary-val" style="color:var(--purple)">${shipped}</div><div class="report-summary-lbl">Shipped</div></div>
       </div>
@@ -7153,6 +7235,7 @@ async function printDailyReport() {
   <div class="inv-grid">
     <div class="inv-cell"><div class="inv-val" style="color:#2563b0">${STATE.cages.filter(c=>c.location==='facility').length}</div><div class="inv-lbl">In Facility</div></div>
     <div class="inv-cell"><div class="inv-val" style="color:#1a8a4a">${STATE.cages.filter(c=>c.location==='rmd').length}</div><div class="inv-lbl">In RMD</div></div>
+    <div class="inv-cell"><div class="inv-val" style="color:#2563b0">${STATE.cages.filter(c=>c.location==='rss').length}</div><div class="inv-lbl">Roof Slab</div></div>
     <div class="inv-cell"><div class="inv-val" style="color:#b85c1a">${STATE.cages.filter(c=>c.location==='frame').length}</div><div class="inv-lbl">In Frames</div></div>
     <div class="inv-cell"><div class="inv-val" style="color:#7040c0">${STATE.cages.filter(c=>c.location==='shipped').length}</div><div class="inv-lbl">Shipped</div></div>
   </div>
@@ -7562,7 +7645,7 @@ async function generateBoatMovements() {
   // assign incoming facility exit cages into slots that were still occupied,
   // producing plans with 3 cages in a 2-cage side. Slots are freed individually
   // in Phase 2 when each rmd_to_frame move is scheduled (lines below).
-  const rmdBoatDeparting = new Set(boatCages.filter(c => c.location === 'rmd').map(c => c.id));
+  const rmdBoatDeparting = new Set(boatCages.filter(c => c.location === 'rmd' || c.location === 'rss').map(c => c.id));
 
   // Helper: available capacity on a day
   function movesUsedOnDay(date) { return existingCounts[date] || 0; }
@@ -7961,7 +8044,7 @@ async function generateBoatMovements() {
         }
       }
 
-    } else if (cage.location === 'rmd') {
+    } else if (cage.location === 'rmd' || cage.location === 'rss') {
       // Check inside/outside access order
       const detail = cage.locationDetail || '';
       const rmdMatch2 = detail.match(/(\d+)\s*([ABab])$/);
@@ -8575,7 +8658,7 @@ function renderBoatPlanner() {
   // Cages to show: those leaving facility before the boat date OR already in RMD/frame
   const eligibleCages = STATE.cages.filter(c => {
     if (c.location === 'shipped') return false;
-    if (c.location === 'rmd' || c.location === 'frame') return true;
+    if (c.location === 'rmd' || c.location === 'rss' || c.location === 'frame') return true;
     if (c.location === 'facility' && c.departureDate) {
       const dep = new Date(c.departureDate + 'T12:00:00');
       return dep <= boatCutoff;
