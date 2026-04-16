@@ -1,4 +1,4 @@
-<!-- CT v4 patched build 20260407_copy_to_tab -->
+<!-- CT v4 patched build 20260416_simulations_v34 -->
 <!DOCTYPE html>
 
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
@@ -547,6 +547,94 @@ tr.dragging { opacity: 0.4; }
 
 /* ── Export button ── */
 .export-btn { display: flex; align-items: center; gap: 5px; }
+
+/* ── Simulation Manager ── */
+.sim-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: linear-gradient(135deg, rgba(112,64,192,0.07), rgba(112,64,192,0.03));
+  border: 1px solid rgba(112,64,192,0.25); border-radius: 8px;
+  padding: 8px 14px; margin-bottom: 14px;
+}
+.sim-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 10px;
+  font: 600 11px var(--font-mono); letter-spacing: 0.03em;
+  cursor: pointer; transition: all 0.12s; border: 1.5px solid;
+}
+.sim-badge-1 { background: rgba(37,99,176,0.1); color: #2563b0; border-color: rgba(37,99,176,0.4); }
+.sim-badge-2 { background: rgba(201,48,48,0.1); color: #c93030; border-color: rgba(201,48,48,0.4); }
+.sim-badge-3 { background: rgba(26,138,74,0.1); color: #1a8a4a; border-color: rgba(26,138,74,0.4); }
+.sim-badge-4 { background: rgba(192,133,32,0.1); color: #c08520; border-color: rgba(192,133,32,0.4); }
+.sim-badge.active { box-shadow: 0 0 0 2px currentColor; }
+.sim-badge:hover { filter: brightness(1.1); }
+
+.sim-compare-panel {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px;
+}
+.sim-compare-col {
+  border: 2px solid var(--border); border-radius: 10px; overflow: hidden;
+}
+.sim-compare-col.col-1 { border-color: rgba(37,99,176,0.5); }
+.sim-compare-col.col-2 { border-color: rgba(201,48,48,0.5); }
+.sim-compare-hdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; font: 700 13px var(--font-mono);
+}
+.sim-compare-hdr.hdr-1 { background: rgba(37,99,176,0.1); color: #2563b0; }
+.sim-compare-hdr.hdr-2 { background: rgba(201,48,48,0.1); color: #c93030; }
+.sim-compare-body { padding: 10px; background: var(--bg-base); }
+.sim-move-chip {
+  display: flex; align-items: center; gap: 6px; padding: 4px 8px;
+  border-radius: 5px; font-size: 11px; margin-bottom: 3px;
+  border: 1px solid var(--border); background: var(--bg-elevated);
+}
+.sim-move-chip.chip-only-a { background: rgba(37,99,176,0.08); border-color: rgba(37,99,176,0.3); color: #2563b0; }
+.sim-move-chip.chip-only-b { background: rgba(201,48,48,0.08); border-color: rgba(201,48,48,0.3); color: #c93030; }
+.sim-move-chip.chip-shared { background: rgba(26,138,74,0.08); border-color: rgba(26,138,74,0.3); color: #1a8a4a; }
+
+.sim-manager-overlay {
+  position: fixed; inset: 0; background: rgba(10,15,30,0.55); backdrop-filter: blur(4px);
+  z-index: 1200; display: flex; align-items: center; justify-content: center;
+}
+.sim-manager-modal {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 14px; width: 620px; max-width: 95vw;
+  max-height: 88vh; display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.28);
+}
+.sim-manager-hdr {
+  padding: 18px 22px 14px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.sim-manager-body { flex: 1; overflow-y: auto; padding: 16px 22px; }
+.sim-manager-ftr { padding: 14px 22px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+.sim-row {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;
+  background: var(--bg-elevated); transition: background 0.1s;
+}
+.sim-row:hover { background: #f0f4f8; }
+.sim-num-dot {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font: 700 12px var(--font-mono); flex-shrink: 0;
+}
+.sim-num-dot.dot-1 { background: rgba(37,99,176,0.15); color: #2563b0; }
+.sim-num-dot.dot-2 { background: rgba(201,48,48,0.15); color: #c93030; }
+.sim-num-dot.dot-3 { background: rgba(26,138,74,0.15); color: #1a8a4a; }
+.sim-num-dot.dot-4 { background: rgba(192,133,32,0.15); color: #c08520; }
+.sim-name-input {
+  flex: 1; border: 1px solid transparent; background: transparent;
+  font: 600 13px var(--font-display); color: var(--text-primary);
+  padding: 4px 8px; border-radius: 6px;
+}
+.sim-name-input:focus { border-color: var(--accent); background: var(--bg-input); outline: none; }
+.sim-count { font: 500 11px var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+.sim-compare-active-bar {
+  display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+  background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px;
+  margin-bottom: 14px; flex-wrap: wrap;
+}
 
 /* ── Zoom control ── */
 .zoom-bar {
@@ -4663,6 +4751,8 @@ function renderPlanner() {
         <button class="btn btn-primary" onclick="planFormOpen=!planFormOpen;render()">+ Plan Movement</button>
       </div>
     </div>
+    ${renderSimBar()}
+    ${simManagerOpen ? renderSimManager() : ''}
     ${formHTML}
     <div class="planner-layout" style="grid-template-columns:1fr 420px">
       <div>
@@ -5304,6 +5394,326 @@ async function blankCanvasPlanner() {
   planWeekStart = (() => { const d=new Date(); d.setDate(d.getDate()-d.getDay()+1); return toISO(d); })();
   render();
   await Promise.all([...pendingIds].map(id => deleteMovementFromAPI(id)));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SIMULATION MANAGER
+// Simulations are stored in localStorage only — they're planning drafts,
+// not real data. Up to 4 slots. The compare view runs purely in-memory.
+// ═══════════════════════════════════════════════════════════════════════════
+const SIM_STORAGE_KEY = 'ct_simulations_v1';
+const MAX_SIMS = 4;
+const SIM_COLORS = ['#2563b0','#c93030','#1a8a4a','#c08520'];
+const SIM_LABELS = ['Sim 1','Sim 2','Sim 3','Sim 4'];
+const SIM_DOT_CLASSES = ['dot-1','dot-2','dot-3','dot-4'];
+const SIM_BADGE_CLASSES = ['sim-badge-1','sim-badge-2','sim-badge-3','sim-badge-4'];
+
+// Compare state — which two slots are being compared (null = off)
+let simCompareA = null;
+let simCompareB = null;
+let simManagerOpen = false;
+
+function simLoadAll() {
+  try {
+    const raw = localStorage.getItem(SIM_STORAGE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw);
+  } catch(e) { return []; }
+}
+
+function simSaveAll(sims) {
+  try { localStorage.setItem(SIM_STORAGE_KEY, JSON.stringify(sims)); } catch(e) {}
+}
+
+function simSaveCurrent(slotIndex) {
+  const pending = STATE.plannedMovements.filter(m => !m.completed);
+  if (pending.length === 0) { showError('No pending movements to save as simulation.'); return; }
+  const sims = simLoadAll();
+  // Pad to 4 slots
+  while (sims.length < MAX_SIMS) sims.push(null);
+  const existing = sims[slotIndex];
+  const defaultName = SIM_LABELS[slotIndex];
+  const name = existing ? existing.name : defaultName;
+  sims[slotIndex] = {
+    name,
+    savedAt: new Date().toISOString(),
+    movements: JSON.parse(JSON.stringify(pending)),
+  };
+  simSaveAll(sims);
+  showSuccess(`Saved ${pending.length} movements as ${name}`);
+  render();
+}
+
+async function simApply(slotIndex) {
+  const sims = simLoadAll();
+  const sim = sims[slotIndex];
+  if (!sim) { showError('No simulation in that slot.'); return; }
+  const pending = STATE.plannedMovements.filter(m => !m.completed);
+  const confirmMsg = `Apply "${sim.name}" (${sim.movements.length} movements)?` +
+    (pending.length > 0 ? `\n\nThis will REPLACE your ${pending.length} current pending movement${pending.length!==1?'s':''} with the simulation's movements.` : '');
+  if (!confirm(confirmMsg)) return;
+  // Delete current pending from API
+  const pendingIds = new Set(pending.map(m => m.id));
+  STATE.plannedMovements = STATE.plannedMovements.filter(m => m.completed);
+  render();
+  await Promise.all([...pendingIds].map(id => deleteMovementFromAPI(id)));
+  // Add simulation movements to API + state
+  for (const m of sim.movements) {
+    const newMove = { ...m, id: m.id }; // keep original IDs — they're just UUIDs
+    STATE.plannedMovements.push(newMove);
+    await addMovementToAPI(newMove);
+  }
+  showSuccess(`Applied "${sim.name}" — ${sim.movements.length} movements loaded.`);
+  simManagerOpen = false;
+  render();
+}
+
+function simDelete(slotIndex) {
+  const sims = simLoadAll();
+  const sim = sims[slotIndex];
+  if (!sim) return;
+  if (!confirm(`Delete "${sim.name}"? This cannot be undone.`)) return;
+  sims[slotIndex] = null;
+  simSaveAll(sims);
+  if (simCompareA === slotIndex) simCompareA = null;
+  if (simCompareB === slotIndex) simCompareB = null;
+  render();
+}
+
+function simRename(slotIndex, newName) {
+  const sims = simLoadAll();
+  if (!sims[slotIndex]) return;
+  sims[slotIndex].name = newName.trim() || SIM_LABELS[slotIndex];
+  simSaveAll(sims);
+}
+
+function simSetCompare(slot) {
+  // Toggle slot into compare A or B
+  if (simCompareA === slot) { simCompareA = null; }
+  else if (simCompareB === slot) { simCompareB = null; }
+  else if (simCompareA === null) { simCompareA = slot; }
+  else if (simCompareB === null) { simCompareB = slot; }
+  else { simCompareA = slot; } // replace A if both taken
+  render();
+}
+
+function simOpenManager() { simManagerOpen = true; render(); }
+function simCloseManager() { simManagerOpen = false; render(); }
+
+// Render the simulation manager modal
+function renderSimManager() {
+  const sims = simLoadAll();
+  while (sims.length < MAX_SIMS) sims.push(null);
+  const pendingCount = STATE.plannedMovements.filter(m => !m.completed).length;
+
+  const rows = sims.map((sim, i) => {
+    const dotCls = SIM_DOT_CLASSES[i];
+    const color = SIM_COLORS[i];
+    const label = SIM_LABELS[i];
+    if (!sim) {
+      return `<div class="sim-row" style="opacity:0.6">
+        <div class="sim-num-dot ${dotCls}">${i+1}</div>
+        <div style="flex:1;font:500 13px var(--font-display);color:var(--text-muted);font-style:italic">Empty slot</div>
+        <button class="btn btn-primary btn-sm" onclick="simSaveCurrent(${i});simCloseManager()"
+          title="Save current pending movements into this slot" ${pendingCount===0?'disabled':''}>
+          💾 Save Here${pendingCount>0?' ('+pendingCount+' moves)':''}
+        </button>
+      </div>`;
+    }
+    const d = new Date(sim.savedAt);
+    const dateStr = d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) + ' ' +
+      d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+    return `<div class="sim-row">
+      <div class="sim-num-dot ${dotCls}">${i+1}</div>
+      <div style="flex:1;min-width:0">
+        <input class="sim-name-input" value="${esc(sim.name)}" onchange="simRename(${i},this.value)"
+          title="Click to rename this simulation" />
+        <div style="font-size:10px;color:var(--text-muted);margin-top:2px">
+          ${sim.movements.length} movements · Saved ${dateStr}
+        </div>
+      </div>
+      <div style="display:flex;gap:5px;flex-shrink:0">
+        <button class="btn btn-primary btn-sm" onclick="simSaveCurrent(${i})"
+          title="Overwrite with current pending movements" ${pendingCount===0?'disabled':''}>
+          🔄 Update
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="simApply(${i});simCloseManager()"
+          title="Load this simulation as your active plan (replaces current pending moves)">
+          ▶ Apply
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="simDelete(${i})">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const compareSlotsHTML = sims.map((sim, i) => {
+    if (!sim) return '';
+    const isA = simCompareA === i;
+    const isB = simCompareB === i;
+    const dotCls = SIM_DOT_CLASSES[i];
+    const activeStyle = isA ? 'border:2px solid #2563b0;background:rgba(37,99,176,0.1)' : isB ? 'border:2px solid #c93030;background:rgba(201,48,48,0.1)' : '';
+    return `<button class="sim-badge ${SIM_BADGE_CLASSES[i]} ${isA||isB?'active':''}" style="${activeStyle}" onclick="simSetCompare(${i});simCloseManager();switchTab('movements')"
+      title="${isA?'Side A of compare (click to remove)':isB?'Side B of compare (click to remove)':'Click to add to compare view'}">
+      ${isA?'A: ':isB?'B: ':''}${esc(sim.name)}
+    </button>`;
+  }).filter(Boolean).join('');
+
+  return `<div class="sim-manager-overlay" onclick="if(event.target===this)simCloseManager()">
+    <div class="sim-manager-modal" onclick="event.stopPropagation()">
+      <div class="sim-manager-hdr">
+        <div>
+          <div style="font:700 16px var(--font-display);color:var(--text-primary)">🧪 Simulation Manager</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Save, compare and apply movement plans</div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="simCloseManager()">✕ Close</button>
+      </div>
+      <div class="sim-manager-body">
+        <div style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Saved Simulations (${sims.filter(Boolean).length}/${MAX_SIMS} slots used)</div>
+        ${rows}
+        ${compareSlotsHTML ? `
+        <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+          <div style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Compare View — select two to compare on the Movements map</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">${compareSlotsHTML}</div>
+        </div>` : ''}
+      </div>
+      <div class="sim-manager-ftr">
+        <div style="font-size:11px;color:var(--text-muted);flex:1;line-height:1.5">
+          💡 <strong>How to use:</strong> Save your current plan → Clear movements → Build a new plan → Save to another slot → Use Compare on the Movements tab to pick the best one, then Apply it.
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// Build the simulation bar shown at the top of planner/movements tabs
+function renderSimBar() {
+  const sims = simLoadAll();
+  while (sims.length < MAX_SIMS) sims.push(null);
+  const hasSims = sims.some(Boolean);
+  const compareActive = simCompareA !== null || simCompareB !== null;
+  const savedCount = sims.filter(Boolean).length;
+
+  let quickSave = '';
+  const firstEmpty = sims.findIndex(s => !s);
+  if (firstEmpty !== -1) {
+    const pending = STATE.plannedMovements.filter(m => !m.completed).length;
+    quickSave = `<button class="btn btn-secondary btn-sm" onclick="simSaveCurrent(${firstEmpty})" ${pending===0?'disabled':''} title="Quick-save current pending movements to next empty slot (${SIM_LABELS[firstEmpty]})">
+      💾 Quick Save → ${SIM_LABELS[firstEmpty]}
+    </button>`;
+  }
+
+  const compareChips = [simCompareA, simCompareB].filter(i => i !== null).map(i => {
+    const sim = sims[i];
+    if (!sim) return '';
+    const label = i === simCompareA ? 'A' : 'B';
+    const color = label === 'A' ? '#2563b0' : '#c93030';
+    return `<span style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:8px;background:${color}18;color:${color};border:1px solid ${color}44;font:600 11px var(--font-mono)">
+      ${label}: ${esc(sim.name)} <button onclick="simSetCompare(${i})" style="border:none;background:none;color:${color};cursor:pointer;font-size:12px;padding:0 0 0 2px;line-height:1" title="Remove from compare">✕</button>
+    </span>`;
+  }).filter(Boolean).join('');
+
+  return `<div class="sim-bar">
+    <span style="font:700 11px var(--font-mono);color:var(--purple);letter-spacing:.04em">🧪 SIMS</span>
+    ${quickSave}
+    <button class="btn btn-secondary btn-sm" onclick="simOpenManager()" title="Open simulation manager">
+      📋 Manage${savedCount > 0 ? ' ('+savedCount+')' : ''}
+    </button>
+    ${compareChips}
+    ${compareActive && simCompareA !== null && simCompareB !== null
+      ? `<button class="btn btn-primary btn-sm" onclick="switchTab('movements')" title="View compare on the Movements map">🗺 View Compare</button>`
+      : !compareActive && hasSims
+        ? `<span style="font-size:11px;color:var(--text-muted);font-style:italic">Select 2 sims from Manage to compare on the map</span>`
+        : ''
+    }
+  </div>`;
+}
+
+// Build the compare panel shown in the Movements tab
+function renderSimComparePanel() {
+  if (simCompareA === null && simCompareB === null) return '';
+  const sims = simLoadAll();
+  while (sims.length < MAX_SIMS) sims.push(null);
+  const simA = simCompareA !== null ? sims[simCompareA] : null;
+  const simB = simCompareB !== null ? sims[simCompareB] : null;
+  if (!simA && !simB) return '';
+
+  function moveSummary(moves, otherMoves, colorClass) {
+    if (!moves || moves.length === 0) return '<div style="color:var(--text-muted);font-style:italic;font-size:12px;padding:8px">No movements in this simulation</div>';
+    const otherDescs = new Set((otherMoves||[]).map(m => m.description));
+    const byDate = {};
+    moves.forEach(m => {
+      if (!byDate[m.date]) byDate[m.date] = [];
+      byDate[m.date].push(m);
+    });
+    return Object.entries(byDate).sort(([a],[b])=>a.localeCompare(b)).map(([date, dayMoves]) => {
+      const chips = dayMoves.map(m => {
+        const shared = otherDescs.has(m.description);
+        const chipClass = shared ? 'chip-shared' : colorClass === 'A' ? 'chip-only-a' : 'chip-only-b';
+        const indicator = shared ? '=' : colorClass === 'A' ? 'A' : 'B';
+        return `<div class="sim-move-chip ${chipClass}">
+          <span style="font:700 8px var(--font-mono);padding:0 4px;border-radius:3px;background:currentColor;color:#fff;opacity:0.8;flex-shrink:0">${indicator}</span>
+          <span>${m.shift==='night'?'🌙 ':''}${esc(m.description.slice(0,40))}</span>
+        </div>`;
+      }).join('');
+      return `<div style="margin-bottom:8px">
+        <div style="font:700 10px var(--font-mono);color:var(--accent);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">${fmt(date)} <span style="font-weight:400;color:var(--text-muted)">(${dayMoves.length})</span></div>
+        ${chips}
+      </div>`;
+    }).join('');
+  }
+
+  const totalA = simA ? simA.movements.length : 0;
+  const totalB = simB ? simB.movements.length : 0;
+
+  // Shared movement count (same description)
+  let sharedCount = 0;
+  if (simA && simB) {
+    const descsB = new Set(simB.movements.map(m => m.description));
+    sharedCount = simA.movements.filter(m => descsB.has(m.description)).length;
+  }
+
+  const statsBar = `<div style="display:flex;gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);margin-bottom:12px;flex-wrap:wrap">
+    ${simA ? `<span style="color:#2563b0;font:600 11px var(--font-mono)">${SIM_LABELS[simCompareA]}: ${totalA} moves</span>` : ''}
+    ${simB ? `<span style="color:#c93030;font:600 11px var(--font-mono)">${SIM_LABELS[simCompareB]}: ${totalB} moves</span>` : ''}
+    ${simA && simB ? `<span style="color:#1a8a4a;font:600 11px var(--font-mono)">= ${sharedCount} shared</span>` : ''}
+    <span style="font-size:10px;color:var(--text-muted)">
+      <span style="padding:1px 6px;border-radius:4px;background:rgba(37,99,176,0.1);color:#2563b0;border:1px solid rgba(37,99,176,0.3);font:600 9px var(--font-mono)">A</span> = only in ${simA?.name||'Sim A'}
+      &nbsp;
+      <span style="padding:1px 6px;border-radius:4px;background:rgba(201,48,48,0.1);color:#c93030;border:1px solid rgba(201,48,48,0.3);font:600 9px var(--font-mono)">B</span> = only in ${simB?.name||'Sim B'}
+      &nbsp;
+      <span style="padding:1px 6px;border-radius:4px;background:rgba(26,138,74,0.1);color:#1a8a4a;border:1px solid rgba(26,138,74,0.3);font:600 9px var(--font-mono)">=</span> = in both
+    </span>
+  </div>`;
+
+  const colAHTML = simA ? `
+    <div class="sim-compare-col col-1">
+      <div class="sim-compare-hdr hdr-1">
+        <span>A: ${esc(simA.name)} <span style="font-weight:400;font-size:10px">(${totalA} moves)</span></span>
+        <button class="btn btn-primary btn-sm" onclick="simApply(${simCompareA})" title="Apply this simulation as your active plan">▶ Apply This</button>
+      </div>
+      <div class="sim-compare-body">${moveSummary(simA.movements, simB?.movements, 'A')}</div>
+    </div>` : `<div class="sim-compare-col col-1" style="display:flex;align-items:center;justify-content:center;min-height:100px;color:var(--text-muted);font-size:13px">No simulation selected for A</div>`;
+
+  const colBHTML = simB ? `
+    <div class="sim-compare-col col-2">
+      <div class="sim-compare-hdr hdr-2">
+        <span>B: ${esc(simB.name)} <span style="font-weight:400;font-size:10px">(${totalB} moves)</span></span>
+        <button class="btn btn-primary btn-sm" onclick="simApply(${simCompareB})" title="Apply this simulation as your active plan">▶ Apply This</button>
+      </div>
+      <div class="sim-compare-body">${moveSummary(simB.movements, simA?.movements, 'B')}</div>
+    </div>` : `<div class="sim-compare-col col-2" style="display:flex;align-items:center;justify-content:center;min-height:100px;color:var(--text-muted);font-size:13px">No simulation selected for B</div>`;
+
+  return `<div class="card" style="margin-bottom:14px;border-color:rgba(112,64,192,0.3);background:rgba(112,64,192,0.02)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div class="card-title" style="margin:0;color:var(--purple)">🧪 Simulation Compare</div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-secondary btn-sm" onclick="simOpenManager()">📋 Change Sims</button>
+        <button class="btn btn-secondary btn-sm" onclick="simCompareA=null;simCompareB=null;render()">✕ Close Compare</button>
+      </div>
+    </div>
+    ${statsBar}
+    <div class="sim-compare-panel">${colAHTML}${colBHTML}</div>
+  </div>`;
 }
 
 async function rescheduleMove(id, newDate) {
@@ -10098,6 +10508,9 @@ function renderMovementsMap(dayCtx) {
       <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="mvDayDate=null;mvDayView=true;render()">📅 Day-by-Day View</button>
     </div>
     <div style="font-size:12px;color:var(--text-muted);margin-bottom:14px">Arrows show all planned, not-yet-actioned movements between RMD storage and frames. Use <strong>Day-by-Day View</strong> to step through one day at a time.</div>
+    ${renderSimBar()}
+    ${simManagerOpen ? renderSimManager() : ''}
+    ${renderSimComparePanel()}
     `}
 
     ${!isDayView ? `<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
