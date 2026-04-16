@@ -12426,24 +12426,21 @@ function bdr_parseTsv(raw) {
 
 function bdr_parseHs(raw) {
   // HS-BDR: user copies H3:AC3 and down
-  // After copy: row 0 = headers (row3), rows 1+ = data
-  // Col 0 (H) = Production no
-  // Col AA relative to H = col 19 (0-indexed from col H): AA is col 27 overall, H is col 8, so offset = 27-8 = 19
+  // Row 0 = header row, rows 1+ = data
+  // Hidden columns may shift positional indices — use header names only
   if (!raw.trim()) return { rows: [], error: 'No data pasted.' };
   const rows = bdr_parseTsv(raw);
   if (rows.length < 2) return { rows: [], error: 'Need at least a header row and one data row.' };
 
   const hdr = rows[0];
-  // Find columns by header name first, fallback to positional
   let colProd = -1, colDel = -1;
   for (let i = 0; i < hdr.length; i++) {
     const h = (hdr[i]||'').toLowerCase().replace(/\s+/g,' ').trim();
     if (h === 'production no' || h === 'production no.') colProd = i;
-    if (h === 'delivery date' || h === ' delivery date ' || h === 'delivery date ') colDel = i;
+    if (h === 'delivery date') colDel = i;
   }
-  // Positional fallback: col H(0)=prod, col AA relative to H = index 19
-  if (colProd < 0) colProd = 0;
-  if (colDel < 0)  colDel  = 19; // AA = col27, H = col8, offset = 19
+  if (colProd < 0) colProd = 0; // fallback: first col is always production no
+  if (colDel < 0) return { rows: [], error: 'Could not find a "Delivery Date" column header in the pasted data. Make sure row 3 (the header row) is included in your copy.' };
 
   const cutoff = bdr_cutoffDate();
   const result = [];
@@ -12454,7 +12451,6 @@ function bdr_parseHs(raw) {
     if (!prodRaw.trim()) continue;
     const prodNo = String(prodRaw).trim();
     const delDate = bdr_toISODate(delRaw);
-    // Only import if delivery date is after cutoff (today - 7 days), or if no date
     if (delDate && delDate < cutoff) continue;
     result.push({ prodNo, deliveryDate: delDate, deliveryDateRaw: delRaw.trim(), source: 'HS', rowIdx: i });
   }
@@ -12464,9 +12460,8 @@ function bdr_parseHs(raw) {
 
 function bdr_parseNi(raw) {
   // NI-BDR: user copies H1:AC1 and down
-  // Row 0 = headers (row1), rows 1+ = data
-  // Col 0 (H) = Production no
-  // Col Z relative to H = index 18 (Z is col26, H is col8, offset = 26-8 = 18)
+  // Row 0 = header row, rows 1+ = data
+  // Hidden columns may shift positional indices — use header names only
   if (!raw.trim()) return { rows: [], error: 'No data pasted.' };
   const rows = bdr_parseTsv(raw);
   if (rows.length < 2) return { rows: [], error: 'Need at least a header row and one data row.' };
@@ -12476,11 +12471,10 @@ function bdr_parseNi(raw) {
   for (let i = 0; i < hdr.length; i++) {
     const h = (hdr[i]||'').toLowerCase().replace(/\s+/g,' ').trim();
     if (h === 'production no' || h === 'production no.') colProd = i;
-    if (h === 'expected delivery date bylor' || h === 'delivery date' || h === 'delivery date ') colDel = i;
+    if (h === 'expected delivery date bylor') colDel = i;
   }
-  // Positional fallback: col H(0)=prod, col Z relative to H = index 18
-  if (colProd < 0) colProd = 0;
-  if (colDel < 0)  colDel  = 18; // Z = col26, H = col8, offset = 18
+  if (colProd < 0) colProd = 0; // fallback: first col is always production no
+  if (colDel < 0) return { rows: [], error: 'Could not find an "Expected Delivery Date Bylor" column header in the pasted data. Make sure row 1 (the header row) is included in your copy.' };
 
   const cutoff = bdr_cutoffDate();
   const result = [];
@@ -12491,7 +12485,6 @@ function bdr_parseNi(raw) {
     if (!prodRaw.trim()) continue;
     const prodNo = String(prodRaw).trim();
     const delDate = bdr_toISODate(delRaw);
-    // Only import if delivery date is after cutoff (today - 7 days), or if no date
     if (delDate && delDate < cutoff) continue;
     result.push({ prodNo, deliveryDate: delDate, deliveryDateRaw: delRaw.trim(), source: 'NI', rowIdx: i });
   }
@@ -12718,34 +12711,25 @@ function renderBdrsTab() {
       <p>Try adjusting your filters or search.</p>
     </div>`;
   } else {
-    const buildRow = (r, i) => {
+    const buildRow = (r) => {
       const cage = STATE.cages && STATE.cages.find(c => String(c.name||'').trim() === r.prodNo);
-      const cageCell = cage
-        ? `<span class="badge badge-green" style="font-size:0.7rem">${bdr_esc(cage.name)}</span>`
-        : `<span style="color:var(--text-muted);font-size:0.75rem;font-style:italic">No match</span>`;
       const cageDep = cage && cage.departureDate
         ? `<span style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-secondary)">${fmt(cage.departureDate)}</span>`
         : `<span style="color:var(--text-muted);font-size:0.75rem">—</span>`;
-      const importedStr = r.importedAt ? new Date(r.importedAt).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '—';
       return `<tr>
-        <td style="color:var(--text-muted);font-size:0.7rem">${i+1}</td>
         <td><span class="bdr-prod-badge">${bdr_esc(r.prodNo)}</span></td>
-        <td><span class="bdr-src-chip bdr-src-${r.source.toLowerCase()}">${r.source}</span></td>
         <td>${r.deliveryDate ? `<span class="bdr-date-chip">${bdr_fmtDate(r.deliveryDate)}</span>` : `<span style="color:var(--text-muted)">—</span>`}</td>
-        <td>${cageCell}</td>
         <td>${cageDep}</td>
-        <td style="color:var(--text-muted);font-size:0.72rem">${importedStr}</td>
         <td><button class="bdr-del-row-btn" onclick="bdr_deleteRecord('${r.id}')" title="Remove this record">✕</button></td>
       </tr>`;
     };
 
     const tblHeader = `<thead><tr>
-      <th>#</th><th>Production No</th><th>Source</th><th>Delivery Date</th>
-      <th>Cage Match</th><th>Leaves Facility</th><th>Imported</th><th></th>
+      <th>Production No</th><th>Delivery Date</th><th>Leaves Facility</th><th></th>
     </tr></thead>`;
 
     if (bdr_grouping === 'none') {
-      const trs = records.map((r, i) => buildRow(r, i)).join('');
+      const trs = records.map(r => buildRow(r)).join('');
       tableHtml = `<div class="bdr-records-scroll">
         <table class="bdr-records-tbl">${tblHeader}<tbody>${trs}</tbody></table>
       </div>`;
@@ -12763,13 +12747,13 @@ function renderBdrsTab() {
         if (b === noDateKey) return -1;
         return a.localeCompare(b);
       });
-      let rowNum = 0;
+
       const sections = keys.map(key => {
         const dayRecords = groups[key];
         const isToday = key !== noDateKey && key === new Date().toISOString().slice(0,10);
         const label = key === noDateKey ? 'No Delivery Date' : bdr_fmtDate(key);
         const todayPill = isToday ? `<span style="background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;border-radius:4px;padding:1px 7px;font-size:0.62rem;font-weight:700;margin-left:8px">TODAY</span>` : '';
-        const trs = dayRecords.map(r => buildRow(r, rowNum++)).join('');
+        const trs = dayRecords.map(r => buildRow(r)).join('');
         return `<div style="margin-bottom:20px">
           <div style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:8px;color:var(--accent);font-weight:700;font-size:0.85rem;padding:8px 14px;display:flex;align-items:center;gap:8px;margin-bottom:0">
             📆 ${bdr_esc(label)}${todayPill}
@@ -12807,13 +12791,13 @@ function renderBdrsTab() {
         return a.localeCompare(b);
       });
       const todayIso = new Date().toISOString().slice(0,10);
-      let rowNum = 0;
+
       const sections = keys.map(key => {
         const wkRecords = groups[key];
         const label = key === noDateKey ? 'No Delivery Date' : weekLabel(key);
         const isCurrentWeek = key !== noDateKey && key === getWeekMonday(todayIso);
         const currentPill = isCurrentWeek ? `<span style="background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;border-radius:4px;padding:1px 7px;font-size:0.62rem;font-weight:700;margin-left:8px">THIS WEEK</span>` : '';
-        const trs = wkRecords.map(r => buildRow(r, rowNum++)).join('');
+        const trs = wkRecords.map(r => buildRow(r)).join('');
         return `<div style="margin-bottom:24px">
           <div style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:8px;color:var(--accent);font-weight:700;font-size:0.85rem;padding:8px 14px;display:flex;align-items:center;gap:8px;margin-bottom:0">
             📅 Week of ${bdr_esc(label)}${currentPill}
