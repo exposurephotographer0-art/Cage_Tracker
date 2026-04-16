@@ -12488,14 +12488,14 @@ function bdr_parseHs(raw) {
 
   let colProd = -1, colDel = -1;
   for (let i = 0; i < hdr.length; i++) {
-    const raw_h = hdr[i] || '';
-    const h = raw_h.toLowerCase().replace(/\s+/g, ' ').trim();
+    const h = (hdr[i]||'').toLowerCase().replace(/\s+/g, ' ').trim();
     if (h === 'production no' || h === 'production no.') colProd = i;
-    // Col AA header is " Delivery date " — has a leading space unlike col O "Delivery Date "
-    if (h === 'delivery date' && raw_h.startsWith(' ')) colDel = i;
+    // Col AA = "Delivery date". Col O also has "Delivery Date" but is hidden
+    // so it is never present in the paste — simple match is safe.
+    if (h === 'delivery date') colDel = i;
   }
   if (colProd < 0) colProd = 0;
-  if (colDel < 0) return { rows: [], error: 'Could not find the " Delivery date " column (col AA) in the pasted data. Make sure row 3 (the header row) is included in your copy.' };
+  if (colDel < 0) return { rows: [], error: 'Could not find the "Delivery date" column (col AA) in the pasted data. Make sure row 3 (the header row) is included in your copy.' };
 
   const cutoff = bdr_cutoffDate();
   const result = [];
