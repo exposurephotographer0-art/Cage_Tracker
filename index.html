@@ -1742,6 +1742,8 @@ async function loadState() {
     render();
     // Restore any in-progress downtime sessions after the main state is loaded
     dtRestoreSessions();
+    // Load BDR records
+    bdr_loadRecords();
   } catch(e) {
     console.warn('[CageTracker] API unavailable, using local data:', e.message);
   }
@@ -12283,6 +12285,19 @@ let bdr_previewRows    = [];        // parsed preview rows before import
 let bdr_records        = [];        // [{id, prodNo, deliveryDate, source, importedAt}]
 let bdr_searchTerm     = '';
 let bdr_filterSource   = 'ALL';     // 'ALL' | 'HS' | 'NI'
+let bdr_grouping       = 'week';    // 'week' | 'day' | 'none'
+
+async function bdr_loadRecords() {
+  try {
+    const res = await api('/api/bdr-records');
+    if (res && res.records) {
+      bdr_records = res.records;
+      if (activeTab === 'bdrs' || activeTab === 'bdrdeliveries') renderMain();
+    }
+  } catch(e) {
+    console.warn('[BDR] Could not load records from API:', e.message);
+  }
+}
 const DD_SHIFT_ORDER   = { AM:0, MID:1, PM:2, N:3 };
 const DD_API           = 'https://cage-tracker-api.exposurephotographer0.workers.dev';
 
@@ -12413,23 +12428,24 @@ function bdr_parseHs(raw) {
   // HS-BDR: user copies H3:AC3 and down
   // After copy: row 0 = headers (row3), rows 1+ = data
   // Col 0 (H) = Production no
-  // Col 7 (O) = Delivery Date
+  // Col AA relative to H = col 19 (0-indexed from col H): AA is col 27 overall, H is col 8, so offset = 27-8 = 19
   if (!raw.trim()) return { rows: [], error: 'No data pasted.' };
   const rows = bdr_parseTsv(raw);
   if (rows.length < 2) return { rows: [], error: 'Need at least a header row and one data row.' };
 
   const hdr = rows[0];
-  // Find "Production no" column
+  // Find columns by header name first, fallback to positional
   let colProd = -1, colDel = -1;
   for (let i = 0; i < hdr.length; i++) {
-    const h = (hdr[i]||'').toLowerCase().trim();
-    if (h === 'production no') colProd = i;
-    if (h === 'delivery date' || h === 'delivery date ') colDel = i;
+    const h = (hdr[i]||'').toLowerCase().replace(/\s+/g,' ').trim();
+    if (h === 'production no' || h === 'production no.') colProd = i;
+    if (h === 'delivery date' || h === ' delivery date ' || h === 'delivery date ') colDel = i;
   }
-  // Fallback to positional: H=col0, O=col7 (0-indexed from col H)
+  // Positional fallback: col H(0)=prod, col AA relative to H = index 19
   if (colProd < 0) colProd = 0;
-  if (colDel < 0)  colDel  = 7;
+  if (colDel < 0)  colDel  = 19; // AA = col27, H = col8, offset = 19
 
+  const cutoff = bdr_cutoffDate();
   const result = [];
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
@@ -12437,17 +12453,20 @@ function bdr_parseHs(raw) {
     const delRaw  = r[colDel]  || '';
     if (!prodRaw.trim()) continue;
     const prodNo = String(prodRaw).trim();
-    const delDate = bdr_toISODate(delRaw) || (delRaw.trim() ? delRaw.trim() : null);
+    const delDate = bdr_toISODate(delRaw);
+    // Only import if delivery date is after cutoff (today - 7 days), or if no date
+    if (delDate && delDate < cutoff) continue;
     result.push({ prodNo, deliveryDate: delDate, deliveryDateRaw: delRaw.trim(), source: 'HS', rowIdx: i });
   }
-  if (!result.length) return { rows: [], error: 'No rows with a Production No found. Check you copied from H3 down.' };
+  if (!result.length) return { rows: [], error: 'No valid rows found. Rows with delivery dates older than 7 days are excluded. Check you copied from H3 down.' };
   return { rows: result, error: null };
 }
 
 function bdr_parseNi(raw) {
   // NI-BDR: user copies H1:AC1 and down
   // Row 0 = headers (row1), rows 1+ = data
-  // Col 0 (H) = Production no, Col 5 (M) = Delivery Date
+  // Col 0 (H) = Production no
+  // Col Z relative to H = index 18 (Z is col26, H is col8, offset = 26-8 = 18)
   if (!raw.trim()) return { rows: [], error: 'No data pasted.' };
   const rows = bdr_parseTsv(raw);
   if (rows.length < 2) return { rows: [], error: 'Need at least a header row and one data row.' };
@@ -12455,13 +12474,15 @@ function bdr_parseNi(raw) {
   const hdr = rows[0];
   let colProd = -1, colDel = -1;
   for (let i = 0; i < hdr.length; i++) {
-    const h = (hdr[i]||'').toLowerCase().trim();
-    if (h === 'production no') colProd = i;
-    if (h === 'delivery date' || h === 'delivery date ') colDel = i;
+    const h = (hdr[i]||'').toLowerCase().replace(/\s+/g,' ').trim();
+    if (h === 'production no' || h === 'production no.') colProd = i;
+    if (h === 'expected delivery date bylor' || h === 'delivery date' || h === 'delivery date ') colDel = i;
   }
+  // Positional fallback: col H(0)=prod, col Z relative to H = index 18
   if (colProd < 0) colProd = 0;
-  if (colDel < 0)  colDel  = 5;
+  if (colDel < 0)  colDel  = 18; // Z = col26, H = col8, offset = 18
 
+  const cutoff = bdr_cutoffDate();
   const result = [];
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
@@ -12469,10 +12490,12 @@ function bdr_parseNi(raw) {
     const delRaw  = r[colDel]  || '';
     if (!prodRaw.trim()) continue;
     const prodNo = String(prodRaw).trim();
-    const delDate = bdr_toISODate(delRaw) || (delRaw.trim() ? delRaw.trim() : null);
+    const delDate = bdr_toISODate(delRaw);
+    // Only import if delivery date is after cutoff (today - 7 days), or if no date
+    if (delDate && delDate < cutoff) continue;
     result.push({ prodNo, deliveryDate: delDate, deliveryDateRaw: delRaw.trim(), source: 'NI', rowIdx: i });
   }
-  if (!result.length) return { rows: [], error: 'No rows with a Production No found. Check you copied from H1 down.' };
+  if (!result.length) return { rows: [], error: 'No valid rows found. Rows with delivery dates older than 7 days are excluded. Check you copied from H1 down.' };
   return { rows: result, error: null };
 }
 
@@ -12544,6 +12567,13 @@ function renderBdrDeliveriesTab() {
 </div>`;
 }
 
+function bdr_cutoffDate() {
+  // Returns ISO date string for today minus 7 days
+  const d = new Date();
+  d.setDate(d.getDate() - 7);
+  return d.toISOString().slice(0, 10);
+}
+
 function bdr_setSource(src) {
   bdr_activeSource = src;
   renderMain();
@@ -12566,7 +12596,7 @@ function bdr_showStatus(msg, type) {
   if (e) { e.textContent = msg; e.className = 'bdr-status ' + type; }
 }
 
-function bdr_doImport() {
+async function bdr_doImport() {
   const raw = (document.getElementById('bdr_paste') || {}).value
     || (bdr_activeSource === 'hs' ? bdr_hsPaste : bdr_niPaste);
   if (bdr_activeSource === 'hs') bdr_hsPaste = raw;
@@ -12577,6 +12607,7 @@ function bdr_doImport() {
 
   // Merge into bdr_records — update if same prodNo+source exists, else add new
   let added = 0, updated = 0;
+  const toUpsert = [];
   parsed.rows.forEach(r => {
     const existing = bdr_records.find(x => x.prodNo === r.prodNo && x.source === r.source);
     if (existing) {
@@ -12585,15 +12616,18 @@ function bdr_doImport() {
       existing.deliveryDateRaw = r.deliveryDateRaw;
       existing.importedAt = new Date().toISOString();
       if (changed) updated++;
+      toUpsert.push(existing);
     } else {
-      bdr_records.push({
+      const rec = {
         id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
         prodNo: r.prodNo,
         deliveryDate: r.deliveryDate,
         deliveryDateRaw: r.deliveryDateRaw,
         source: r.source,
         importedAt: new Date().toISOString(),
-      });
+      };
+      bdr_records.push(rec);
+      toUpsert.push(rec);
       added++;
     }
   });
@@ -12602,6 +12636,13 @@ function bdr_doImport() {
   const msg = `✓ Imported ${parsed.rows.length} rows from ${bdr_activeSource.toUpperCase()}-BDR. ${added} new, ${updated} updated.`;
   bdr_showStatus(msg, 'success');
   renderMain();
+
+  // Persist to API
+  try {
+    await api('/api/bdr-records', 'PUT', { records: toUpsert });
+  } catch(e) {
+    console.warn('[BDR] Failed to save to API:', e.message);
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -12626,6 +12667,14 @@ function renderBdrsTab() {
     );
   }
 
+  // Sort by delivery date asc (nulls last), then prodNo
+  records.sort((a, b) => {
+    if (a.deliveryDate && b.deliveryDate) return a.deliveryDate.localeCompare(b.deliveryDate);
+    if (a.deliveryDate) return -1;
+    if (b.deliveryDate) return 1;
+    return (a.prodNo||'').localeCompare(b.prodNo||'');
+  });
+
   // Stats
   const totalAll = bdr_records.length;
   const totalHs  = bdr_records.filter(r => r.source === 'HS').length;
@@ -12646,6 +12695,11 @@ function renderBdrsTab() {
       <button class="bdr-filter-btn ${bdr_filterSource==='ALL'?'active':''}" onclick="bdr_setFilter('ALL')">All</button>
       <button class="bdr-filter-btn ${bdr_filterSource==='HS'?'active':''}" onclick="bdr_setFilter('HS')">HS-BDR</button>
       <button class="bdr-filter-btn ${bdr_filterSource==='NI'?'active':''}" onclick="bdr_setFilter('NI')">NI-BDR</button>
+      <span style="width:1px;height:20px;background:var(--border);margin:0 2px;flex-shrink:0"></span>
+      <span style="font-size:0.72rem;color:var(--text-muted);font-weight:600">Group:</span>
+      <button class="bdr-filter-btn ${bdr_grouping==='week'?'active':''}" onclick="bdr_setGrouping('week')">📅 By Week</button>
+      <button class="bdr-filter-btn ${bdr_grouping==='day'?'active':''}"  onclick="bdr_setGrouping('day')">📆 By Day</button>
+      <button class="bdr-filter-btn ${bdr_grouping==='none'?'active':''}" onclick="bdr_setGrouping('none')">≡ Flat</button>
       <span style="margin-left:auto;font-size:0.75rem;color:var(--text-muted)">${records.length} record${records.length!==1?'s':''}</span>
       ${bdr_records.length ? `<button class="btn btn-danger btn-sm" onclick="bdr_clearAll()" title="Remove all BDR records">🗑 Clear All</button>` : ''}
     </div>`;
@@ -12664,8 +12718,7 @@ function renderBdrsTab() {
       <p>Try adjusting your filters or search.</p>
     </div>`;
   } else {
-    const trs = records.map((r, i) => {
-      // Find matching cage
+    const buildRow = (r, i) => {
       const cage = STATE.cages && STATE.cages.find(c => String(c.name||'').trim() === r.prodNo);
       const cageCell = cage
         ? `<span class="badge badge-green" style="font-size:0.7rem">${bdr_esc(cage.name)}</span>`
@@ -12684,16 +12737,93 @@ function renderBdrsTab() {
         <td style="color:var(--text-muted);font-size:0.72rem">${importedStr}</td>
         <td><button class="bdr-del-row-btn" onclick="bdr_deleteRecord('${r.id}')" title="Remove this record">✕</button></td>
       </tr>`;
-    }).join('');
-    tableHtml = `<div class="bdr-records-scroll">
-      <table class="bdr-records-tbl">
-        <thead><tr>
-          <th>#</th><th>Production No</th><th>Source</th><th>Delivery Date</th>
-          <th>Cage Match</th><th>Leaves Facility</th><th>Imported</th><th></th>
-        </tr></thead>
-        <tbody>${trs}</tbody>
-      </table>
-    </div>`;
+    };
+
+    const tblHeader = `<thead><tr>
+      <th>#</th><th>Production No</th><th>Source</th><th>Delivery Date</th>
+      <th>Cage Match</th><th>Leaves Facility</th><th>Imported</th><th></th>
+    </tr></thead>`;
+
+    if (bdr_grouping === 'none') {
+      const trs = records.map((r, i) => buildRow(r, i)).join('');
+      tableHtml = `<div class="bdr-records-scroll">
+        <table class="bdr-records-tbl">${tblHeader}<tbody>${trs}</tbody></table>
+      </div>`;
+    } else if (bdr_grouping === 'day') {
+      // Group by delivery date
+      const groups = {};
+      const noDateKey = '__nodate__';
+      records.forEach(r => {
+        const key = r.deliveryDate || noDateKey;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(r);
+      });
+      const keys = Object.keys(groups).sort((a,b) => {
+        if (a === noDateKey) return 1;
+        if (b === noDateKey) return -1;
+        return a.localeCompare(b);
+      });
+      let rowNum = 0;
+      const sections = keys.map(key => {
+        const dayRecords = groups[key];
+        const isToday = key !== noDateKey && key === new Date().toISOString().slice(0,10);
+        const label = key === noDateKey ? 'No Delivery Date' : bdr_fmtDate(key);
+        const todayPill = isToday ? `<span style="background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;border-radius:4px;padding:1px 7px;font-size:0.62rem;font-weight:700;margin-left:8px">TODAY</span>` : '';
+        const trs = dayRecords.map(r => buildRow(r, rowNum++)).join('');
+        return `<div style="margin-bottom:20px">
+          <div style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:8px;color:var(--accent);font-weight:700;font-size:0.85rem;padding:8px 14px;display:flex;align-items:center;gap:8px;margin-bottom:0">
+            📆 ${bdr_esc(label)}${todayPill}
+            <span style="background:var(--bg-card);color:var(--text-muted);font-size:0.7rem;font-weight:600;border-radius:10px;padding:2px 10px;margin-left:auto">${dayRecords.length} BDR${dayRecords.length!==1?'s':''}</span>
+          </div>
+          <table class="bdr-records-tbl">${tblHeader}<tbody>${trs}</tbody></table>
+        </div>`;
+      }).join('');
+      tableHtml = `<div class="bdr-records-scroll" style="padding:16px 20px">${sections}</div>`;
+    } else {
+      // Group by week (Mon–Sun)
+      const getWeekMonday = (iso) => {
+        const d = new Date(iso + 'T12:00:00');
+        const day = d.getDay(); // 0=Sun
+        const diff = (day === 0 ? -6 : 1 - day);
+        d.setDate(d.getDate() + diff);
+        return d.toISOString().slice(0,10);
+      };
+      const weekLabel = (mondayIso) => {
+        const mon = new Date(mondayIso + 'T12:00:00');
+        const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
+        const fmt2 = d => d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+        return `${fmt2(mon)} – ${fmt2(sun)} ${sun.getFullYear()}`;
+      };
+      const groups = {};
+      const noDateKey = '__nodate__';
+      records.forEach(r => {
+        const key = r.deliveryDate ? getWeekMonday(r.deliveryDate) : noDateKey;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(r);
+      });
+      const keys = Object.keys(groups).sort((a,b) => {
+        if (a === noDateKey) return 1;
+        if (b === noDateKey) return -1;
+        return a.localeCompare(b);
+      });
+      const todayIso = new Date().toISOString().slice(0,10);
+      let rowNum = 0;
+      const sections = keys.map(key => {
+        const wkRecords = groups[key];
+        const label = key === noDateKey ? 'No Delivery Date' : weekLabel(key);
+        const isCurrentWeek = key !== noDateKey && key === getWeekMonday(todayIso);
+        const currentPill = isCurrentWeek ? `<span style="background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;border-radius:4px;padding:1px 7px;font-size:0.62rem;font-weight:700;margin-left:8px">THIS WEEK</span>` : '';
+        const trs = wkRecords.map(r => buildRow(r, rowNum++)).join('');
+        return `<div style="margin-bottom:24px">
+          <div style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:8px;color:var(--accent);font-weight:700;font-size:0.85rem;padding:8px 14px;display:flex;align-items:center;gap:8px;margin-bottom:0">
+            📅 Week of ${bdr_esc(label)}${currentPill}
+            <span style="background:var(--bg-card);color:var(--text-muted);font-size:0.7rem;font-weight:600;border-radius:10px;padding:2px 10px;margin-left:auto">${wkRecords.length} BDR${wkRecords.length!==1?'s':''}</span>
+          </div>
+          <table class="bdr-records-tbl">${tblHeader}<tbody>${trs}</tbody></table>
+        </div>`;
+      }).join('');
+      tableHtml = `<div class="bdr-records-scroll" style="padding:16px 20px">${sections}</div>`;
+    }
   }
 
   return `<div class="bdr-tab-wrap">${statsHtml}${toolbarHtml}${tableHtml}</div>`;
@@ -12701,15 +12831,20 @@ function renderBdrsTab() {
 
 function bdr_setSearch(v) { bdr_searchTerm = v; renderMain(); }
 function bdr_setFilter(v) { bdr_filterSource = v; renderMain(); }
-function bdr_deleteRecord(id) {
+function bdr_setGrouping(v) { bdr_grouping = v; renderMain(); }
+
+async function bdr_deleteRecord(id) {
   bdr_records = bdr_records.filter(r => r.id !== id);
   renderMain();
+  try { await api('/api/bdr-records', 'DELETE', { id }); } catch(e) { console.warn('[BDR] delete failed:', e.message); }
 }
-function bdr_clearAll() {
+
+async function bdr_clearAll() {
   if (!confirm('Remove all BDR records? This cannot be undone.')) return;
   bdr_records = [];
   bdr_previewRows = [];
   renderMain();
+  try { await api('/api/bdr-records', 'DELETE', { deleteAll: true }); } catch(e) { console.warn('[BDR] clearAll failed:', e.message); }
 }
 
 
