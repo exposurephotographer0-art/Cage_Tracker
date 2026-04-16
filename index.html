@@ -3395,6 +3395,7 @@ function clearCageFromCurrentLocation(cid) {
       if(r[s].cage2===cid) r[s].cage2=null;
     });
   });
+  if (STATE.rssCages) STATE.rssCages = STATE.rssCages.filter(id => id !== cid);
   return modifiedFrames;
 }
 
@@ -4218,16 +4219,13 @@ let plannerShowCompleted = false;
 let planWeekStart = (() => { const d=new Date(); d.setDate(d.getDate()-d.getDay()+1); return toISO(d); })();
 
 const MOVE_TYPES = [
-  {value:'facility-to-frame', label:'Facility → Frame (out of facility)'},
-  {value:'frame-to-frame',    label:'Frame → Frame (swap cage between frames)'},
-  {value:'frame-to-rmd', label:'Frame → RMD/Roof Slab Storage'},
-  {value:'rmd-to-frame', label:'RMD/Roof Slab → Frame'},
-  {value:'facility-to-rss', label:'Facility → Roof Slab Storage'},
-  {value:'rss-to-frame', label:'Roof Slab Storage → Frame'},
-  {value:'rmd-to-rss', label:'RMD → Roof Slab Storage'},
-  {value:'rss-to-rmd', label:'Roof Slab Storage → RMD'},
+  {value:'facility-to-frame', label:'Facility → Frame'},
+  {value:'frame-to-frame',    label:'Frame → Frame'},
+  {value:'frame-to-rmd',      label:'Frame → RMD / Roof Slab'},
+  {value:'rmd-to-frame',      label:'RMD / Roof Slab → Frame'},
+  {value:'rmd-to-rss',        label:'RMD → Roof Slab Storage'},
+  {value:'rss-to-rmd',        label:'Roof Slab Storage → RMD'},
   {value:'frame-fix-shipping', label:'Fix cage to frame for shipping'},
-  {value:'frame-return-from-client', label:'Frame returns from client → Facility'},
 ];
 
 function onPlanTypeChange(val) {
@@ -4357,10 +4355,6 @@ function buildPlanFormHTML() {
       }
       return `<option value="${f.id}">${esc(f.name)} (${f.width}m${f.hasWaler ? " 🔩" : ""})</option>`;
     }).join('');
-    showRmd = false;
-  } else if (planFormType === 'facility-to-rss') {
-    cageOpts = [...STATE.cages.filter(c=>c.location==='facility')].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(c=>`<option value="${c.id}">${esc(c.name)} (${hCat(c.height)}, ${c.width}m)</option>`).join('');
-    showFrame = false;
     showRmd = false;
   } else if (planFormType === 'rmd-to-rss') {
     cageOpts = [...STATE.cages.filter(c=>c.location==='rmd')].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(c=>`<option value="${c.id}">${esc(c.name)} (${c.locationDetail})</option>`).join('');
@@ -4786,7 +4780,7 @@ async function addMovement() {
   // If frame-to-rmd with RSS slot, rewrite as facility-to-rss for description clarity
   let effectiveType = type;
   if (type === 'frame-to-rmd' && rmdSlot === 'RSS') {
-    effectiveType = 'facility-to-rss'; // RSS slot selected — treat as to-rss move
+    effectiveType = 'frame-to-rss'; // RSS slot selected — frame → Roof Slab
   }
   if (type === 'frame-to-rmd' && cage && !resolvedFrameId) {
     // First check: cage is currently in a frame
@@ -4813,9 +4807,14 @@ async function addMovement() {
     const srcFrame = STATE.frames.find(f => f.cages.includes(cageId));
     if(srcFrame) parts.push(srcFrame.name + frameWidthTag(srcFrame));
     if(frame) parts.push(frame.name + frameWidthTag(frame));
-  } else if (effectiveType === 'facility-to-rss' || effectiveType === 'rmd-to-rss') {
+  } else if (effectiveType === 'frame-to-rss') {
     if(cage) parts.push(cage.name);
-    if(effectiveType === 'rmd-to-rss') parts.push(cage?.locationDetail || 'RMD');
+    const srcFr = STATE.frames.find(f => f.cages.includes(cageId));
+    if(srcFr) parts.push(srcFr.name);
+    parts.push('Roof Slab Storage');
+  } else if (effectiveType === 'rmd-to-rss') {
+    if(cage) parts.push(cage.name);
+    parts.push(cage?.locationDetail || 'RMD');
     parts.push('Roof Slab Storage');
   } else if (effectiveType === 'rss-to-rmd') {
     if(cage) parts.push(cage.name);
@@ -4858,10 +4857,10 @@ async function completeMove(id) {
   // Record location history for cage-moving operations
   if (cage) {
     if (m.typeKey === 'facility-to-frame' && frame) recordLocationChange(cage, 'frame', frame.name);
-    else if (m.typeKey === 'rmd-to-frame' && frame) recordLocationChange(cage, 'frame', frame.name);
+    else if ((m.typeKey === 'rmd-to-frame') && frame) recordLocationChange(cage, 'frame', frame.name);
     else if (m.typeKey === 'rss-to-frame' && frame) recordLocationChange(cage, 'frame', frame.name);
     else if (m.typeKey === 'frame-to-rmd' && m.rmdSlot) recordLocationChange(cage, 'rmd', 'RMD-' + m.rmdSlot);
-    else if (m.typeKey === 'facility-to-rss') recordLocationChange(cage, 'rss', 'Roof Slab Storage');
+    else if (m.typeKey === 'frame-to-rss') recordLocationChange(cage, 'rss', 'Roof Slab Storage');
     else if (m.typeKey === 'rmd-to-rss') recordLocationChange(cage, 'rss', 'Roof Slab Storage');
     else if (m.typeKey === 'rss-to-rmd') recordLocationChange(cage, 'rmd', m.rmdSlot ? 'RMD-'+m.rmdSlot : 'RMD');
     else if (m.typeKey === 'facility-to-rmd' && m.rmdNumber != null) recordLocationChange(cage, 'rmd', `RMD-${m.rmdNumber}${m.rmdSide||''}`);
@@ -4888,16 +4887,14 @@ async function completeMove(id) {
     cage.locationDetail = frame.name;
     cage.departureDate = null; // cage has left facility
   }
-  else if (m.typeKey === 'rss-to-frame' && cage && frame) {
-    // Move cage from Roof Slab Storage to frame
-    if (STATE.rssCages) STATE.rssCages = STATE.rssCages.filter(id => id !== cage.id);
-    cage.location = 'frame';
-    cage.locationDetail = frame.name;
-    if (!frame.cages.includes(cage.id)) frame.cages.push(cage.id);
-    await saveRSS();
-    await api('/api/frames', 'PUT', frame);
-  }
-  else if (m.typeKey === 'facility-to-rss' && cage) {
+  // rss-to-frame is now handled by rmd-to-frame (which includes rss cages)
+  else if (m.typeKey === 'frame-to-rss' && cage) {
+    // Remove from its current frame
+    const srcFrame = STATE.frames.find(f => f.cages.includes(cage.id));
+    if (srcFrame) {
+      srcFrame.cages = srcFrame.cages.filter(id => id !== cage.id);
+      await api('/api/frames', 'PUT', srcFrame);
+    }
     if (!STATE.rssCages) STATE.rssCages = [];
     if (!STATE.rssCages.includes(cage.id)) STATE.rssCages.push(cage.id);
     cage.location = 'rss';
@@ -9594,8 +9591,7 @@ function renderMovementsMap(dayCtx) {
     {k:'frame-to-frame',   label:`Frame → Frame (${ct['frame-to-frame']||0})`},
     {k:'facility-to-frame',label:`Facility → Frame (${ct['facility-to-frame']||0})`},
     {k:'facility-to-rmd',label:`Facility → RMD (${ct['facility-to-rmd']||0})`},
-    {k:'facility-to-rss',label:`Facility → Roof Slab (${ct['facility-to-rss']||0})`},
-    {k:'rss-to-frame',   label:`Roof Slab → Frame (${ct['rss-to-frame']||0})`},
+    {k:'frame-to-rss',   label:`Frame → Roof Slab (${ct['frame-to-rss']||0})`},
     {k:'rmd-to-rss',    label:`RMD → Roof Slab (${ct['rmd-to-rss']||0})`},
     {k:'rss-to-rmd',    label:`Roof Slab → RMD (${ct['rss-to-rmd']||0})`},
     {k:'frame-fix-shipping',label:`Fix Shipping (${ct['frame-fix-shipping']||0})`},
@@ -9885,7 +9881,7 @@ function renderMovementsMap(dayCtx) {
   const boatMoves = filtered.filter(m => m.typeKey === 'frame-return-from-client');
 
   // ── Movement list sidebar ──
-  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','facility-to-frame':'#2563b0','facility-to-rmd':'#0d9488','frame-fix-shipping':'#c08520','rss-to-frame':'#0891b2','facility-to-rss':'#0891b2','rmd-to-rss':'#0891b2','rss-to-rmd':'#7c3aed','rss-to-frame':'#0891b2'};
+  const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','facility-to-frame':'#2563b0','facility-to-rmd':'#0d9488','frame-fix-shipping':'#c08520','rss-to-frame':'#0891b2','frame-to-rss':'#7040c0','rmd-to-rss':'#0891b2','rss-to-rmd':'#7c3aed','rss-to-frame':'#0891b2'};
   const moveListHTML = filtered.map((m,i)=>{
     const col = MVCOLS[m.typeKey]||'var(--accent)';
     const cage = getCage(m.cageId);
@@ -10358,7 +10354,7 @@ function mvRedraw() {
     'frame-return-from-client': '#0e7490',
     'cage-to-boat-frame':  '#b45309',
     'rss-to-frame':         '#0891b2',
-    'facility-to-rss':      '#0891b2',
+    'frame-to-rss':         '#7040c0',
     'rmd-to-rss':           '#0891b2',
     'rss-to-rmd':           '#7c3aed',
   };
@@ -10760,7 +10756,7 @@ function mvRedraw() {
         svg.appendChild(lblTxt);
       }
 
-    } else if (['rss-to-frame','facility-to-rss','rmd-to-rss','rss-to-rmd'].includes(m.typeKey)) {
+    } else if (['rss-to-frame','frame-to-rss','rmd-to-rss','rss-to-rmd'].includes(m.typeKey)) {
       const rssPos = getPos('mv-rss-card');
       if (!rssPos) return;
 
@@ -10795,26 +10791,26 @@ function mvRedraw() {
           lt.textContent = cLabel; svg.appendChild(lt);
         }
 
-      } else if (m.typeKey === 'facility-to-rss') {
-        // Facility → RSS: dashed, same as facility-to-frame but targeting RSS card bottom edge
-        // Facility box is to the right of the canvas; RSS is in the top zone.
-        // FROM Facility (bottom edge) TO RSS (bottom edge — facility box is lower on screen)
-        // Actually use bottom of facility → bottom of RSS card since both are visible
-        const facPos = getPos('mv-facility-box');
-        if (!facPos) return;
-        // RSS is above-left of facility. Arrow: bottom of facility → bottom of RSS
-        const sx = facPos.cx; const sy = facPos.bottom;
+      } else if (m.typeKey === 'frame-to-rss') {
+        // Frame → RSS: identical pattern to frame-to-rmd
+        // FROM Frame top edge TO RSS bottom edge (frame is below, RSS is above in the zone)
+        const fk = String(m.frameId||'');
+        const fPos = getPos('mvf-' + fk) || getPos('mvboat-' + fk);
+        if (!fPos) return;
+
+        // Frame is below RSS in the layout (same as frame→RMD where frame top → RMD bottom)
+        const sx = fPos.cx;   const sy = fPos.top;
         const ex = rssPos.cx; const ey = rssPos.bottom;
-        const gap = Math.abs(ey - sy) || 60;
-        const cpOff = Math.max(gap * 0.4, 40);
+        const gap = Math.abs(ey - sy);
+        const cpOff = Math.max(gap * 0.35, 40);
         svg.appendChild(svgEl('path', {
-          d: `M${sx},${sy} C${sx},${sy+cpOff} ${ex},${ey+cpOff} ${ex},${ey}`,
+          d: `M${sx},${sy} C${sx},${sy-cpOff} ${ex},${ey+cpOff} ${ex},${ey}`,
           stroke: color, 'stroke-width': '2.5', fill: 'none', 'stroke-linecap': 'round',
-          'stroke-dasharray': '7,4', 'marker-end': `url(#arrow-facility-to-rss)`
+          'marker-end': `url(#arrow-frame-to-rss)`
         }));
         const mt = 0.5;
         const bx = (1-mt)**3*sx + 3*(1-mt)**2*mt*sx + 3*(1-mt)*mt**2*ex + mt**3*ex;
-        const by = (1-mt)**3*sy + 3*(1-mt)**2*mt*(sy+cpOff) + 3*(1-mt)*mt**2*(ey+cpOff) + mt**3*ey;
+        const by = (1-mt)**3*sy + 3*(1-mt)**2*mt*(sy-cpOff) + 3*(1-mt)*mt**2*(ey+cpOff) + mt**3*ey;
         svg.appendChild(svgEl('circle', { cx:bx, cy:by, r:'12', fill:color, stroke:'#fff', 'stroke-width':'2' }));
         const nt = svgEl('text', { x:bx, y:by, fill:'#fff', 'font-size':'11', 'font-weight':'bold', 'font-family':'monospace', 'text-anchor':'middle', 'dominant-baseline':'central' });
         nt.textContent = String(num); svg.appendChild(nt);
