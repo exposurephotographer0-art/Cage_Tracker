@@ -10054,6 +10054,41 @@ function renderMovementsDayView() {
       simFrameCages[loc.frameId].push(cid);
   });
 
+  // ── Location totals for the start-of-day banner ─────────────────────────────
+  let _rmdCount = 0, _frameFacCount = 0, _frameBoatCount = 0;
+  cageLocSim.forEach((loc) => {
+    if (loc.location === 'rmd') { _rmdCount++; }
+    else if (loc.location === 'frame' && loc.frameId) {
+      const _f = STATE.frames.find(f => f.id === loc.frameId);
+      if (_f && (_f.location === 'boat' || _f.location === 'client')) _frameBoatCount++;
+      else _frameFacCount++;
+    } else if (loc.location === 'frame') {
+      // frameId unknown — count as facility frame
+      _frameFacCount++;
+    }
+  });
+  const dayLocationBannerHTML = `
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;padding:10px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:var(--radius-lg);align-items:center">
+      <span style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;flex-shrink:0">Start of day position:</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:8px;background:#e6f0fa;border:1px solid #a0c8e8">
+          <span style="font-size:14px">▦</span>
+          <span style="font:700 18px var(--font-mono);color:var(--blue)">${_rmdCount}</span>
+          <span style="font:600 11px var(--font-display);color:var(--blue)">in RMD</span>
+        </span>
+        <span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:8px;background:#e6f5ec;border:1px solid #b0dcc0">
+          <span style="font-size:14px">⊞</span>
+          <span style="font:700 18px var(--font-mono);color:var(--green)">${_frameFacCount}</span>
+          <span style="font:600 11px var(--font-display);color:var(--green)">in Frames</span>
+        </span>
+        ${_frameBoatCount > 0 ? `<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:8px;background:#e6f0fa;border:1px solid #a0c8e8">
+          <span style="font-size:14px">🚢</span>
+          <span style="font:700 18px var(--font-mono);color:var(--blue)">${_frameBoatCount}</span>
+          <span style="font:600 11px var(--font-display);color:var(--blue)">Frames at Boat</span>
+        </span>` : ''}
+      </div>
+    </div>`;
+
   // Day tab strip
   const lastPlannedDate = dates.length > 1 ? dates[dates.length - 2] : null; // second-to-last = last with actual moves
   const ghostDay = dates[dates.length - 1]; // the appended next-working-day
@@ -10085,7 +10120,7 @@ function renderMovementsDayView() {
   );
 
   // Now render the full map, passing our day-context overrides
-  return renderMovementsMap({ dayMoves, simFrameCages, simRmdState, cageLocSim, dayIdx, dates, prevDay, nextDay, dayTabsHTML, simReturnedFrameIds });
+  return renderMovementsMap({ dayMoves, simFrameCages, simRmdState, cageLocSim, dayIdx, dates, prevDay, nextDay, dayTabsHTML, simReturnedFrameIds, dayLocationBannerHTML });
 }
 
 function renderMovementsMap(dayCtx) {
@@ -10554,6 +10589,7 @@ function renderMovementsMap(dayCtx) {
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:2px solid var(--border);overflow-x:auto">
       ${dayCtx.dayTabsHTML}
     </div>
+    ${dayCtx.dayLocationBannerHTML || ''}
     ${(() => {
       if (pendingMoves.length > 0) return '';
       const isGhostDay = mvDayDate === dayCtx.dates[dayCtx.dates.length - 1] &&
