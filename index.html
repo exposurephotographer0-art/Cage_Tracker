@@ -10632,8 +10632,13 @@ function renderMovementsMap(dayCtx) {
   });
 
   // Also inject virtual "frame-return-from-client" entries for frames that have a returnDate set
-  // These appear as arrows in the map without needing a planned movement
+  // These appear as arrows in the map without needing a planned movement.
+  // In day view: skip these virtual arrows entirely — the frame naturally transitions from
+  //   the Boat zone (before returnDate) to the Facility zone (on/after returnDate), so a
+  //   separate dashed "↩ Mon 20 Apr" label drawn on every prior day tab was misleading
+  //   (users read it as "frame returning on this day").
   STATE.frames.forEach(f => {
+    if (isDayView) return;
     if ((f.location === 'client' || f.location === 'boat') && f.returnDate) {
       window._mvMovesData.push({
         id: 'ret-' + f.id, typeKey: 'frame-return-from-client', cageId: null,
@@ -10645,12 +10650,19 @@ function renderMovementsMap(dayCtx) {
 
   // Inject virtual "cage-to-boat-frame" entries: cages planned into frames currently away
   // These replace the standard facility-to-frame / rmd-to-frame arrows so there is only ONE arrow.
+  // In day view: only reclassify if the frame is STILL at boat/client on the viewed day.
+  //   i.e. mvDayDate < f.returnDate. On/after the return date the frame is shown in the
+  //   facility zone (as mvf-${f.id}), so keep the move as facility-to-frame / rmd-to-frame
+  //   and let the normal arrow drawing point to the facility-zone card.
   filtered.forEach(m => {
     if (m.typeKey !== 'rmd-to-frame' && m.typeKey !== 'facility-to-frame') return;
     const frame = getFrame(m.frameId);
     if (!frame) return;
     if (frame.location === 'facility') return; // only away frames
     if (!frame.returnDate) return; // only if they have a return date
+    // Day view: if frame has already returned by the viewed day, do not reclassify —
+    // the frame is in the facility zone and the normal arrow handles it correctly.
+    if (isDayView && frame.returnDate <= mvDayDate) return;
     // Remove the original move from _mvMovesData so it doesn't also draw a blue/green arrow
     const idx = window._mvMovesData.findIndex(x => x.id === m.id);
     if (idx !== -1) window._mvMovesData.splice(idx, 1);
