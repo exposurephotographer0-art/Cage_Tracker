@@ -1686,6 +1686,11 @@ async function loadState() {
         secondShipTripId: PRELOAD_STATE.settings?.secondShipTripId || null,
       },
   };
+  // If this is a sim preview window, replace planned movements with the sim snapshot
+  if (window._simPreviewMovements) {
+    const completed = STATE.plannedMovements.filter(m => m.completed);
+    STATE.plannedMovements = [...completed, ...window._simPreviewMovements];
+  }
 
   // Render immediately from local data — don't wait for API
   render();
@@ -1730,6 +1735,12 @@ async function loadState() {
     };
     STATE.customTabs     = data.customTabs     || [];
     STATE.customTabItems = data.customTabItems  || [];
+    // If this is a sim preview window, replace planned movements with the sim snapshot
+    // so the API response cannot overwrite what was injected.
+    if (window._simPreviewMovements) {
+      const completed = STATE.plannedMovements.filter(m => m.completed);
+      STATE.plannedMovements = [...completed, ...window._simPreviewMovements];
+    }
     console.log('[CageTracker] State synced from API:', STATE.cages.length, 'cages');
     render();
     // Restore any in-progress downtime sessions after the main state is loaded
@@ -4888,24 +4899,40 @@ function simOpenPreviewWindow(slotIndex) {
   const html = document.documentElement.outerHTML;
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
-  // Always use a unique window name so we never reuse a stale window
+  // Always unique name — prevents reusing a stale window
   const winName = 'ct-sim-preview-' + slotIndex + '-' + Date.now();
   const win = window.open(url, winName, 'width=1400,height=900,scrollbars=yes,resizable=yes');
   if (!win) { alert('Pop-up blocked. Please allow pop-ups for this page.'); return; }
+
+  // Inject the sim data onto the window object BEFORE the page's own scripts run.
+  // We do this synchronously right after open() — the window object exists immediately
+  // even though the document hasn't loaded yet.
+  try {
+    win._simPreviewName = sim.name;
+    win._simPreviewSlot = slotIndex;
+    win._simPreviewMovements = JSON.parse(JSON.stringify(sim.movements));
+  } catch(e) {}
+
   win.addEventListener('load', () => {
+    // Belt-and-braces: also set after load in case the above was too early
+    try {
+      win._simPreviewName = sim.name;
+      win._simPreviewSlot = slotIndex;
+      win._simPreviewMovements = JSON.parse(JSON.stringify(sim.movements));
+    } catch(e) {}
+
     const inject = () => {
       try {
         if (!win.STATE || !win.render) { setTimeout(inject, 150); return; }
+        // Patch plannedMovements: keep completed real ones, swap pending with sim
         const completed = win.STATE.plannedMovements.filter(m => m.completed);
         win.STATE.plannedMovements = [...completed, ...JSON.parse(JSON.stringify(sim.movements))];
-        win._simPreviewName = sim.name;
-        win._simPreviewSlot = slotIndex;
         win.activeTab = 'movements';
         win.mvDayView = false;
         win.render();
       } catch(e) { setTimeout(inject, 150); }
     };
-    setTimeout(inject, 250);
+    setTimeout(inject, 300);
   });
 }
 
