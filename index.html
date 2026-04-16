@@ -10046,10 +10046,15 @@ function renderMovementsDayView() {
 
   // ── Mark cages as shipped if their proposedShipDay is on or before the viewed day ──
   // This removes them from the map and counts — they are on the boat after that date.
+  // Use the SIMULATED location (not the real one) so undone/re-simulated cages are
+  // correctly marked shipped even if their real STATE location differs.
   STATE.cages.forEach(c => {
-    if (c.proposedShipDay && c.proposedShipDay <= mvDayDate && c.location !== 'shipped') {
-      cageLocSim.set(c.id, { location:'shipped', locationDetail:'On boat', frameId:null });
-      simRmdRemoveCage(c.id); // also clear from simulated RMD slots
+    if (c.proposedShipDay && c.proposedShipDay <= mvDayDate) {
+      const simLoc = cageLocSim.get(c.id);
+      if (!simLoc || simLoc.location !== 'shipped') {
+        cageLocSim.set(c.id, { location:'shipped', locationDetail:'On boat', frameId:null });
+        simRmdRemoveCage(c.id); // also clear from simulated RMD slots
+      }
     }
   });
 
@@ -10082,8 +10087,11 @@ function renderMovementsDayView() {
   });
   // Also apply shipping to eodLocSim — a cage whose ship day is today counts as gone by end of day
   STATE.cages.forEach(c => {
-    if (c.proposedShipDay && c.proposedShipDay <= mvDayDate && c.location !== 'shipped') {
-      eodLocSim.set(c.id, { location:'shipped', locationDetail:'On boat', frameId:null });
+    if (c.proposedShipDay && c.proposedShipDay <= mvDayDate) {
+      const simEodLoc = eodLocSim.get(c.id);
+      if (!simEodLoc || simEodLoc.location !== 'shipped') {
+        eodLocSim.set(c.id, { location:'shipped', locationDetail:'On boat', frameId:null });
+      }
     }
   });
   let _rmdCount = 0, _frameFacCount = 0, _frameBoatCount = 0, _rssCount = 0;
@@ -10394,8 +10402,8 @@ function renderMovementsMap(dayCtx) {
   const relevantFrames = STATE.frames.filter(f =>
     f.location === 'facility' ||
     (activeFrames.has(f.id) && f.location !== 'client' && f.location !== 'boat') ||
-    (isDayView && dayCtx.simFrameCages && (dayCtx.simFrameCages[f.id]?.length > 0) && f.location !== 'client') ||
-    (isDayView && (f.location === 'boat' || f.location === 'client') && f.returnDate && f.returnDate < mvDayDate));
+    (isDayView && dayCtx.simFrameCages && (dayCtx.simFrameCages[f.id]?.length > 0) && f.location !== 'client' && f.location !== 'boat') ||
+    (isDayView && (f.location === 'boat' || f.location === 'client') && f.returnDate && f.returnDate <= mvDayDate));
   const sortedFrames = [...relevantFrames].sort((a,b)=>{
     return (activeFrames.has(b.id)?1:0)-(activeFrames.has(a.id)?1:0);
   });
@@ -10461,10 +10469,10 @@ function renderMovementsMap(dayCtx) {
     if(!html) html='<div style="font-size:10px;color:var(--text-muted);font-style:italic">empty</div>';
 
     // In day view: hide facility frame if it has no simulated cages and no planned moves in/out
-    // Exception: frames that have just returned from boat (returnDate < mvDayDate) should always show
+    // Exception: frames that have just returned from boat (returnDate <= mvDayDate) should always show
     if (isDayView) {
       const simCageIds = dayCtx.simFrameCages ? (dayCtx.simFrameCages[f.id] || []) : f.cages;
-      const isJustReturned = (f.location === 'boat' || f.location === 'client') && f.returnDate && f.returnDate < mvDayDate;
+      const isJustReturned = (f.location === 'boat' || f.location === 'client') && f.returnDate && f.returnDate <= mvDayDate;
       if (simCageIds.length === 0 && outIds.length === 0 && inIds.length === 0 && !isJustReturned) return '';
     }
 
@@ -10819,10 +10827,13 @@ function renderMovementsMap(dayCtx) {
                     if (!(f.location==='client'||f.location==='boat')) return false;
                     if (isDayView && dayCtx.simReturnedFrameIds && dayCtx.simReturnedFrameIds.has(f.id)) return false;
                     if (!isDayView) return f.returnDate || activeFrames.has(f.id);
-                    // Day view: show frame if it still has simulated cages, has planned moves,
-                    // has a returnDate on/after the viewed day, or is in activeFrames
+                    // Day view: once returnDate has arrived the frame moves to facility section — remove from boat
+                    const hasReturned = f.returnDate && f.returnDate <= mvDayDate;
+                    if (hasReturned) return false;
+                    // Show frame if it still has simulated cages, has planned moves,
+                    // or has a returnDate strictly in the future
                     const simCages = dayCtx.simFrameCages?.[f.id]?.length > 0;
-                    const hasReturnDate = f.returnDate && f.returnDate >= mvDayDate;
+                    const hasReturnDate = f.returnDate && f.returnDate > mvDayDate;
                     return simCages || activeFrames.has(f.id) || hasReturnDate;
                   })
                   .sort((a,b) => (a.returnDate||'').localeCompare(b.returnDate||''));
@@ -10914,15 +10925,16 @@ function renderMovementsMap(dayCtx) {
                   });
                   if (!cageHTML) cageHTML = '<div style="font-size:10px;color:var(--text-muted);font-style:italic">away</div>';
 
-                  // In day view: hide from boat section once returnDate has passed (frame is back at facility).
-                  // It will appear in the facility frames section instead.
+                  // In day view: hide from boat section once returnDate has arrived (frame is back at facility).
+                  // Also hide if all cages have shipped and there is nothing else to show.
                   if (isDayView) {
                     const simCageIds = dayCtx.simFrameCages ? (dayCtx.simFrameCages[f.id] || []) : f.cages;
                     const hasPlannedIn = plannedIntoCages.length > 0;
                     const hasExiting   = exitingCages.length > 0;
                     const hasReturning = returningMoves.length > 0;
-                    const hasReturned  = f.returnDate && f.returnDate < mvDayDate;
-                    if (hasReturned && simCageIds.length === 0 && !hasPlannedIn && !hasExiting && !hasReturning) return '';
+                    const hasReturned  = f.returnDate && f.returnDate <= mvDayDate;
+                    // Hide if returned (now in facility section) OR if totally empty with no activity
+                    if (hasReturned || (simCageIds.length === 0 && !hasPlannedIn && !hasExiting && !hasReturning)) return '';
                   }
 
                   const boatBorder = isActive
