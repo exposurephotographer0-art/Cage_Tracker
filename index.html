@@ -12401,20 +12401,29 @@ function bdr_fmtDate(v) {
 
 function bdr_toISODate(v) {
   if (!v) return null;
-  if (typeof v === 'string' && v.match(/^\d{4}-\d{2}-\d{2}/)) return v.slice(0,10);
-  if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0,10);
-  if (typeof v === 'number' && v > 10000) {
-    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+  const s = String(v).trim();
+  if (!s) return null;
+
+  // DD/MM/YYYY  or  DD-MM-YYYY  or  DD.MM.YYYY  (Excel en-GB format)
+  const dmyMatch = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/);
+  if (dmyMatch) {
+    const [, dd, mm, yyyy] = dmyMatch;
+    const d = new Date(`${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}T12:00:00`);
     if (!isNaN(d)) return d.toISOString().slice(0,10);
   }
-  // Try parsing date strings like "15/04/2025" or "15-Apr-25"
-  if (typeof v === 'string') {
-    const parts = v.split(/[\/\-\.]/);
-    if (parts.length === 3) {
-      const d = new Date(v);
+
+  // ISO: YYYY-MM-DD
+  if (s.match(/^\d{4}-\d{2}-\d{2}/)) return s.slice(0,10);
+
+  // Excel serial number
+  if (/^\d+(\.\d+)?$/.test(s)) {
+    const n = parseFloat(s);
+    if (n > 10000) {
+      const d = new Date(Math.round((n - 25569) * 86400 * 1000));
       if (!isNaN(d)) return d.toISOString().slice(0,10);
     }
   }
+
   return null;
 }
 
@@ -12451,10 +12460,12 @@ function bdr_parseHs(raw) {
     if (!prodRaw.trim()) continue;
     const prodNo = String(prodRaw).trim();
     const delDate = bdr_toISODate(delRaw);
-    if (delDate && delDate < cutoff) continue;
+    // Skip if no delivery date, or if older than 7 days
+    if (!delDate) continue;
+    if (delDate < cutoff) continue;
     result.push({ prodNo, deliveryDate: delDate, deliveryDateRaw: delRaw.trim(), source: 'HS', rowIdx: i });
   }
-  if (!result.length) return { rows: [], error: 'No valid rows found. Rows with delivery dates older than 7 days are excluded. Check you copied from H3 down.' };
+  if (!result.length) return { rows: [], error: 'No valid rows found. Rows must have a delivery date within the last 7 days or future. Check the "Delivery Date" column has values and you copied from H3 down.' };
   return { rows: result, error: null };
 }
 
@@ -12485,10 +12496,12 @@ function bdr_parseNi(raw) {
     if (!prodRaw.trim()) continue;
     const prodNo = String(prodRaw).trim();
     const delDate = bdr_toISODate(delRaw);
-    if (delDate && delDate < cutoff) continue;
+    // Skip if no delivery date, or if older than 7 days
+    if (!delDate) continue;
+    if (delDate < cutoff) continue;
     result.push({ prodNo, deliveryDate: delDate, deliveryDateRaw: delRaw.trim(), source: 'NI', rowIdx: i });
   }
-  if (!result.length) return { rows: [], error: 'No valid rows found. Rows with delivery dates older than 7 days are excluded. Check you copied from H1 down.' };
+  if (!result.length) return { rows: [], error: 'No valid rows found. Rows must have a delivery date within the last 7 days or future. Check the "Expected Delivery Date Bylor" column has values and you copied from H1 down.' };
   return { rows: result, error: null };
 }
 
@@ -12712,20 +12725,15 @@ function renderBdrsTab() {
     </div>`;
   } else {
     const buildRow = (r) => {
-      const cage = STATE.cages && STATE.cages.find(c => String(c.name||'').trim() === r.prodNo);
-      const cageDep = cage && cage.departureDate
-        ? `<span style="font-family:var(--font-mono);font-size:0.75rem;color:var(--text-secondary)">${fmt(cage.departureDate)}</span>`
-        : `<span style="color:var(--text-muted);font-size:0.75rem">—</span>`;
       return `<tr>
         <td><span class="bdr-prod-badge">${bdr_esc(r.prodNo)}</span></td>
-        <td>${r.deliveryDate ? `<span class="bdr-date-chip">${bdr_fmtDate(r.deliveryDate)}</span>` : `<span style="color:var(--text-muted)">—</span>`}</td>
-        <td>${cageDep}</td>
+        <td><span class="bdr-date-chip">${bdr_fmtDate(r.deliveryDate)}</span></td>
         <td><button class="bdr-del-row-btn" onclick="bdr_deleteRecord('${r.id}')" title="Remove this record">✕</button></td>
       </tr>`;
     };
 
     const tblHeader = `<thead><tr>
-      <th>Production No</th><th>Delivery Date</th><th>Leaves Facility</th><th></th>
+      <th>Production No</th><th>Delivery Date</th><th></th>
     </tr></thead>`;
 
     if (bdr_grouping === 'none') {
