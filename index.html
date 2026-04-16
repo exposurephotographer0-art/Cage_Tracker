@@ -4888,7 +4888,9 @@ function simOpenPreviewWindow(slotIndex) {
   const html = document.documentElement.outerHTML;
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
-  const win = window.open(url, 'ct-sim-preview-' + slotIndex, 'width=1400,height=900,scrollbars=yes,resizable=yes');
+  // Always use a unique window name so we never reuse a stale window
+  const winName = 'ct-sim-preview-' + slotIndex + '-' + Date.now();
+  const win = window.open(url, winName, 'width=1400,height=900,scrollbars=yes,resizable=yes');
   if (!win) { alert('Pop-up blocked. Please allow pop-ups for this page.'); return; }
   win.addEventListener('load', () => {
     const inject = () => {
