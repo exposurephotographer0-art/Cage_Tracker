@@ -10434,6 +10434,13 @@ function renderMovementsMap(dayCtx) {
     return (activeFrames.has(b.id)?1:0)-(activeFrames.has(a.id)?1:0);
   });
 
+  // All frame IDs referenced by ANY pending movement (used to keep frames visible
+  // between operations even when temporarily empty on a given day).
+  const _allPendingFrameIds = isDayView
+    ? new Set(STATE.plannedMovements.filter(m => !m.completed)
+        .flatMap(m => [m.frameId, m.srcFrameId]).filter(Boolean))
+    : new Set();
+
   function buildFrameCard(f) {
     const isActive = activeFrames.has(f.id);
     const movesForFrame = filtered.filter(m => resolveFrameId(m) === f.id);
@@ -10494,12 +10501,21 @@ function renderMovementsMap(dayCtx) {
     });
     if(!html) html='<div style="font-size:10px;color:var(--text-muted);font-style:italic">empty</div>';
 
-    // In day view: hide facility frame if it has no simulated cages and no planned moves in/out
-    // Exception: frames that have just returned from boat (returnDate <= mvDayDate) should always show
+    // In day view: hide facility frame if it has no simulated cages and no planned moves in/out.
+    // Exceptions:
+    //   1. Frames with any pending move anywhere in the plan stay visible between operations
+    //      (prevents frames flickering in/out when temporarily empty mid-plan).
+    //   2. Frames that just returned from boat/client are shown — UNLESS all their cages have
+    //      already shipped, in which case they belong in the Shipped section, not here.
     if (isDayView) {
       const simCageIds = dayCtx.simFrameCages ? (dayCtx.simFrameCages[f.id] || []) : f.cages;
       const isJustReturned = (f.location === 'boat' || f.location === 'client') && f.returnDate && f.returnDate <= mvDayDate;
-      if (simCageIds.length === 0 && outIds.length === 0 && inIds.length === 0 && !isJustReturned) return '';
+      const hasShippedCages = isJustReturned && dayCtx.shippedFrameCages && !!dayCtx.shippedFrameCages[f.id];
+      const hasAnyPendingMove = _allPendingFrameIds.has(f.id);
+      // Hide if: nothing to show AND not an exception
+      if (simCageIds.length === 0 && outIds.length === 0 && inIds.length === 0
+          && (!isJustReturned || hasShippedCages)
+          && !hasAnyPendingMove) return '';
     }
 
     const border = isActive ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);' : mvPick ? 'border:2px dashed #e8a830;cursor:pointer;' : 'border:1px solid var(--border);';
@@ -11018,13 +11034,12 @@ function renderMovementsMap(dayCtx) {
 
               <!-- Shipped section: day view only — frames whose cages have shipped by this date -->
               ${isDayView && dayCtx.shippedFrameCages && Object.keys(dayCtx.shippedFrameCages).length > 0 ? (() => {
-                // Exclude boat/client frames that have already returned (returnDate <= viewed day):
-                // those frames appear in the "Frames at Facility" section, so showing them here
-                // too (e.g. TF-44) would create a duplicate. Only include them in Shipped when
-                // they are still away (returnDate > viewed day) or have no returnDate.
+                // Show all frames whose cages shipped. Returned boat/client frames that still have
+                // remaining non-shipped cages will appear in the Facility section instead — those are
+                // excluded here by checking simFrameCages is empty for that frame.
                 const _shEntries = Object.values(dayCtx.shippedFrameCages).filter(({frame: _sf}) => {
-                  if ((_sf.location === 'boat' || _sf.location === 'client') && _sf.returnDate && _sf.returnDate <= mvDayDate) return false;
-                  return true;
+                  const _remaining = dayCtx.simFrameCages ? (dayCtx.simFrameCages[_sf.id] || []) : [];
+                  return _remaining.length === 0; // only show in Shipped if no remaining cages in Facility
                 });
                 if (_shEntries.length === 0) return '';
                 const _shCardsHTML = _shEntries.map(({frame: _sf, cageIds: _scids}) => {
