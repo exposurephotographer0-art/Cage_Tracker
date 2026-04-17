@@ -10050,15 +10050,23 @@ function renderMovementsDayView() {
   // correctly marked shipped even if their real STATE location differs.
   // Also record which frames "lost" cages to shipping — those boat/client frames
   // are assumed to have shipped WITH their cages and should disappear from the map.
+  // shippedFromFrameIds: boat/client frames only (used for hide-logic in framesWithReturn)
+  // shippedFrameCages:   ALL frames (facility + boat/client) — used to render the Shipped section
   const shippedFromFrameIds = new Set();
+  const shippedFrameCages = {}; // frameId -> { frame, cageIds[] }
   STATE.cages.forEach(c => {
     if (c.proposedShipDay && c.proposedShipDay <= mvDayDate) {
       const simLoc = cageLocSim.get(c.id);
-      // Capture the pre-ship frame so we can hide it later (only if it's a boat/client frame)
+      // Capture the pre-ship frame before we overwrite cageLocSim
       if (simLoc && simLoc.location === 'frame' && simLoc.frameId) {
         const _fr = getFrame(simLoc.frameId);
-        if (_fr && (_fr.location === 'boat' || _fr.location === 'client')) {
-          shippedFromFrameIds.add(simLoc.frameId);
+        if (_fr) {
+          if (_fr.location === 'boat' || _fr.location === 'client') {
+            shippedFromFrameIds.add(simLoc.frameId); // existing hide-logic
+          }
+          // Track for the new Shipped section (facility frames too)
+          if (!shippedFrameCages[simLoc.frameId]) shippedFrameCages[simLoc.frameId] = { frame: _fr, cageIds: [] };
+          shippedFrameCages[simLoc.frameId].cageIds.push(c.id);
         }
       }
       if (!simLoc || simLoc.location !== 'shipped') {
@@ -10179,7 +10187,7 @@ function renderMovementsDayView() {
   );
 
   // Now render the full map, passing our day-context overrides
-  return renderMovementsMap({ dayMoves, simFrameCages, simRmdState, cageLocSim, dayIdx, dates, prevDay, nextDay, dayTabsHTML, simReturnedFrameIds, dayLocationBannerHTML, shippedFromFrameIds });
+  return renderMovementsMap({ dayMoves, simFrameCages, simRmdState, cageLocSim, dayIdx, dates, prevDay, nextDay, dayTabsHTML, simReturnedFrameIds, dayLocationBannerHTML, shippedFromFrameIds, shippedFrameCages });
 }
 
 function renderMovementsMap(dayCtx) {
@@ -11007,6 +11015,34 @@ function renderMovementsMap(dayCtx) {
                     ${boatFramesHTML}
                   </div>`;
               })()}
+
+              <!-- Shipped section: day view only — frames whose cages have shipped by this date -->
+              ${isDayView && dayCtx.shippedFrameCages && Object.keys(dayCtx.shippedFrameCages).length > 0 ? (() => {
+                const _shEntries = Object.values(dayCtx.shippedFrameCages);
+                const _shCardsHTML = _shEntries.map(({frame: _sf, cageIds: _scids}) => {
+                  const _scages = _scids.map(cid => getCage(cid)).filter(Boolean);
+                  const _scagesHTML = _scages.map(_sc => {
+                    const _shade = shipmentShadeClass(_sc, _mvShipDays);
+                    return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #c4b5fd;background:#f5f3ff;margin-bottom:2px;">
+                      <div style="display:flex;align-items:center;gap:2px;"><span style="font:600 10px var(--font-mono);color:#6d28d9">${hDot(_sc.height)}${tagDot(_sc)}${esc(_sc.name)}</span></div>
+                      <div style="font-size:9px;color:var(--text-muted);padding-left:4px">${_sc.width}m · ${hCat(_sc.height)} · ${lCat(_sc.length)} · ${_sc.weight}t</div>
+                    </div>`;
+                  }).join('');
+                  const _locLabel = (_sf.location === 'boat' || _sf.location === 'client') ? _sf.location : 'facility';
+                  return `<div style="background:#faf5ff;border:1px solid #c4b5fd;border-radius:8px;padding:9px 10px;min-width:100px;">
+                    <div style="font:700 12px var(--font-mono);color:#6d28d9">${esc(_sf.name)}</div>
+                    <div style="font-size:9px;color:#9070c8;margin-bottom:6px">${_sf.width}m · was at ${_locLabel}</div>
+                    ${_scagesHTML || '<div style="font-size:10px;color:var(--text-muted);font-style:italic">—</div>'}
+                  </div>`;
+                }).join('');
+                return `
+                  <div style="border-top:2px dashed #c4b5fd;margin:20px 0 16px;position:relative">
+                    <span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--bg-deep);padding:0 12px;font:600 10px var(--font-mono);color:#6d28d9;letter-spacing:.06em">📦 SHIPPED</span>
+                  </div>
+                  <div id="mv-shipped-zone" style="display:flex;gap:6px;flex-wrap:wrap;">
+                    ${_shCardsHTML}
+                  </div>`;
+              })() : ''}
             </div>
 
             <!-- SVG overlay: absolutely positioned within mv-content for reliable arrow drawing -->
