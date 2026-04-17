@@ -10046,10 +10046,33 @@ function renderMovementsDayView() {
 
   // ── Mark cages as shipped if their proposedShipDay is on or before the viewed day ──
   // This removes them from the map and counts — they are on the boat after that date.
+  // Use the SIMULATED location (not the real one) so undone/re-simulated cages are
+  // correctly marked shipped even if their real STATE location differs.
+  // Also record which frames "lost" cages to shipping — those boat/client frames
+  // are assumed to have shipped WITH their cages and should disappear from the map.
+  // shippedFromFrameIds: boat/client frames only (used for hide-logic in framesWithReturn)
+  // shippedFrameCages:   ALL frames (facility + boat/client) — used to render the Shipped section
+  const shippedFromFrameIds = new Set();
+  const shippedFrameCages = {}; // frameId -> { frame, cageIds[] }
   STATE.cages.forEach(c => {
-    if (c.proposedShipDay && c.proposedShipDay <= mvDayDate && c.location !== 'shipped') {
-      cageLocSim.set(c.id, { location:'shipped', locationDetail:'On boat', frameId:null });
-      simRmdRemoveCage(c.id); // also clear from simulated RMD slots
+    if (c.proposedShipDay && c.proposedShipDay <= mvDayDate) {
+      const simLoc = cageLocSim.get(c.id);
+      // Capture the pre-ship frame before we overwrite cageLocSim
+      if (simLoc && simLoc.location === 'frame' && simLoc.frameId) {
+        const _fr = getFrame(simLoc.frameId);
+        if (_fr) {
+          if (_fr.location === 'boat' || _fr.location === 'client') {
+            shippedFromFrameIds.add(simLoc.frameId); // existing hide-logic
+          }
+          // Track for the new Shipped section (facility frames too)
+          if (!shippedFrameCages[simLoc.frameId]) shippedFrameCages[simLoc.frameId] = { frame: _fr, cageIds: [] };
+          shippedFrameCages[simLoc.frameId].cageIds.push(c.id);
+        }
+      }
+      if (!simLoc || simLoc.location !== 'shipped') {
+        cageLocSim.set(c.id, { location:'shipped', locationDetail:'On boat', frameId:null });
+        simRmdRemoveCage(c.id); // also clear from simulated RMD slots
+      }
     }
   });
 
@@ -10082,8 +10105,11 @@ function renderMovementsDayView() {
   });
   // Also apply shipping to eodLocSim — a cage whose ship day is today counts as gone by end of day
   STATE.cages.forEach(c => {
-    if (c.proposedShipDay && c.proposedShipDay <= mvDayDate && c.location !== 'shipped') {
-      eodLocSim.set(c.id, { location:'shipped', locationDetail:'On boat', frameId:null });
+    if (c.proposedShipDay && c.proposedShipDay <= mvDayDate) {
+      const simEodLoc = eodLocSim.get(c.id);
+      if (!simEodLoc || simEodLoc.location !== 'shipped') {
+        eodLocSim.set(c.id, { location:'shipped', locationDetail:'On boat', frameId:null });
+      }
     }
   });
   let _rmdCount = 0, _frameFacCount = 0, _frameBoatCount = 0, _rssCount = 0;
@@ -10161,7 +10187,7 @@ function renderMovementsDayView() {
   );
 
   // Now render the full map, passing our day-context overrides
-  return renderMovementsMap({ dayMoves, simFrameCages, simRmdState, cageLocSim, dayIdx, dates, prevDay, nextDay, dayTabsHTML, simReturnedFrameIds, dayLocationBannerHTML });
+  return renderMovementsMap({ dayMoves, simFrameCages, simRmdState, cageLocSim, dayIdx, dates, prevDay, nextDay, dayTabsHTML, simReturnedFrameIds, dayLocationBannerHTML, shippedFromFrameIds, shippedFrameCages });
 }
 
 function renderMovementsMap(dayCtx) {
@@ -10233,6 +10259,11 @@ function renderMovementsMap(dayCtx) {
   function resolveFrameId(m) {
     if (m.frameId) return m.frameId;
     if (m.typeKey === 'frame-to-rmd' || m.typeKey === 'rmd-to-frame') {
+      // In day view, prefer the simulated cage location (prior pending moves already applied)
+      if (isDayView && dayCtx.cageLocSim && m.cageId) {
+        const simLoc = dayCtx.cageLocSim.get(m.cageId);
+        if (simLoc && simLoc.location === 'frame' && simLoc.frameId) return simLoc.frameId;
+      }
       const cage = getCage(m.cageId);
       if (cage && cage.location === 'frame') {
         const f = STATE.frames.find(fr => fr.cages.includes(m.cageId));
@@ -10394,10 +10425,21 @@ function renderMovementsMap(dayCtx) {
   const relevantFrames = STATE.frames.filter(f =>
     f.location === 'facility' ||
     (activeFrames.has(f.id) && f.location !== 'client' && f.location !== 'boat') ||
-    (isDayView && dayCtx.simFrameCages && (dayCtx.simFrameCages[f.id]?.length > 0) && f.location !== 'client'));
+    (isDayView && dayCtx.simFrameCages && (dayCtx.simFrameCages[f.id]?.length > 0) && f.location !== 'client' && f.location !== 'boat') ||
+    // Returning boat/client frames: show in facility zone on/after returnDate.
+    // But if the frame "shipped away" with its cages (any cage in it shipped),
+    // it has not yet returned — keep it out of the facility zone until returnDate.
+    (isDayView && (f.location === 'boat' || f.location === 'client') && f.returnDate && f.returnDate <= mvDayDate));
   const sortedFrames = [...relevantFrames].sort((a,b)=>{
     return (activeFrames.has(b.id)?1:0)-(activeFrames.has(a.id)?1:0);
   });
+
+  // All frame IDs referenced by ANY pending movement (used to keep frames visible
+  // between operations even when temporarily empty on a given day).
+  const _allPendingFrameIds = isDayView
+    ? new Set(STATE.plannedMovements.filter(m => !m.completed)
+        .flatMap(m => [m.frameId, m.srcFrameId]).filter(Boolean))
+    : new Set();
 
   function buildFrameCard(f) {
     const isActive = activeFrames.has(f.id);
@@ -10458,6 +10500,24 @@ function renderMovementsMap(dayCtx) {
       </div>`;
     });
     if(!html) html='<div style="font-size:10px;color:var(--text-muted);font-style:italic">empty</div>';
+
+    // In day view: hide facility frame if it has no simulated cages and no planned moves in/out.
+    // Exceptions:
+    //   1. Frames with any pending move anywhere in the plan stay visible between operations
+    //      (prevents frames flickering in/out when temporarily empty mid-plan).
+    //   2. Frames that just returned from boat/client are shown — UNLESS all their cages have
+    //      already shipped, in which case they belong in the Shipped section, not here.
+    if (isDayView) {
+      const simCageIds = dayCtx.simFrameCages ? (dayCtx.simFrameCages[f.id] || []) : f.cages;
+      const isJustReturned = (f.location === 'boat' || f.location === 'client') && f.returnDate && f.returnDate <= mvDayDate;
+      const hasShippedCages = isJustReturned && dayCtx.shippedFrameCages && !!dayCtx.shippedFrameCages[f.id];
+      const hasAnyPendingMove = _allPendingFrameIds.has(f.id);
+      // Hide if: nothing to show AND not an exception
+      if (simCageIds.length === 0 && outIds.length === 0 && inIds.length === 0
+          && (!isJustReturned || hasShippedCages)
+          && !hasAnyPendingMove) return '';
+    }
+
     const border = isActive ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);' : mvPick ? 'border:2px dashed #e8a830;cursor:pointer;' : 'border:1px solid var(--border);';
     const frameClickHandler = mvPick ? `onclick="mvPickDestination('frame','${f.id}','${esc(f.name)} [${f.width}m]')"` : '';
     const framePickHint = mvPick ? `<div style="font-size:9px;color:#e8a830;font-weight:600;margin-top:4px;text-align:center">▶ Move here</div>` : '';
@@ -10549,11 +10609,18 @@ function renderMovementsMap(dayCtx) {
     }
     // Resolve missing frameId for frame-to-rmd / rmd-to-frame
     if (!frameId && (m.typeKey === 'frame-to-rmd' || m.typeKey === 'rmd-to-frame')) {
+      // In day view, prefer the simulated cage location
+      if (isDayView && dayCtx.cageLocSim && m.cageId) {
+        const simLoc = dayCtx.cageLocSim.get(m.cageId);
+        if (simLoc && simLoc.location === 'frame' && simLoc.frameId) frameId = simLoc.frameId;
+      }
       // Try to find the frame from the cage's current location
-      const cage = getCage(m.cageId);
-      if (cage && cage.location === 'frame') {
-        const f = STATE.frames.find(fr => fr.cages.includes(m.cageId));
-        if (f) frameId = f.id;
+      if (!frameId) {
+        const cage = getCage(m.cageId);
+        if (cage && cage.location === 'frame') {
+          const f = STATE.frames.find(fr => fr.cages.includes(m.cageId));
+          if (f) frameId = f.id;
+        }
       }
       // Or from a pending facility-to-frame movement
       if (!frameId) {
@@ -10566,10 +10633,16 @@ function renderMovementsMap(dayCtx) {
     // Resolve srcFrameId for frame-to-frame if missing
     let srcFrameId = m.srcFrameId || '';
     if (!srcFrameId && m.typeKey === 'frame-to-frame' && m.cageId) {
-      const cage = getCage(m.cageId);
-      if (cage && cage.location === 'frame') {
-        const f = STATE.frames.find(fr => fr.cages.includes(m.cageId));
-        if (f) srcFrameId = f.id;
+      if (isDayView && dayCtx.cageLocSim) {
+        const simLoc = dayCtx.cageLocSim.get(m.cageId);
+        if (simLoc && simLoc.location === 'frame' && simLoc.frameId) srcFrameId = simLoc.frameId;
+      }
+      if (!srcFrameId) {
+        const cage = getCage(m.cageId);
+        if (cage && cage.location === 'frame') {
+          const f = STATE.frames.find(fr => fr.cages.includes(m.cageId));
+          if (f) srcFrameId = f.id;
+        }
       }
     }
     return {
@@ -10583,8 +10656,13 @@ function renderMovementsMap(dayCtx) {
   });
 
   // Also inject virtual "frame-return-from-client" entries for frames that have a returnDate set
-  // These appear as arrows in the map without needing a planned movement
+  // These appear as arrows in the map without needing a planned movement.
+  // In day view: skip these virtual arrows entirely — the frame naturally transitions from
+  //   the Boat zone (before returnDate) to the Facility zone (on/after returnDate), so a
+  //   separate dashed "↩ Mon 20 Apr" label drawn on every prior day tab was misleading
+  //   (users read it as "frame returning on this day").
   STATE.frames.forEach(f => {
+    if (isDayView) return;
     if ((f.location === 'client' || f.location === 'boat') && f.returnDate) {
       window._mvMovesData.push({
         id: 'ret-' + f.id, typeKey: 'frame-return-from-client', cageId: null,
@@ -10596,12 +10674,19 @@ function renderMovementsMap(dayCtx) {
 
   // Inject virtual "cage-to-boat-frame" entries: cages planned into frames currently away
   // These replace the standard facility-to-frame / rmd-to-frame arrows so there is only ONE arrow.
+  // In day view: only reclassify if the frame is STILL at boat/client on the viewed day.
+  //   i.e. mvDayDate < f.returnDate. On/after the return date the frame is shown in the
+  //   facility zone (as mvf-${f.id}), so keep the move as facility-to-frame / rmd-to-frame
+  //   and let the normal arrow drawing point to the facility-zone card.
   filtered.forEach(m => {
     if (m.typeKey !== 'rmd-to-frame' && m.typeKey !== 'facility-to-frame') return;
     const frame = getFrame(m.frameId);
     if (!frame) return;
     if (frame.location === 'facility') return; // only away frames
     if (!frame.returnDate) return; // only if they have a return date
+    // Day view: if frame has already returned by the viewed day, do not reclassify —
+    // the frame is in the facility zone and the normal arrow handles it correctly.
+    if (isDayView && frame.returnDate <= mvDayDate) return;
     // Remove the original move from _mvMovesData so it doesn't also draw a blue/green arrow
     const idx = window._mvMovesData.findIndex(x => x.id === m.id);
     if (idx !== -1) window._mvMovesData.splice(idx, 1);
@@ -10807,20 +10892,16 @@ function renderMovementsMap(dayCtx) {
                 const framesWithReturn = STATE.frames
                   .filter(f => {
                     if (!(f.location==='client'||f.location==='boat')) return false;
-                    if (!(f.returnDate || activeFrames.has(f.id))) return false;
                     if (isDayView && dayCtx.simReturnedFrameIds && dayCtx.simReturnedFrameIds.has(f.id)) return false;
-                    // In day view: hide this frame if all its cages have shipped by the viewed date
-                    if (isDayView && mvDayDate) {
-                      const frameCageIds = dayCtx.simFrameCages ? (dayCtx.simFrameCages[f.id] || []) : f.cages;
-                      const allCageIds = [...new Set([...frameCageIds, ...f.cages])];
-                      if (allCageIds.length > 0) {
-                        const allShipped = allCageIds.every(cid => {
-                          const c = getCage(cid);
-                          return c && c.proposedShipDay && c.proposedShipDay <= mvDayDate;
-                        });
-                        if (allShipped) return false;
-                      }
-                    }
+                    if (!isDayView) return f.returnDate || activeFrames.has(f.id);
+                    // Day view rules (per user requirement):
+                    //   1. Only show frames that have a trip assigned (returnDate set)
+                    //   2. Only on days strictly BEFORE the return date
+                    //   3. Hide the frame if any cage in it has shipped (proposedShipDay <= viewed day)
+                    //      — the frame effectively ships away with its cages.
+                    if (!f.returnDate) return false;
+                    if (f.returnDate <= mvDayDate) return false; // on/after return → goes to facility section
+                    if (dayCtx.shippedFromFrameIds && dayCtx.shippedFromFrameIds.has(f.id)) return false;
                     return true;
                   })
                   .sort((a,b) => (a.returnDate||'').localeCompare(b.returnDate||''));
@@ -10911,6 +10992,16 @@ function renderMovementsMap(dayCtx) {
                     </div>`;
                   });
                   if (!cageHTML) cageHTML = '<div style="font-size:10px;color:var(--text-muted);font-style:italic">away</div>';
+
+                  // In day view: outer filter already enforces the visibility rules
+                  // (must have returnDate > viewed day and no shipped cages). This card
+                  // always renders when we reach here — even if empty of cages — so the
+                  // user sees the full list of frames assigned a return trip.
+                  if (isDayView) {
+                    const hasReturned  = f.returnDate && f.returnDate <= mvDayDate;
+                    if (hasReturned) return '';
+                  }
+
                   const boatBorder = isActive
                     ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);'
                     : mvPick
@@ -10931,6 +11022,7 @@ function renderMovementsMap(dayCtx) {
 
                 if (!hasAny) return '';
                 const boatFramesHTML = framesWithReturn.map(f => buildBoatFrameCard(f)).join('');
+                if (!boatFramesHTML.trim()) return '';
                 return `
                   <div style="border-top:2px dashed #a5f3fc;margin:20px 0 16px;position:relative">
                     <span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--bg-deep);padding:0 12px;font:600 10px var(--font-mono);color:#0e7490;letter-spacing:.06em">🚢 FRAMES AT BOAT / CLIENT</span>
@@ -10939,6 +11031,41 @@ function renderMovementsMap(dayCtx) {
                     ${boatFramesHTML}
                   </div>`;
               })()}
+
+              <!-- Shipped section: day view only — frames whose cages have shipped by this date -->
+              ${isDayView && dayCtx.shippedFrameCages && Object.keys(dayCtx.shippedFrameCages).length > 0 ? (() => {
+                // Show all frames whose cages shipped. Returned boat/client frames that still have
+                // remaining non-shipped cages will appear in the Facility section instead — those are
+                // excluded here by checking simFrameCages is empty for that frame.
+                const _shEntries = Object.values(dayCtx.shippedFrameCages).filter(({frame: _sf}) => {
+                  const _remaining = dayCtx.simFrameCages ? (dayCtx.simFrameCages[_sf.id] || []) : [];
+                  return _remaining.length === 0; // only show in Shipped if no remaining cages in Facility
+                });
+                if (_shEntries.length === 0) return '';
+                const _shCardsHTML = _shEntries.map(({frame: _sf, cageIds: _scids}) => {
+                  const _scages = _scids.map(cid => getCage(cid)).filter(Boolean);
+                  const _scagesHTML = _scages.map(_sc => {
+                    const _shade = shipmentShadeClass(_sc, _mvShipDays);
+                    return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #c4b5fd;background:#f5f3ff;margin-bottom:2px;">
+                      <div style="display:flex;align-items:center;gap:2px;"><span style="font:600 10px var(--font-mono);color:#6d28d9">${hDot(_sc.height)}${tagDot(_sc)}${esc(_sc.name)}</span></div>
+                      <div style="font-size:9px;color:var(--text-muted);padding-left:4px">${_sc.width}m · ${hCat(_sc.height)} · ${lCat(_sc.length)} · ${_sc.weight}t</div>
+                    </div>`;
+                  }).join('');
+                  const _locLabel = (_sf.location === 'boat' || _sf.location === 'client') ? _sf.location : 'facility';
+                  return `<div style="background:#faf5ff;border:1px solid #c4b5fd;border-radius:8px;padding:9px 10px;min-width:100px;">
+                    <div style="font:700 12px var(--font-mono);color:#6d28d9">${esc(_sf.name)}</div>
+                    <div style="font-size:9px;color:#9070c8;margin-bottom:6px">${_sf.width}m · was at ${_locLabel}</div>
+                    ${_scagesHTML || '<div style="font-size:10px;color:var(--text-muted);font-style:italic">—</div>'}
+                  </div>`;
+                }).join('');
+                return `
+                  <div style="border-top:2px dashed #c4b5fd;margin:20px 0 16px;position:relative">
+                    <span style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--bg-deep);padding:0 12px;font:600 10px var(--font-mono);color:#6d28d9;letter-spacing:.06em">📦 SHIPPED</span>
+                  </div>
+                  <div id="mv-shipped-zone" style="display:flex;gap:6px;flex-wrap:wrap;">
+                    ${_shCardsHTML}
+                  </div>`;
+              })() : ''}
             </div>
 
             <!-- SVG overlay: absolutely positioned within mv-content for reliable arrow drawing -->
