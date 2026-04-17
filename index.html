@@ -11018,7 +11018,15 @@ function renderMovementsMap(dayCtx) {
 
               <!-- Shipped section: day view only — frames whose cages have shipped by this date -->
               ${isDayView && dayCtx.shippedFrameCages && Object.keys(dayCtx.shippedFrameCages).length > 0 ? (() => {
-                const _shEntries = Object.values(dayCtx.shippedFrameCages);
+                // Exclude boat/client frames that have already returned (returnDate <= viewed day):
+                // those frames appear in the "Frames at Facility" section, so showing them here
+                // too (e.g. TF-44) would create a duplicate. Only include them in Shipped when
+                // they are still away (returnDate > viewed day) or have no returnDate.
+                const _shEntries = Object.values(dayCtx.shippedFrameCages).filter(({frame: _sf}) => {
+                  if ((_sf.location === 'boat' || _sf.location === 'client') && _sf.returnDate && _sf.returnDate <= mvDayDate) return false;
+                  return true;
+                });
+                if (_shEntries.length === 0) return '';
                 const _shCardsHTML = _shEntries.map(({frame: _sf, cageIds: _scids}) => {
                   const _scages = _scids.map(cid => getCage(cid)).filter(Boolean);
                   const _scagesHTML = _scages.map(_sc => {
