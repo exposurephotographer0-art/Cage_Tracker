@@ -13397,16 +13397,19 @@ function bdr_parseHs(raw) {
   const hdrIdx = bdr_findHeaderRow(rows);
   const hdr = rows[hdrIdx];
 
-  let colProd = -1, colDel = -1;
+  let colProd = -1, colDel = -1, colTrailer = -1;
   for (let i = 0; i < hdr.length; i++) {
     const h = (hdr[i]||'').toLowerCase().replace(/\s+/g, ' ').trim();
     if (h === 'production no' || h === 'production no.') colProd = i;
     // Col AA = "Delivery date". Col O also has "Delivery Date" but is hidden
     // so it is never present in the paste — simple match is safe.
     if (h === 'delivery date') colDel = i;
+    if (h === 'trailer' || h === 'trailer no' || h === 'trailer no.' || h === 'trailer number' || h === 'trailer ref') colTrailer = i;
   }
   if (colProd < 0) colProd = 0;
   if (colDel < 0) return { rows: [], error: 'Could not find the "Delivery date" column (col AA) in the pasted data. Make sure row 3 (the header row) is included in your copy.' };
+  // Fall back to last column for trailer if no named column found
+  if (colTrailer < 0) colTrailer = hdr.length - 1;
 
   const cutoff = bdr_cutoffDate();
   const result = [];
@@ -13419,7 +13422,8 @@ function bdr_parseHs(raw) {
     const delDate = bdr_toISODate(delRaw);
     if (!delDate) continue;
     if (delDate < cutoff) continue;
-    result.push({ prodNo, deliveryDate: delDate, deliveryDateRaw: delRaw.trim(), source: 'HS', rowIdx: i });
+    const trailerNo = String(r[colTrailer] || '').trim();
+    result.push({ prodNo, deliveryDate: delDate, deliveryDateRaw: delRaw.trim(), source: 'HS', trailerNo, rowIdx: i });
   }
   if (!result.length) return { rows: [], error: 'No valid rows found. Rows must have a delivery date within the last 7 days or future. Check the " Delivery date " column has values and you copied from H3 down.' };
   return { rows: result, error: null };
@@ -13435,14 +13439,17 @@ function bdr_parseNi(raw) {
   const hdrIdx = bdr_findHeaderRow(rows);
   const hdr = rows[hdrIdx];
 
-  let colProd = -1, colDel = -1;
+  let colProd = -1, colDel = -1, colTrailer = -1;
   for (let i = 0; i < hdr.length; i++) {
     const h = (hdr[i]||'').toLowerCase().replace(/\s+/g,' ').trim();
     if (h === 'production no' || h === 'production no.') colProd = i;
     if (h === 'expected delivery date bylor') colDel = i;
+    if (h === 'trailer' || h === 'trailer no' || h === 'trailer no.' || h === 'trailer number' || h === 'trailer ref') colTrailer = i;
   }
   if (colProd < 0) colProd = 0;
   if (colDel < 0) return { rows: [], error: 'Could not find an "Expected Delivery Date Bylor" column header in the pasted data. Make sure row 1 (the header row) is included in your copy.' };
+  // Fall back to last column for trailer if no named column found
+  if (colTrailer < 0) colTrailer = hdr.length - 1;
 
   const cutoff = bdr_cutoffDate();
   const result = [];
@@ -13455,7 +13462,8 @@ function bdr_parseNi(raw) {
     const delDate = bdr_toISODate(delRaw);
     if (!delDate) continue;
     if (delDate < cutoff) continue;
-    result.push({ prodNo, deliveryDate: delDate, deliveryDateRaw: delRaw.trim(), source: 'NI', rowIdx: i });
+    const trailerNo = String(r[colTrailer] || '').trim();
+    result.push({ prodNo, deliveryDate: delDate, deliveryDateRaw: delRaw.trim(), source: 'NI', trailerNo, rowIdx: i });
   }
   if (!result.length) return { rows: [], error: 'No valid rows found. Rows must have a delivery date within the last 7 days or future. Check the "Expected Delivery Date Bylor" column has values and you copied from H1 down.' };
   return { rows: result, error: null };
@@ -13478,11 +13486,12 @@ function renderBdrDeliveriesTab() {
         <td><span class="bdr-prod-badge">${bdr_esc(r.prodNo)}</span></td>
         <td><span class="bdr-src-chip bdr-src-${r.source.toLowerCase()}">${r.source}</span></td>
         <td><span class="bdr-date-chip">${r.deliveryDate ? bdr_fmtDate(r.deliveryDate) : (r.deliveryDateRaw ? bdr_esc(r.deliveryDateRaw) : '<span style="color:var(--text-muted)">—</span>')}</span></td>
+        <td>${r.trailerNo ? `<span style="font-family:var(--font-mono);font-size:0.78rem;color:var(--text-secondary)">${bdr_esc(r.trailerNo)}</span>` : `<span style="color:var(--text-muted);font-size:0.75rem">—</span>`}</td>
         <td>${matchCell}</td>
       </tr>`;
     }).join('');
     previewHtml = `<table class="bdr-preview-tbl">
-      <thead><tr><th>#</th><th>Production No</th><th>Source</th><th>Delivery Date</th><th>Cage Match</th></tr></thead>
+      <thead><tr><th>#</th><th>Production No</th><th>Source</th><th>Delivery Date</th><th>Trailer No</th><th>Cage Match</th></tr></thead>
       <tbody>${trs}</tbody>
     </table>`;
   } else {
@@ -13576,6 +13585,7 @@ async function bdr_doImport() {
       const changed = existing.deliveryDate !== r.deliveryDate;
       existing.deliveryDate = r.deliveryDate;
       existing.deliveryDateRaw = r.deliveryDateRaw;
+      existing.trailerNo = r.trailerNo;
       existing.importedAt = new Date().toISOString();
       if (changed) updated++;
       toUpsert.push(existing);
@@ -13585,6 +13595,7 @@ async function bdr_doImport() {
         prodNo: r.prodNo,
         deliveryDate: r.deliveryDate,
         deliveryDateRaw: r.deliveryDateRaw,
+        trailerNo: r.trailerNo,
         source: r.source,
         importedAt: new Date().toISOString(),
       };
@@ -13625,7 +13636,8 @@ function renderBdrsTab() {
     records = records.filter(r =>
       (r.prodNo||'').toLowerCase().includes(q) ||
       (r.deliveryDateRaw||'').toLowerCase().includes(q) ||
-      (r.source||'').toLowerCase().includes(q)
+      (r.source||'').toLowerCase().includes(q) ||
+      (r.trailerNo||'').toLowerCase().includes(q)
     );
   }
 
@@ -13684,12 +13696,13 @@ function renderBdrsTab() {
       return `<tr>
         <td><span class="bdr-prod-badge">${bdr_esc(r.prodNo)}</span></td>
         <td><span class="bdr-date-chip">${bdr_fmtDate(r.deliveryDate)}</span></td>
+        <td>${r.trailerNo ? `<span style="font-family:var(--font-mono);font-size:0.78rem;color:var(--text-secondary)">${bdr_esc(r.trailerNo)}</span>` : `<span style="color:var(--text-muted);font-size:0.75rem">—</span>`}</td>
         <td><button class="bdr-del-row-btn" onclick="bdr_deleteRecord('${r.id}')" title="Remove this record">✕</button></td>
       </tr>`;
     };
 
     const tblHeader = `<thead><tr>
-      <th>Production No</th><th>Delivery Date</th><th></th>
+      <th>Production No</th><th>Delivery Date</th><th>Trailer No</th><th></th>
     </tr></thead>`;
 
     if (bdr_grouping === 'none') {
