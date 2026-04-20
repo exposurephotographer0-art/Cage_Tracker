@@ -4692,7 +4692,7 @@ function renderPlanner() {
         </td>
         <td><span class="badge ${m.completed?'badge-green':'badge-yellow'}">${m.completed?'Done':'Pending'}</span></td>
         <td style="white-space:nowrap">
-          ${!m.completed ? `<button class="btn btn-primary btn-xs" onclick="completeMove('${m.id}')">✓</button> ` : ''}
+          ${!m.completed ? `<button class="btn btn-primary btn-xs" onclick="completeMove('${m.id}')">✓</button> <button class="btn btn-secondary btn-xs" onclick="openEditMove('${m.id}')" title="Edit this movement">✏ Edit</button> ` : ''}
           <button class="btn btn-danger btn-xs" onclick="deleteMove('${m.id}')">Del</button>
         </td>
       </tr>`).join('');
@@ -5789,6 +5789,176 @@ async function rescheduleMove(id, newDate) {
   render();
   showSuccess('Movement rescheduled to ' + fmt(newDate));
 }
+
+// ── Edit planned movement modal ───────────────────────────────────────────────
+function openEditMove(id) {
+  const m = STATE.plannedMovements.find(x => x.id === id);
+  if (!m) return;
+
+  // Remove any existing edit overlay
+  const existing = document.getElementById('edit-move-overlay');
+  if (existing) existing.remove();
+
+  // Build cage options
+  const cageOpts = STATE.cages.map(c =>
+    `<option value="${c.id}" ${c.id === m.cageId ? 'selected' : ''}>${esc(c.name)}</option>`
+  ).join('');
+
+  // Build frame options
+  const frameOpts = `<option value="">— None —</option>` + STATE.frames.map(f =>
+    `<option value="${f.id}" ${f.id === m.frameId ? 'selected' : ''}>${esc(f.name)} (${f.width}m${f.hasWaler ? ' 🔩' : ''})</option>`
+  ).join('');
+
+  // Build move type options
+  const typeOpts = MOVE_TYPES.map(t =>
+    `<option value="${t.value}" ${t.value === m.typeKey ? 'selected' : ''}>${t.label}</option>`
+  ).join('');
+
+  // Build RMD slot options
+  const rmdSlotOpts = `<option value="">— None —</option>` +
+    Array.from({length:12},(_,i)=>i+1).map(n =>
+      `<option value="${n}" ${String(n) === String(m.rmdSlot) ? 'selected' : ''}>RMD-${n}</option>`
+    ).join('') +
+    `<option value="RSS" ${m.rmdSlot === 'RSS' ? 'selected' : ''}>Roof Slab Storage</option>`;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'edit-move-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;';
+  overlay.innerHTML = `
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:24px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <div style="font:700 16px var(--font-display);color:var(--text-primary)">✏ Edit Movement</div>
+        <button onclick="document.getElementById('edit-move-overlay').remove()" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-muted);line-height:1">✕</button>
+      </div>
+      <div style="display:grid;gap:12px">
+        <div>
+          <label>Movement Type</label>
+          <select id="em-type" onchange="emTypeChanged()">${typeOpts}</select>
+        </div>
+        <div>
+          <label>Cage</label>
+          <select id="em-cage">${cageOpts}</select>
+        </div>
+        <div id="em-frame-row">
+          <label>Target Frame</label>
+          <select id="em-frame">${frameOpts}</select>
+        </div>
+        <div id="em-rmd-row">
+          <label>RMD / RSS Slot</label>
+          <select id="em-rmd">${rmdSlotOpts}</select>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label>Date</label>
+            <input type="date" id="em-date" value="${m.date}" />
+          </div>
+          <div>
+            <label>Shift</label>
+            <select id="em-shift">
+              <option value="day" ${m.shift !== 'night' ? 'selected' : ''}>☀ Day</option>
+              <option value="night" ${m.shift === 'night' ? 'selected' : ''}>🌙 Night</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label>Notes</label>
+          <input type="text" id="em-notes" value="${esc(m.notes||'')}" placeholder="Optional notes…" />
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:18px;justify-content:flex-end">
+        <button class="btn btn-secondary" onclick="document.getElementById('edit-move-overlay').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveEditMove('${id}')">💾 Save Changes</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  emTypeChanged(); // hide/show frame & rmd rows based on current type
+}
+
+function emTypeChanged() {
+  const type = (document.getElementById('em-type') || {}).value || '';
+  const frameRow = document.getElementById('em-frame-row');
+  const rmdRow   = document.getElementById('em-rmd-row');
+  if (!frameRow || !rmdRow) return;
+  const needsFrame = ['facility-to-frame','rmd-to-frame','frame-to-frame','frame-return-from-client','frame-fix-shipping','rss-to-frame'].includes(type);
+  const needsRmd   = ['facility-to-rmd','frame-to-rmd','rmd-to-rmd','rss-to-rmd','rmd-to-rss'].includes(type);
+  frameRow.style.display = needsFrame ? '' : 'none';
+  rmdRow.style.display   = needsRmd   ? '' : 'none';
+}
+
+async function saveEditMove(id) {
+  const m = STATE.plannedMovements.find(x => x.id === id);
+  if (!m) return;
+
+  const typeKey  = document.getElementById('em-type').value;
+  const cageId   = document.getElementById('em-cage').value;
+  const frameId  = (document.getElementById('em-frame') || {}).value || '';
+  const rmdSlot  = (document.getElementById('em-rmd') || {}).value || '';
+  const date     = document.getElementById('em-date').value;
+  const shift    = document.getElementById('em-shift').value;
+  const notes    = document.getElementById('em-notes').value.trim();
+
+  if (!date) { alert('Please select a date.'); return; }
+
+  // Rebuild description using same logic as addMovement
+  const cage  = getCage(cageId);
+  const frame = getFrame(frameId);
+  const frameWidthTag = (f) => f && f.width ? ` [${f.width}m]` : '';
+  const parts = [];
+  if (typeKey === 'frame-return-from-client') {
+    if (frame) parts.push(frame.name + frameWidthTag(frame));
+    parts.push('Facility');
+  } else if (typeKey === 'frame-to-frame') {
+    if (cage) parts.push(cage.name);
+    const srcFrame = STATE.frames.find(f => f.cages.includes(cageId));
+    if (srcFrame) parts.push(srcFrame.name + frameWidthTag(srcFrame));
+    if (frame) parts.push(frame.name + frameWidthTag(frame));
+  } else if (typeKey === 'frame-to-rss') {
+    if (cage) parts.push(cage.name);
+    const srcFr = STATE.frames.find(f => f.cages.includes(cageId));
+    if (srcFr) parts.push(srcFr.name);
+    parts.push('Roof Slab Storage');
+  } else if (typeKey === 'rmd-to-rss') {
+    if (cage) parts.push(cage.name);
+    parts.push(cage?.locationDetail || 'RMD');
+    parts.push('Roof Slab Storage');
+  } else if (typeKey === 'rss-to-rmd') {
+    if (cage) parts.push(cage.name);
+    parts.push('Roof Slab Storage');
+    if (rmdSlot && rmdSlot !== 'RSS') parts.push('RMD-' + rmdSlot);
+  } else if (typeKey === 'rss-to-frame') {
+    if (cage) parts.push(cage.name);
+    parts.push('Roof Slab Storage');
+    if (frame) parts.push(frame.name + frameWidthTag(frame));
+  } else {
+    if (cage) parts.push(cage.name);
+    if (frame) parts.push(frame.name + frameWidthTag(frame));
+    if (rmdSlot && rmdSlot !== 'RSS') parts.push('RMD-' + rmdSlot);
+  }
+  const desc      = parts.join(' → ') || notes || 'Movement';
+  const typeLabel = MOVE_TYPES.find(t => t.value === typeKey)?.label || typeKey;
+
+  // Update in-state
+  m.typeKey     = typeKey;
+  m.type        = typeLabel;
+  m.cageId      = cageId;
+  m.frameId     = frameId;
+  m.rmdSlot     = rmdSlot !== 'RSS' ? rmdSlot : rmdSlot;
+  m.date        = date;
+  m.shift       = shift;
+  m.notes       = notes;
+  m.description = desc;
+  // Update srcFrameId for frame-to-frame moves
+  if (typeKey === 'frame-to-frame') {
+    const srcFrame = STATE.frames.find(f => f.cages.includes(cageId));
+    m.srcFrameId = srcFrame ? srcFrame.id : '';
+  }
+
+  document.getElementById('edit-move-overlay').remove();
+  render();
+  await updateMovementInAPI(m);
+  showSuccess('Movement updated.');
+}
+
 
 async function deleteMove(id) {
   STATE.plannedMovements = STATE.plannedMovements.filter(m=>m.id!==id);
