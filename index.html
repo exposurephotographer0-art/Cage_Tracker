@@ -11376,7 +11376,11 @@ function mvRedraw() {
   if (!svg || !container) return;
 
   svg.innerHTML = '';
-  const MOVES = window._mvMovesData || [];
+  // Always exclude completed movements — belt-and-braces guard in case _mvMovesData is stale
+  const completedIds = new Set(
+    STATE.plannedMovements.filter(m => m.completed).map(m => m.id)
+  );
+  const MOVES = (window._mvMovesData || []).filter(m => !completedIds.has(m.id));
   if (!MOVES.length) { _setupFacilityBoxFade(); return; }
 
   const COLORS = {
