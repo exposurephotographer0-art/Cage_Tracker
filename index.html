@@ -10842,39 +10842,93 @@ function renderMovementsMap(dayCtx) {
 
   // ── Movement list sidebar ──
   const MVCOLS = {'rmd-to-frame':'#27a060','frame-to-rmd':'#7040c0','facility-to-frame':'#2563b0','facility-to-rmd':'#0d9488','frame-fix-shipping':'#c08520','rss-to-frame':'#0891b2','frame-to-rss':'#7040c0','rmd-to-rss':'#0891b2','rss-to-rmd':'#7c3aed','rss-to-frame':'#0891b2'};
-  const moveListHTML = filtered.map((m,i)=>{
-    const col = MVCOLS[m.typeKey]||'var(--accent)';
-    const cage = getCage(m.cageId);
-    // Resolve frame: use stored frameId, or find from cage location / pending moves
-    let frame = getFrame(m.frameId);
-    if (!frame && cage && (m.typeKey === 'frame-to-rmd' || m.typeKey === 'rmd-to-frame')) {
-      if (cage.location === 'frame') {
-        frame = STATE.frames.find(f => f.cages.includes(m.cageId)) || null;
-      }
-      if (!frame) {
-        const pending = STATE.plannedMovements.find(
-          pm => !pm.completed && pm.cageId === m.cageId && pm.typeKey === 'facility-to-frame' && pm.frameId
-        );
-        if (pending) frame = getFrame(pending.frameId);
-      }
-    }
-    const resolvedRmdSlot = resolveRmdSlot(m);
-    const dir = m.typeKey==='rmd-to-frame' ? `RMD-${resolvedRmdSlot||'?'} → ${frame?frame.name:'?'}`
-              : m.typeKey==='frame-to-rmd' ? `${frame?frame.name:'?'} → RMD-${resolvedRmdSlot||'?'}`
-              : m.typeKey==='facility-to-frame' ? `Facility → ${frame?frame.name:'?'}`
-              : m.typeKey==='facility-to-rmd' ? `Facility → RMD-${m.rmdNumber!=null?m.rmdNumber+(m.rmdSide||''):'?'}`
-              : m.typeKey==='frame-return-from-client' ? `🚢 ${frame?frame.name:'?'} → Facility`
-              : m.description;
-    const _posNum = _mvGlobalPos[m.id] != null ? _mvGlobalPos[m.id] : (i+1);
-    return `<div style="display:flex;align-items:flex-start;gap:8px;padding:7px 0;border-bottom:1px solid var(--border-light)">
-      <div style="width:22px;height:22px;border-radius:50%;background:${col};color:#fff;font:700 11px var(--font-mono);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${_posNum}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font:700 12px var(--font-mono);color:var(--text-primary);cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px" onclick="openMvCageMovements('${m.cageId}')" title="Click to view/edit movements">${cage?esc(cage.name):'?'}</div>
-        <div style="font-size:11px;color:var(--text-muted);margin-top:1px">${dir}</div>
-      </div>
-      <div style="font-size:10px;color:var(--text-muted);white-space:nowrap">${m.date?fmt(m.date):''}</div>
-    </div>`;
-  }).join('');
+
+  // Build sidebar list: all movements (pending + completed), sorted by date asc then sortOrder
+  const sidebarMoves = STATE.plannedMovements
+    .slice()
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      const shiftA = a.shift === 'night' ? 1 : 0;
+      const shiftB = b.shift === 'night' ? 1 : 0;
+      if (shiftA !== shiftB) return shiftA - shiftB;
+      return (a.sortOrder ?? 999999) - (b.sortOrder ?? 999999);
+    });
+
+  // Apply same type filter as the map (pending only for filter, but show completed separately)
+  const sidebarFiltered = mvFilter === 'all'
+    ? sidebarMoves
+    : sidebarMoves.filter(m => m.typeKey === mvFilter);
+
+  let moveListHTML = '';
+  if (!sidebarFiltered.length) {
+    moveListHTML = '';
+  } else {
+    const todayISO = todayStr();
+    // Group by date
+    const sbGroups = [];
+    sidebarFiltered.forEach(m => {
+      const last = sbGroups[sbGroups.length - 1];
+      if (last && last.date === m.date) { last.moves.push(m); }
+      else { sbGroups.push({ date: m.date, moves: [m] }); }
+    });
+
+    sbGroups.forEach(group => {
+      const d = new Date(group.date + 'T12:00:00');
+      const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+      const isToday  = group.date === todayISO;
+      const isPast   = group.date < todayISO;
+      const dayDiff  = Math.ceil((new Date(group.date + 'T12:00:00') - new Date(todayISO + 'T12:00:00')) / 86400000);
+      const relLabel = isToday ? 'Today' : isPast ? `${Math.abs(dayDiff)}d ago` : `in ${dayDiff}d`;
+      const pendingCt = group.moves.filter(m => !m.completed).length;
+      const headerBg     = isToday ? '#fef9ec' : isPast ? '#f4f4f4' : '#f0f5ff';
+      const headerBorder = isToday ? '#e8c84a' : isPast ? '#ddd'    : '#c3d9f7';
+      const headerColor  = isToday ? 'var(--accent)' : isPast ? 'var(--text-muted)' : 'var(--blue)';
+
+      // Day header
+      moveListHTML += `<div style="background:${headerBg};border-top:2px solid ${headerBorder};margin:0 -2px;padding:5px 8px;display:flex;align-items:center;gap:6px;">
+        <span style="font:700 11px var(--font-mono);color:${headerColor}">${dow} ${fmt(group.date)}</span>
+        <span style="font:500 9px var(--font-mono);color:${headerColor};opacity:0.75;background:${headerBorder};padding:1px 5px;border-radius:8px">${relLabel}</span>
+        <span style="font:600 9px var(--font-mono);color:var(--text-muted);margin-left:auto">${pendingCt} pending</span>
+      </div>`;
+
+      group.moves.forEach((m, dayIdx) => {
+        const col   = MVCOLS[m.typeKey] || 'var(--accent)';
+        const cage  = getCage(m.cageId);
+        let frame   = getFrame(m.frameId);
+        if (!frame && cage && (m.typeKey === 'frame-to-rmd' || m.typeKey === 'rmd-to-frame')) {
+          if (cage.location === 'frame') {
+            frame = STATE.frames.find(f => f.cages.includes(m.cageId)) || null;
+          }
+          if (!frame) {
+            const pending = STATE.plannedMovements.find(
+              pm => !pm.completed && pm.cageId === m.cageId && pm.typeKey === 'facility-to-frame' && pm.frameId
+            );
+            if (pending) frame = getFrame(pending.frameId);
+          }
+        }
+        const resolvedRmdSlot = resolveRmdSlot(m);
+        const dir = m.typeKey==='rmd-to-frame'           ? `RMD-${resolvedRmdSlot||'?'} → ${frame?frame.name:'?'}`
+                  : m.typeKey==='frame-to-rmd'           ? `${frame?frame.name:'?'} → RMD-${resolvedRmdSlot||'?'}`
+                  : m.typeKey==='facility-to-frame'      ? `Facility → ${frame?frame.name:'?'}`
+                  : m.typeKey==='facility-to-rmd'        ? `Facility → RMD-${m.rmdNumber!=null?m.rmdNumber+(m.rmdSide||''):'?'}`
+                  : m.typeKey==='frame-return-from-client'? `🚢 ${frame?frame.name:'?'} → Facility`
+                  : m.description;
+        const doneStyle = m.completed ? 'opacity:0.5;text-decoration:line-through;text-decoration-color:var(--text-muted);' : '';
+        const shiftIcon = m.shift === 'night' ? '🌙' : '☀';
+        moveListHTML += `<div style="display:flex;align-items:flex-start;gap:7px;padding:6px 2px 6px 2px;border-bottom:1px solid var(--border-light);${doneStyle}">
+          <div style="width:20px;height:20px;border-radius:50%;background:${m.completed?'#aaa':col};color:#fff;font:700 10px var(--font-mono);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${dayIdx+1}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span style="font:700 12px var(--font-mono);color:var(--text-primary);cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;${m.completed?'text-decoration:line-through;color:var(--text-muted);':''}" onclick="openMvCageMovements('${m.cageId}')" title="Click to view/edit movements">${cage?esc(cage.name):'?'}</span>
+              <span style="font-size:10px">${shiftIcon}</span>
+              ${m.completed ? '<span style="font:600 9px var(--font-mono);color:var(--green);background:#e6f5ec;border:1px solid #b0dcc0;border-radius:8px;padding:0 5px">✓ Done</span>' : ''}
+            </div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:1px">${dir}</div>
+          </div>
+        </div>`;
+      });
+    });
+  }
 
   // Store moves globally so the draw function can access them after DOM update
   // Resolve missing frameId for frame-to-rmd movements (older data may lack it)
