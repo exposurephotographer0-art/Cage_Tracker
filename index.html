@@ -3432,6 +3432,37 @@ function exportMovementsCSV() {
 }
 
 /**
+ * Validates that a facility→frame movement date is not BEFORE the cage's
+ * "Leaves Facility" (departureDate).
+ *
+ * Returns true  → safe to proceed
+ * Returns false → user cancelled; caller should abort the save
+ *
+ * @param {string} cageId
+ * @param {string} newMoveDate   YYYY-MM-DD
+ * @param {string} typeKey       movement typeKey
+ * @returns {boolean}
+ */
+function validateMovementDateVsDepartureDate(cageId, newMoveDate, typeKey) {
+  if (typeKey !== 'facility-to-frame') return true; // only relevant for this type
+  if (!newMoveDate) return true;
+  const cage = getCage(cageId);
+  if (!cage || !cage.departureDate) return true; // no departure date set — nothing to check
+
+  if (newMoveDate < cage.departureDate) {
+    const fmt = d => { const [y,mo,dy]=d.split('-'); return `${dy}/${mo}/${y}`; };
+    const msg =
+      `Warning: the planned Facility → Frame date (${fmt(newMoveDate)}) is ` +
+      `BEFORE cage ${cage.name}'s "Leaves Facility" date (${fmt(cage.departureDate)}).\n\n` +
+      `A cage cannot move into a frame before it has left the facility.\n\n` +
+      `Click OK to save anyway (and review the departure date separately).\n` +
+      `Click Cancel to go back and correct the date.`;
+    return confirm(msg);
+  }
+  return true;
+}
+
+/**
  * Validates that a new departure date for a cage does not fall AFTER any
  * existing planned facility→frame movement for that cage.
  * If violated, warns the user and offers to push the movement date forward
@@ -5014,6 +5045,9 @@ async function addMovement() {
   const notes = document.getElementById('pf-notes').value.trim();
   if(!date) return alert('Please select a date.');
 
+  // Validate: facility→frame movement must not be before the cage's departure date
+  if (!validateMovementDateVsDepartureDate(cageId, date, type)) return;
+
   const cage = getCage(cageId);
 
   // For fix-shipping, auto-find the frame the cage is in
@@ -5867,6 +5901,10 @@ function renderSimComparePanel() {
 async function rescheduleMove(id, newDate) {
   const m = STATE.plannedMovements.find(m=>m.id===id);
   if (!m) return;
+  if (!validateMovementDateVsDepartureDate(m.cageId, newDate, m.typeKey)) {
+    render(); // revert the inline date picker
+    return;
+  }
   m.date = newDate;
   await updateMovementInAPI(m);
   render();
@@ -5981,6 +6019,9 @@ async function saveEditMove(id) {
   const notes    = document.getElementById('em-notes').value.trim();
 
   if (!date) { alert('Please select a date.'); return; }
+
+  // Validate: facility→frame movement must not be before the cage's departure date
+  if (!validateMovementDateVsDepartureDate(cageId, date, typeKey)) return;
 
   // Rebuild description using same logic as addMovement
   const cage  = getCage(cageId);
