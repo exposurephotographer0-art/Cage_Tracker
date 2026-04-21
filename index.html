@@ -435,7 +435,6 @@ tr.dragging { opacity: 0.4; }
 .rmd-mini-count.empty { color: #d0d0d0; }
 
 
-
 .planner-layout { display: grid; grid-template-columns: 1fr 340px; gap: 16px; }
 .planner-sidebar { max-height: calc(100vh - 140px); overflow-y: auto; }
 .planner-sidebar .card { padding: 12px; margin-bottom: 8px; }
@@ -1420,11 +1419,14 @@ tr.dragging { opacity: 0.4; }
 
 
 
+/* utility classes */
+.u-input-base{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box}
+.u-badge-accent{font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px}
+.u-mono-tag{font-family:var(--font-mono);background:var(--bg-elevated);padding:1px 5px;border-radius:3px}
+.u-stat-box{background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:6px 14px;text-align:center}
 </style>
 <script>
-// ═══════════════════════════════════════════════════════════════════════════════
 // DATA MODEL & CONSTANTS
-// ═══════════════════════════════════════════════════════════════════════════════
 const FRAME_COUNT = 50;
 const FRAME_WIDTHS = [1.1, 1.5, 2.3, 2.5];
 const RMD_COUNT = 12;
@@ -1552,7 +1554,7 @@ function fmt(d) { if(!d) return ''; return new Date(d+'T12:00:00').toLocaleDateS
 function fmtShort(d) { if(!d) return ''; const dt=new Date(d+'T12:00:00'); return dt.toLocaleDateString('en-GB',{weekday:'short'})+' '+dt.getDate(); }
 function esc(s) { const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
-const PRELOAD_STATE = {"cages":[{"id":"19c76b4946ei9fmfw","name":"320","height":5.35,"width":1.84,"length":8.5,"weight":18.83,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4946fw9hcxa","name":"415","height":4.9,"width":1.5,"length":6.45,"weight":6.4,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4946fcrxl9j","name":"416","height":7.0,"width":0.85,"length":4.2,"weight":5.86,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-04A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49470okyutr","name":"445","height":4.1,"width":1.35,"length":11.45,"weight":11.3,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494701p7nuh","name":"433","height":5.96,"width":1.35,"length":7.1,"weight":8.3,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-08A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49471abpxbw","name":"589","height":3.5,"width":0.35,"length":5.1,"weight":1.11,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494713v1kk5","name":"454","height":6.5,"width":0.95,"length":9.4,"weight":9.22,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-01B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49472pf9hgm","name":"591","height":3.2,"width":0.66,"length":10.2,"weight":3.08,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-05B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49472ense8a","name":"597","height":3.2,"width":0.7,"length":10.0,"weight":3.13,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-05B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49473ixap4y","name":"914","height":0,"width":0,"length":0,"weight":1.66,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49473khk1l2","name":"915","height":0,"width":0,"length":0,"weight":0.84,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49474ps17zl","name":"917","height":0,"width":0,"length":0,"weight":1.53,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49474kod0zj","name":"918","height":0,"width":0,"length":0,"weight":0.81,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49475gh3x47","name":"911","height":3.05,"width":0.7,"length":5.95,"weight":2.79,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-04B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494752xbxyr","name":"410","height":4.49,"width":1.71,"length":6.03,"weight":4.91,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-07B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49476z7wc8o","name":"910","height":3.095,"width":0.74,"length":5.95,"weight":2.89,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-06B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49476lfbc8d","name":"955","height":4.785,"width":0.36,"length":4.5,"weight":2.16,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-05A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494773mvbs6","name":"957","height":4.8,"width":0.45,"length":6.4,"weight":2.96,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-12B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49477sk6twf","name":"407","height":5.8,"width":1.0,"length":9.6,"weight":6.49,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-02A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494783i24wf","name":"956","height":4.85,"width":0.36,"length":4.3,"weight":1.7,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-05A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49479yaw0d2","name":"950","height":4.8,"width":1.7,"length":11.0,"weight":15.07,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-04B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49479jnq6p1","name":"431","height":6.3,"width":1.4,"length":11.0,"weight":19.49,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-10A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4947arldwi3","name":"406","height":4.1,"width":1.5,"length":5.9,"weight":5.04,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-01A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4947aelzyy6","name":"398","height":6.325,"width":0.38,"length":8.46,"weight":6.43,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-12A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4947bl05qd6","name":"901","height":4.6,"width":1.74,"length":10.8,"weight":19.62,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-08B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4947b5av12x","name":"368","height":3.1,"width":0.88,"length":8.3,"weight":3.51,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-06B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4947c9bxhvh","name":"919","height":4.7,"width":0.68,"length":5.95,"weight":4.58,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-12B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4947c4ubj57","name":"389","height":7.0,"width":0.38,"length":9.6,"weight":15.15,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-07A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4947dik2kvy","name":"595","height":3.2,"width":0.65,"length":6.0,"weight":1.78,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4947eomqqa2","name":"500","height":3.4,"width":0.4,"length":5.1,"weight":0.97,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-02B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4947evqyjps","name":"916","height":3.0,"width":0.75,"length":6.4,"weight":3.51,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-01A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4947f2mn8q2","name":"587","height":3.5,"width":0.36,"length":5.3,"weight":1.15,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-08B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4947fzfoumf","name":"599","height":3.5,"width":0.35,"length":6.2,"weight":1.16,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-11A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49480dsffuq","name":"961","height":4.9,"width":0.4,"length":7.0,"weight":3.45,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-11B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49480n7jj8d","name":"383","height":5.8,"width":1.06,"length":5.3,"weight":4.38,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-09B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494812ytp1g","name":"437","height":6.0,"width":1.4,"length":7.1,"weight":6.27,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-11A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49481ju2zpj","name":"951","height":4.7,"width":1.7,"length":11.0,"weight":18.07,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-02B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49482a27le4","name":"401","height":5.5,"width":0.68,"length":6.8,"weight":4.54,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-09A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4948357ve62","name":"417","height":7.0,"width":0.85,"length":4.0,"weight":5.07,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-04A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49483oc4mr3","name":"440","height":3.9,"width":1.35,"length":11.5,"weight":11.36,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-03A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49484p0s5o3","name":"962","height":4.8,"width":1.7,"length":10.0,"weight":17.93,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-06A","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49484jid8cu","name":"479","height":4.1,"width":1.4,"length":11.5,"weight":10.13,"notes":"Imported from Excel","location":"rmd","locationDetail":"RMD-03B","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49485whx2pe","name":"334","height":5.4,"width":0.84,"length":4.15,"weight":3.89,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49485kjycqu","name":"392","height":6.9,"width":1.1,"length":4.5,"weight":4.52,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494865qaq29","name":"418","height":6.0,"width":0.85,"length":4.0,"weight":7.03,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494862a4slt","name":"426","height":3.8,"width":0.95,"length":9.3,"weight":5.39,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49487k7woqz","name":"612","height":6.3,"width":0.35,"length":9.6,"weight":8.79,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49487i3dd1l","name":"639","height":6.6,"width":0.35,"length":9.6,"weight":7.77,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49488z7ody3","name":"474","height":6.9,"width":1.0,"length":7.4,"weight":6.68,"notes":"Imported from Excel","location":"frame","locationDetail":"TF-38","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494884kzx2r","name":"481","height":5.8,"width":0.95,"length":6.9,"weight":5.39,"notes":"Imported from Excel","location":"frame","locationDetail":"TF-33","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49489gzju80","name":"478","height":4.0,"width":1.38,"length":11.5,"weight":9.99,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4948aoqdkmv","name":"281","height":4.9,"width":1.85,"length":10.0,"weight":15.16,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4948aisoyfj","name":"424","height":3.1,"width":0.98,"length":10.3,"weight":4.5,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4948bw6vxji","name":"429","height":3.1,"width":0.95,"length":4.4,"weight":2.32,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4948b8e5aev","name":"439","height":5.9,"width":1.35,"length":5.4,"weight":12.8,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4948crio165","name":"470","height":3.7,"width":0.96,"length":5.7,"weight":3.27,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4948cfvk782","name":"604","height":6.6,"width":0.35,"length":9.6,"weight":9.06,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4948d2f8htb","name":"613","height":5.0,"width":0.35,"length":9.6,"weight":7.73,"notes":"Imported from Excel","location":"frame","locationDetail":"TF-43","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4948e2qul4b","name":"619","height":6.6,"width":0.35,"length":9.3,"weight":9.53,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4948eyaq7is","name":"633","height":6.3,"width":0.35,"length":9.6,"weight":8.92,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4948f3tv8f2","name":"921","height":0,"width":0,"length":0,"weight":2.88,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4948fwj4iyx","name":"972","height":0,"width":0,"length":0,"weight":2.93,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49490tkql55","name":"483","height":0,"width":0,"length":0,"weight":12.8,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494900hubx3","name":"432","height":3.7,"width":0.95,"length":5.9,"weight":3.6,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49491tu82ia","name":"624","height":6.6,"width":0.35,"length":9.6,"weight":9.06,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49491jw6k7a","name":"632","height":4.96,"width":0.35,"length":9.6,"weight":7.29,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49492le77ab","name":"920","height":0,"width":0,"length":0,"weight":3.36,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494933gj2bt","name":"472","height":0,"width":0,"length":0,"weight":3.42,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49493u2uljp","name":"966","height":0,"width":0,"length":0,"weight":19.02,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49494wfb8xm","name":"968","height":0,"width":0,"length":0,"weight":17.18,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494940l7ki8","name":"971","height":0,"width":0,"length":0,"weight":7.96,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494955ta20o","name":"979","height":0,"width":0,"length":0,"weight":1.12,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49495tj6upf","name":"977","height":0,"width":0,"length":0,"weight":6.89,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49496j8iph1","name":"438","height":3.7,"width":0.95,"length":10.3,"weight":6.11,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49496ff8r1r","name":"441","height":3.7,"width":0.95,"length":4.4,"weight":2.86,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49497lx0gyw","name":"471","height":3.6,"width":0,"length":7.2,"weight":3.83,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49497qgj965","name":"908","height":0,"width":0,"length":0,"weight":2.57,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494982q36ba","name":"909","height":0,"width":0,"length":0,"weight":2.82,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49499f6p592","name":"964","height":0,"width":0,"length":0,"weight":18.22,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49499vhop2j","name":"965","height":0,"width":0,"length":0,"weight":19.31,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4949abbfi6n","name":"976","height":0,"width":0,"length":0,"weight":3.77,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4949afzvfps","name":"954","height":0,"width":0,"length":0,"weight":4.35,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4949b9qrzcd","name":"1800","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4949ba2hbcd","name":"1801","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4949c1yd4as","name":"967","height":0,"width":0,"length":0,"weight":19.23,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4949c58tixd","name":"969","height":0,"width":0,"length":0,"weight":19.64,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4949d1gl6zj","name":"970","height":0,"width":0,"length":0,"weight":19.34,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4949e0iytbz","name":"975","height":0,"width":0,"length":0,"weight":4.78,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4949efqgn1k","name":"978","height":0,"width":0,"length":0,"weight":6.46,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4949f33grph","name":"974","height":0,"width":0,"length":0,"weight":3.04,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4949fj3kmke","name":"405","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a01q98sv","name":"482","height":0,"width":0,"length":0,"weight":10.03,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a091ub3y","name":"1804","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a1dhifd6","name":"1802","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a119oo4j","name":"1808","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a2ts3f33","name":"1809","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a27wgpax","name":"1803","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a3tn0v98","name":"1806","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a3uljaj0","name":"1807","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a4aos93w","name":"446","height":0,"width":0,"length":0,"weight":10.69,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a4rlpz62","name":"1810","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a5p4fqvv","name":"1100","height":0,"width":0,"length":0,"weight":18.83,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a67j3v9h","name":"1812","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a6gwj5c3","name":"1101","height":0,"width":0,"length":0,"weight":16.43,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a7nbxsae","name":"1811","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a7r0rwna","name":"1813","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a84lac7a","name":"973","height":0,"width":0,"length":0,"weight":2.12,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a8wo4c3h","name":"1814","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494a9577v1j","name":"1600","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494aalz4u2p","name":"1602","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494aa4m23y4","name":"1601","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494abaw0rmg","name":"1603","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494ab8j9dao","name":"1815","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494ac4bxlop","name":"1821","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494adkwcm4a","name":"1816","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494adtm5pbd","name":"1818","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494aeph9o8u","name":"1700","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494aejj0dcq","name":"1701","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494afkjssrj","name":"1702","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b04m9aes","name":"1819","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b06x3hq3","name":"1823","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b1buhh8x","name":"1822","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b1rv2qek","name":"1817","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b2wpntgu","name":"1820","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b22a369h","name":"1824","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b3jva3uo","name":"1703","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b4z8cjep","name":"1300","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b4ze4q6m","name":"1301","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b5yp25zw","name":"1302","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b54acjj4","name":"1304","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b6f2p49e","name":"1104","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b6bl3375","name":"1825","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b77fjdme","name":"1826","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b7wsksbf","name":"1827","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b8p0bxbv","name":"1828","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b9wev51q","name":"1904","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494b9o6e4e6","name":"1905","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494ba3yjuhd","name":"1704","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494bap9vxfo","name":"1705","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494bbd4pb0i","name":"1916","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494bblngs34","name":"1103","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494bc2nt4n6","name":"1106","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494bcz787a6","name":"1105","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494bdnbbsea","name":"1108","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494bdd74b6p","name":"1829","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494be3pyccl","name":"1830","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494bflkilvt","name":"1831","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494bf8k0aos","name":"1107","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494c0yg84cm","name":"1400","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494c14kt1si","name":"1832","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494c14vx49n","name":"1833","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494c296tht0","name":"1109","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494c2yu3juy","name":"1915","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494c3ef6o76","name":"1917","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494c371dcyy","name":"1911","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494c4zrh8ch","name":"1708","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494c54arkka","name":"1709","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494c598z4zo","name":"1710","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494c6d2qytf","name":"1401","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494c70qe2iw","name":"1607","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494c7vgog8m","name":"1608","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494c8en79jx","name":"1303","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494c9fi8ytt","name":"1706","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494caz6xmda","name":"1707","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494ca11nqg2","name":"1613","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494cbl1xyon","name":"1834","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494cbbbveks","name":"1604","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494cchyeg9c","name":"1605","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494ccmtlo11","name":"1835","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494cdgnwfbp","name":"1609","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494cdecbk3x","name":"1610","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494cesobnhq","name":"1919","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494cfkbikch","name":"1900","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494cfppy1g9","name":"1918","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494d0y7wj2h","name":"1402","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494d0xx64pa","name":"1404","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494d1olj72c","name":"1611","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494d140lwix","name":"1606","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494d21fw310","name":"1711","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494d2hu9ua1","name":"1902","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494d3ebeaqn","name":"1903","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494d3dyp09l","name":"1403","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494d432gyaj","name":"1901","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494d4jqtyoc","name":"1908","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494d5tqpzzl","name":"1909","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494d685wx1y","name":"1612","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494d86pwwm8","name":"1906","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494d9pd4rfi","name":"1907","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494d9uvpu1u","name":"1912","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494dau7us61","name":"1910","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494darjj9ft","name":"1913","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494db5rgrq3","name":"1200","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494db7emy8m","name":"1201","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494e0o27pk3","name":"655","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494e1zgrc2b","name":"664","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494e1hcvxks","name":"665","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494e2v5tukn","name":"670","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494e29usfl8","name":"675","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494e3wu9f6h","name":"684","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494e3gsz1zf","name":"1914","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494e6q31ol1","name":"651","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494e607luas","name":"652","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494e7c50kjx","name":"656","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494e7y0wrxt","name":"685","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494e8g44g45","name":"690","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494e85wuuaa","name":"1405","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494e9xl43xx","name":"1305","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494ebvwzdxp","name":"653","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494eckzi2oo","name":"657","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494ec0m4g2l","name":"658","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494ed80nro6","name":"659","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494edaqu3kh","name":"660","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494ee9ckbu0","name":"666","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494ee50c6uy","name":"1406","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494efj1lfqx","name":"1202","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f0q8jnub","name":"1203","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f05c0nvu","name":"661","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f1onvovs","name":"667","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f1pua1wq","name":"668","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f2op4gi7","name":"671","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f2p9p5wy","name":"676","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f3knn1ux","name":"678","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f32ueujk","name":"1408","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f4sxixxv","name":"1409","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f4nf1gny","name":"1204","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f56pxiqp","name":"1205","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f5gcrx00","name":"672","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f6unab1z","name":"673","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f7r0azpw","name":"680","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f7mvhofl","name":"1410","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f8073dtq","name":"1411","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f8c4rzf1","name":"1306","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f99a9p0y","name":"1307","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494f9hbxhh0","name":"1308","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494fa9y74ee","name":"1309","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494fbmjab6f","name":"677","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494fby5bgbm","name":"679","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494fcy5kq4z","name":"681","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494fd5wox9o","name":"686","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494fdiv42kq","name":"687","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494fe4m4l8n","name":"688","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b494ff8ve0nu","name":"1310","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49500a3vnvj","name":"1206","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b495008o0ye2","name":"1413","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49501cnf9wo","name":"1311","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49504ur679u","name":"1407","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4950659sfo3","name":"1412","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b495089mn8a0","name":"1314","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49508opcgig","name":"1207","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49509g6yeju","name":"1208","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4950bdsa47y","name":"1414","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4950dhun7er","name":"1312","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4950e5olkop","name":"1313","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4950e7imvbd","name":"1209","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4950f3kd6zl","name":"1210","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49516rs8qzt","name":"654","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b495179zvfzu","name":"662","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4951bkable5","name":"663","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4951bgucnri","name":"1211","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4951c3goyxx","name":"1212","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4951cv2n33x","name":"1213","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b495217hvmxa","name":"669","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4952134i15p","name":"674","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49522snygbh","name":"682","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49522q6bwg7","name":"683","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49523fw1c85","name":"689","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b495234jws3d","name":"1214","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49524868p96","name":"1215","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b495529u1m8y","name":"1805","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4958ct5xpsr","name":"1102","height":0,"width":0,"length":0,"weight":17.16,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4958d7zcsj3","name":"=COUNT(B4:B537)","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b4958fe9trb7","name":"Production Number","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49607cea4fv","name":"=COUNT(B542:B765)","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49609smpho4","name":"Production Number","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"},{"id":"19c76b49685pzi58f","name":"=COUNT(B770:B999)","height":0,"width":0,"length":0,"weight":0,"notes":"Imported from Excel","location":"facility","locationDetail":"","createdAt":"2026-02-19T12:00:00.000Z"}],"frames":[{"id":"19c76b49685vf2t3w","name":"TF-1","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685i3m9nw","name":"TF-2","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b4968547tyoy","name":"TF-3","width":2.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685iqw9r5","name":"TF-4","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b496854uslgg","name":"TF-5","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685gdcbpt","name":"TF-6","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685p8fqo4","name":"TF-7","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b496854b7xy5","name":"TF-8","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685r0rzvz","name":"TF-9","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685gj8x19","name":"TF-10","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685eln1gm","name":"TF-11","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685bfpfvl","name":"TF-12","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685asrzm1","name":"TF-13","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685mvmrb3","name":"TF-14","width":2.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b496858z4v2o","name":"TF-15","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b496858z0il7","name":"TF-16","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b496853yq149","name":"TF-17","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685e5wixe","name":"TF-18","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685j1uiq7","name":"TF-19","width":2.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685fudpmy","name":"TF-20","width":2.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685dpm1bb","name":"TF-21","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b496852qrymi","name":"TF-22","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685n2cyay","name":"TF-23","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685ojnfts","name":"TF-24","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685spnqe9","name":"TF-25","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685i51qbb","name":"TF-26","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685wgqfye","name":"TF-27","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b496855dwzkw","name":"TF-28","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685fj8w0j","name":"TF-29","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685s3s3sh","name":"TF-30","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b496857x06z9","name":"TF-31","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685xdd72e","name":"TF-32","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685yvwh4j","name":"TF-33","width":1.1,"location":"facility","cages":["19c76b494884kzx2r"],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685tlbfsu","name":"TF-34","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685skx3ia","name":"TF-35","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685hd8bqb","name":"TF-36","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685vm82n4","name":"TF-37","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685ly11ks","name":"TF-38","width":2.5,"location":"facility","cages":["19c76b49488z7ody3"],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b4968503mtlz","name":"TF-39","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685mcw8yk","name":"TF-40","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685265vko","name":"TF-41","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685p0e9xc","name":"TF-42","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685ycmvy4","name":"TF-43","width":1.1,"location":"facility","cages":["19c76b4948d2f8htb"],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b496855ssvl0","name":"TF-44","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685gormow","name":"TF-45","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685ixtgt1","name":"TF-46","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685rrayhh","name":"TF-47","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685iq13hq","name":"TF-48","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685ssy2th","name":"TF-49","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b4968585hv1k","name":"TF-50","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false}],"rmdSlots":[{"number":1,"A":{"cage1":"19c76b4947arldwi3","cage2":"19c76b4947evqyjps","overridden":false},"B":{"cage1":"19c76b494713v1kk5","cage2":null,"overridden":false}},{"number":2,"A":{"cage1":"19c76b49477sk6twf","cage2":null,"overridden":false},"B":{"cage1":"19c76b4947eomqqa2","cage2":"19c76b49481ju2zpj","overridden":false}},{"number":3,"A":{"cage1":"19c76b49483oc4mr3","cage2":null,"overridden":false},"B":{"cage1":"19c76b49484jid8cu","cage2":null,"overridden":false}},{"number":4,"A":{"cage1":"19c76b4946fcrxl9j","cage2":"19c76b4948357ve62","overridden":false},"B":{"cage1":"19c76b49475gh3x47","cage2":"19c76b49479yaw0d2","overridden":false}},{"number":5,"A":{"cage1":"19c76b49476lfbc8d","cage2":"19c76b494783i24wf","overridden":false},"B":{"cage1":"19c76b49472pf9hgm","cage2":"19c76b49472ense8a","overridden":false}},{"number":6,"A":{"cage1":"19c76b49484p0s5o3","cage2":null,"overridden":false},"B":{"cage1":"19c76b49476z7wc8o","cage2":"19c76b4947b5av12x","overridden":false}},{"number":7,"A":{"cage1":"19c76b4947c4ubj57","cage2":null,"overridden":false},"B":{"cage1":"19c76b494752xbxyr","cage2":null,"overridden":false}},{"number":8,"A":{"cage1":"19c76b494701p7nuh","cage2":null,"overridden":false},"B":{"cage1":"19c76b4947bl05qd6","cage2":"19c76b4947f2mn8q2","overridden":false}},{"number":9,"A":{"cage1":"19c76b49482a27le4","cage2":null,"overridden":false},"B":{"cage1":"19c76b49480n7jj8d","cage2":null,"overridden":false}},{"number":10,"A":{"cage1":"19c76b49479jnq6p1","cage2":null,"overridden":false},"B":{"cage1":null,"cage2":null,"overridden":false}},{"number":11,"A":{"cage1":"19c76b4947fzfoumf","cage2":"19c76b494812ytp1g","overridden":false},"B":{"cage1":"19c76b49480dsffuq","cage2":null,"overridden":false}},{"number":12,"A":{"cage1":"19c76b4947aelzyy6","cage2":null,"overridden":false},"B":{"cage1":"19c76b494773mvbs6","cage2":"19c76b4947c9bxhvh","overridden":false}}],"plannedMovements":[],"shipments":[],"settings":{"movementsPerDay":4}};
+const PRELOAD_STATE = {"cages":[{"id":"19c76b4946ei9fmfw","name":"320","height":5.35,"width":1.84,"length":8.5,"weight":18.83,"location":"facility"},{"id":"19c76b4946fw9hcxa","name":"415","height":4.9,"width":1.5,"length":6.45,"weight":6.4,"location":"facility"},{"id":"19c76b4946fcrxl9j","name":"416","height":7.0,"width":0.85,"length":4.2,"weight":5.86,"location":"rmd","locationDetail":"RMD-04A"},{"id":"19c76b49470okyutr","name":"445","height":4.1,"width":1.35,"length":11.45,"weight":11.3,"location":"facility"},{"id":"19c76b494701p7nuh","name":"433","height":5.96,"width":1.35,"length":7.1,"weight":8.3,"location":"rmd","locationDetail":"RMD-08A"},{"id":"19c76b49471abpxbw","name":"589","height":3.5,"width":0.35,"length":5.1,"weight":1.11,"location":"facility"},{"id":"19c76b494713v1kk5","name":"454","height":6.5,"width":0.95,"length":9.4,"weight":9.22,"location":"rmd","locationDetail":"RMD-01B"},{"id":"19c76b49472pf9hgm","name":"591","height":3.2,"width":0.66,"length":10.2,"weight":3.08,"location":"rmd","locationDetail":"RMD-05B"},{"id":"19c76b49472ense8a","name":"597","height":3.2,"width":0.7,"length":10.0,"weight":3.13,"location":"rmd","locationDetail":"RMD-05B"},{"id":"19c76b49473ixap4y","name":"914","height":0,"width":0,"length":0,"weight":1.66,"location":"facility"},{"id":"19c76b49473khk1l2","name":"915","height":0,"width":0,"length":0,"weight":0.84,"location":"facility"},{"id":"19c76b49474ps17zl","name":"917","height":0,"width":0,"length":0,"weight":1.53,"location":"facility"},{"id":"19c76b49474kod0zj","name":"918","height":0,"width":0,"length":0,"weight":0.81,"location":"facility"},{"id":"19c76b49475gh3x47","name":"911","height":3.05,"width":0.7,"length":5.95,"weight":2.79,"location":"rmd","locationDetail":"RMD-04B"},{"id":"19c76b494752xbxyr","name":"410","height":4.49,"width":1.71,"length":6.03,"weight":4.91,"location":"rmd","locationDetail":"RMD-07B"},{"id":"19c76b49476z7wc8o","name":"910","height":3.095,"width":0.74,"length":5.95,"weight":2.89,"location":"rmd","locationDetail":"RMD-06B"},{"id":"19c76b49476lfbc8d","name":"955","height":4.785,"width":0.36,"length":4.5,"weight":2.16,"location":"rmd","locationDetail":"RMD-05A"},{"id":"19c76b494773mvbs6","name":"957","height":4.8,"width":0.45,"length":6.4,"weight":2.96,"location":"rmd","locationDetail":"RMD-12B"},{"id":"19c76b49477sk6twf","name":"407","height":5.8,"width":1.0,"length":9.6,"weight":6.49,"location":"rmd","locationDetail":"RMD-02A"},{"id":"19c76b494783i24wf","name":"956","height":4.85,"width":0.36,"length":4.3,"weight":1.7,"location":"rmd","locationDetail":"RMD-05A"},{"id":"19c76b49479yaw0d2","name":"950","height":4.8,"width":1.7,"length":11.0,"weight":15.07,"location":"rmd","locationDetail":"RMD-04B"},{"id":"19c76b49479jnq6p1","name":"431","height":6.3,"width":1.4,"length":11.0,"weight":19.49,"location":"rmd","locationDetail":"RMD-10A"},{"id":"19c76b4947arldwi3","name":"406","height":4.1,"width":1.5,"length":5.9,"weight":5.04,"location":"rmd","locationDetail":"RMD-01A"},{"id":"19c76b4947aelzyy6","name":"398","height":6.325,"width":0.38,"length":8.46,"weight":6.43,"location":"rmd","locationDetail":"RMD-12A"},{"id":"19c76b4947bl05qd6","name":"901","height":4.6,"width":1.74,"length":10.8,"weight":19.62,"location":"rmd","locationDetail":"RMD-08B"},{"id":"19c76b4947b5av12x","name":"368","height":3.1,"width":0.88,"length":8.3,"weight":3.51,"location":"rmd","locationDetail":"RMD-06B"},{"id":"19c76b4947c9bxhvh","name":"919","height":4.7,"width":0.68,"length":5.95,"weight":4.58,"location":"rmd","locationDetail":"RMD-12B"},{"id":"19c76b4947c4ubj57","name":"389","height":7.0,"width":0.38,"length":9.6,"weight":15.15,"location":"rmd","locationDetail":"RMD-07A"},{"id":"19c76b4947dik2kvy","name":"595","height":3.2,"width":0.65,"length":6.0,"weight":1.78,"location":"facility"},{"id":"19c76b4947eomqqa2","name":"500","height":3.4,"width":0.4,"length":5.1,"weight":0.97,"location":"rmd","locationDetail":"RMD-02B"},{"id":"19c76b4947evqyjps","name":"916","height":3.0,"width":0.75,"length":6.4,"weight":3.51,"location":"rmd","locationDetail":"RMD-01A"},{"id":"19c76b4947f2mn8q2","name":"587","height":3.5,"width":0.36,"length":5.3,"weight":1.15,"location":"rmd","locationDetail":"RMD-08B"},{"id":"19c76b4947fzfoumf","name":"599","height":3.5,"width":0.35,"length":6.2,"weight":1.16,"location":"rmd","locationDetail":"RMD-11A"},{"id":"19c76b49480dsffuq","name":"961","height":4.9,"width":0.4,"length":7.0,"weight":3.45,"location":"rmd","locationDetail":"RMD-11B"},{"id":"19c76b49480n7jj8d","name":"383","height":5.8,"width":1.06,"length":5.3,"weight":4.38,"location":"rmd","locationDetail":"RMD-09B"},{"id":"19c76b494812ytp1g","name":"437","height":6.0,"width":1.4,"length":7.1,"weight":6.27,"location":"rmd","locationDetail":"RMD-11A"},{"id":"19c76b49481ju2zpj","name":"951","height":4.7,"width":1.7,"length":11.0,"weight":18.07,"location":"rmd","locationDetail":"RMD-02B"},{"id":"19c76b49482a27le4","name":"401","height":5.5,"width":0.68,"length":6.8,"weight":4.54,"location":"rmd","locationDetail":"RMD-09A"},{"id":"19c76b4948357ve62","name":"417","height":7.0,"width":0.85,"length":4.0,"weight":5.07,"location":"rmd","locationDetail":"RMD-04A"},{"id":"19c76b49483oc4mr3","name":"440","height":3.9,"width":1.35,"length":11.5,"weight":11.36,"location":"rmd","locationDetail":"RMD-03A"},{"id":"19c76b49484p0s5o3","name":"962","height":4.8,"width":1.7,"length":10.0,"weight":17.93,"location":"rmd","locationDetail":"RMD-06A"},{"id":"19c76b49484jid8cu","name":"479","height":4.1,"width":1.4,"length":11.5,"weight":10.13,"location":"rmd","locationDetail":"RMD-03B"},{"id":"19c76b49485whx2pe","name":"334","height":5.4,"width":0.84,"length":4.15,"weight":3.89,"location":"facility"},{"id":"19c76b49485kjycqu","name":"392","height":6.9,"width":1.1,"length":4.5,"weight":4.52,"location":"facility"},{"id":"19c76b494865qaq29","name":"418","height":6.0,"width":0.85,"length":4.0,"weight":7.03,"location":"facility"},{"id":"19c76b494862a4slt","name":"426","height":3.8,"width":0.95,"length":9.3,"weight":5.39,"location":"facility"},{"id":"19c76b49487k7woqz","name":"612","height":6.3,"width":0.35,"length":9.6,"weight":8.79,"location":"facility"},{"id":"19c76b49487i3dd1l","name":"639","height":6.6,"width":0.35,"length":9.6,"weight":7.77,"location":"facility"},{"id":"19c76b49488z7ody3","name":"474","height":6.9,"width":1.0,"length":7.4,"weight":6.68,"location":"frame","locationDetail":"TF-38"},{"id":"19c76b494884kzx2r","name":"481","height":5.8,"width":0.95,"length":6.9,"weight":5.39,"location":"frame","locationDetail":"TF-33"},{"id":"19c76b49489gzju80","name":"478","height":4.0,"width":1.38,"length":11.5,"weight":9.99,"location":"facility"},{"id":"19c76b4948aoqdkmv","name":"281","height":4.9,"width":1.85,"length":10.0,"weight":15.16,"location":"facility"},{"id":"19c76b4948aisoyfj","name":"424","height":3.1,"width":0.98,"length":10.3,"weight":4.5,"location":"facility"},{"id":"19c76b4948bw6vxji","name":"429","height":3.1,"width":0.95,"length":4.4,"weight":2.32,"location":"facility"},{"id":"19c76b4948b8e5aev","name":"439","height":5.9,"width":1.35,"length":5.4,"weight":12.8,"location":"facility"},{"id":"19c76b4948crio165","name":"470","height":3.7,"width":0.96,"length":5.7,"weight":3.27,"location":"facility"},{"id":"19c76b4948cfvk782","name":"604","height":6.6,"width":0.35,"length":9.6,"weight":9.06,"location":"facility"},{"id":"19c76b4948d2f8htb","name":"613","height":5.0,"width":0.35,"length":9.6,"weight":7.73,"location":"frame","locationDetail":"TF-43"},{"id":"19c76b4948e2qul4b","name":"619","height":6.6,"width":0.35,"length":9.3,"weight":9.53,"location":"facility"},{"id":"19c76b4948eyaq7is","name":"633","height":6.3,"width":0.35,"length":9.6,"weight":8.92,"location":"facility"},{"id":"19c76b4948f3tv8f2","name":"921","height":0,"width":0,"length":0,"weight":2.88,"location":"facility"},{"id":"19c76b4948fwj4iyx","name":"972","height":0,"width":0,"length":0,"weight":2.93,"location":"facility"},{"id":"19c76b49490tkql55","name":"483","height":0,"width":0,"length":0,"weight":12.8,"location":"facility"},{"id":"19c76b494900hubx3","name":"432","height":3.7,"width":0.95,"length":5.9,"weight":3.6,"location":"facility"},{"id":"19c76b49491tu82ia","name":"624","height":6.6,"width":0.35,"length":9.6,"weight":9.06,"location":"facility"},{"id":"19c76b49491jw6k7a","name":"632","height":4.96,"width":0.35,"length":9.6,"weight":7.29,"location":"facility"},{"id":"19c76b49492le77ab","name":"920","height":0,"width":0,"length":0,"weight":3.36,"location":"facility"},{"id":"19c76b494933gj2bt","name":"472","height":0,"width":0,"length":0,"weight":3.42,"location":"facility"},{"id":"19c76b49493u2uljp","name":"966","height":0,"width":0,"length":0,"weight":19.02,"location":"facility"},{"id":"19c76b49494wfb8xm","name":"968","height":0,"width":0,"length":0,"weight":17.18,"location":"facility"},{"id":"19c76b494940l7ki8","name":"971","height":0,"width":0,"length":0,"weight":7.96,"location":"facility"},{"id":"19c76b494955ta20o","name":"979","height":0,"width":0,"length":0,"weight":1.12,"location":"facility"},{"id":"19c76b49495tj6upf","name":"977","height":0,"width":0,"length":0,"weight":6.89,"location":"facility"},{"id":"19c76b49496j8iph1","name":"438","height":3.7,"width":0.95,"length":10.3,"weight":6.11,"location":"facility"},{"id":"19c76b49496ff8r1r","name":"441","height":3.7,"width":0.95,"length":4.4,"weight":2.86,"location":"facility"},{"id":"19c76b49497lx0gyw","name":"471","height":3.6,"width":0,"length":7.2,"weight":3.83,"location":"facility"},{"id":"19c76b49497qgj965","name":"908","height":0,"width":0,"length":0,"weight":2.57,"location":"facility"},{"id":"19c76b494982q36ba","name":"909","height":0,"width":0,"length":0,"weight":2.82,"location":"facility"},{"id":"19c76b49499f6p592","name":"964","height":0,"width":0,"length":0,"weight":18.22,"location":"facility"},{"id":"19c76b49499vhop2j","name":"965","height":0,"width":0,"length":0,"weight":19.31,"location":"facility"},{"id":"19c76b4949abbfi6n","name":"976","height":0,"width":0,"length":0,"weight":3.77,"location":"facility"},{"id":"19c76b4949afzvfps","name":"954","height":0,"width":0,"length":0,"weight":4.35,"location":"facility"},{"id":"19c76b4949b9qrzcd","name":"1800","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b4949ba2hbcd","name":"1801","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b4949c1yd4as","name":"967","height":0,"width":0,"length":0,"weight":19.23,"location":"facility"},{"id":"19c76b4949c58tixd","name":"969","height":0,"width":0,"length":0,"weight":19.64,"location":"facility"},{"id":"19c76b4949d1gl6zj","name":"970","height":0,"width":0,"length":0,"weight":19.34,"location":"facility"},{"id":"19c76b4949e0iytbz","name":"975","height":0,"width":0,"length":0,"weight":4.78,"location":"facility"},{"id":"19c76b4949efqgn1k","name":"978","height":0,"width":0,"length":0,"weight":6.46,"location":"facility"},{"id":"19c76b4949f33grph","name":"974","height":0,"width":0,"length":0,"weight":3.04,"location":"facility"},{"id":"19c76b4949fj3kmke","name":"405","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494a01q98sv","name":"482","height":0,"width":0,"length":0,"weight":10.03,"location":"facility"},{"id":"19c76b494a091ub3y","name":"1804","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494a1dhifd6","name":"1802","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494a119oo4j","name":"1808","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494a2ts3f33","name":"1809","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494a27wgpax","name":"1803","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494a3tn0v98","name":"1806","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494a3uljaj0","name":"1807","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494a4aos93w","name":"446","height":0,"width":0,"length":0,"weight":10.69,"location":"facility"},{"id":"19c76b494a4rlpz62","name":"1810","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494a5p4fqvv","name":"1100","height":0,"width":0,"length":0,"weight":18.83,"location":"facility"},{"id":"19c76b494a67j3v9h","name":"1812","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494a6gwj5c3","name":"1101","height":0,"width":0,"length":0,"weight":16.43,"location":"facility"},{"id":"19c76b494a7nbxsae","name":"1811","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494a7r0rwna","name":"1813","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494a84lac7a","name":"973","height":0,"width":0,"length":0,"weight":2.12,"location":"facility"},{"id":"19c76b494a8wo4c3h","name":"1814","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494a9577v1j","name":"1600","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494aalz4u2p","name":"1602","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494aa4m23y4","name":"1601","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494abaw0rmg","name":"1603","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494ab8j9dao","name":"1815","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494ac4bxlop","name":"1821","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494adkwcm4a","name":"1816","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494adtm5pbd","name":"1818","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494aeph9o8u","name":"1700","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494aejj0dcq","name":"1701","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494afkjssrj","name":"1702","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b04m9aes","name":"1819","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b06x3hq3","name":"1823","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b1buhh8x","name":"1822","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b1rv2qek","name":"1817","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b2wpntgu","name":"1820","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b22a369h","name":"1824","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b3jva3uo","name":"1703","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b4z8cjep","name":"1300","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b4ze4q6m","name":"1301","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b5yp25zw","name":"1302","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b54acjj4","name":"1304","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b6f2p49e","name":"1104","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b6bl3375","name":"1825","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b77fjdme","name":"1826","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b7wsksbf","name":"1827","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b8p0bxbv","name":"1828","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b9wev51q","name":"1904","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494b9o6e4e6","name":"1905","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494ba3yjuhd","name":"1704","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494bap9vxfo","name":"1705","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494bbd4pb0i","name":"1916","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494bblngs34","name":"1103","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494bc2nt4n6","name":"1106","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494bcz787a6","name":"1105","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494bdnbbsea","name":"1108","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494bdd74b6p","name":"1829","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494be3pyccl","name":"1830","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494bflkilvt","name":"1831","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494bf8k0aos","name":"1107","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494c0yg84cm","name":"1400","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494c14kt1si","name":"1832","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494c14vx49n","name":"1833","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494c296tht0","name":"1109","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494c2yu3juy","name":"1915","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494c3ef6o76","name":"1917","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494c371dcyy","name":"1911","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494c4zrh8ch","name":"1708","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494c54arkka","name":"1709","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494c598z4zo","name":"1710","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494c6d2qytf","name":"1401","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494c70qe2iw","name":"1607","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494c7vgog8m","name":"1608","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494c8en79jx","name":"1303","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494c9fi8ytt","name":"1706","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494caz6xmda","name":"1707","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494ca11nqg2","name":"1613","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494cbl1xyon","name":"1834","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494cbbbveks","name":"1604","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494cchyeg9c","name":"1605","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494ccmtlo11","name":"1835","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494cdgnwfbp","name":"1609","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494cdecbk3x","name":"1610","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494cesobnhq","name":"1919","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494cfkbikch","name":"1900","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494cfppy1g9","name":"1918","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494d0y7wj2h","name":"1402","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494d0xx64pa","name":"1404","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494d1olj72c","name":"1611","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494d140lwix","name":"1606","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494d21fw310","name":"1711","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494d2hu9ua1","name":"1902","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494d3ebeaqn","name":"1903","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494d3dyp09l","name":"1403","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494d432gyaj","name":"1901","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494d4jqtyoc","name":"1908","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494d5tqpzzl","name":"1909","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494d685wx1y","name":"1612","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494d86pwwm8","name":"1906","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494d9pd4rfi","name":"1907","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494d9uvpu1u","name":"1912","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494dau7us61","name":"1910","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494darjj9ft","name":"1913","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494db5rgrq3","name":"1200","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494db7emy8m","name":"1201","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494e0o27pk3","name":"655","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494e1zgrc2b","name":"664","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494e1hcvxks","name":"665","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494e2v5tukn","name":"670","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494e29usfl8","name":"675","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494e3wu9f6h","name":"684","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494e3gsz1zf","name":"1914","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494e6q31ol1","name":"651","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494e607luas","name":"652","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494e7c50kjx","name":"656","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494e7y0wrxt","name":"685","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494e8g44g45","name":"690","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494e85wuuaa","name":"1405","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494e9xl43xx","name":"1305","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494ebvwzdxp","name":"653","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494eckzi2oo","name":"657","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494ec0m4g2l","name":"658","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494ed80nro6","name":"659","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494edaqu3kh","name":"660","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494ee9ckbu0","name":"666","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494ee50c6uy","name":"1406","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494efj1lfqx","name":"1202","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f0q8jnub","name":"1203","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f05c0nvu","name":"661","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f1onvovs","name":"667","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f1pua1wq","name":"668","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f2op4gi7","name":"671","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f2p9p5wy","name":"676","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f3knn1ux","name":"678","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f32ueujk","name":"1408","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f4sxixxv","name":"1409","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f4nf1gny","name":"1204","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f56pxiqp","name":"1205","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f5gcrx00","name":"672","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f6unab1z","name":"673","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f7r0azpw","name":"680","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f7mvhofl","name":"1410","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f8073dtq","name":"1411","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f8c4rzf1","name":"1306","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f99a9p0y","name":"1307","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494f9hbxhh0","name":"1308","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494fa9y74ee","name":"1309","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494fbmjab6f","name":"677","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494fby5bgbm","name":"679","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494fcy5kq4z","name":"681","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494fd5wox9o","name":"686","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494fdiv42kq","name":"687","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494fe4m4l8n","name":"688","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b494ff8ve0nu","name":"1310","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b49500a3vnvj","name":"1206","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b495008o0ye2","name":"1413","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b49501cnf9wo","name":"1311","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b49504ur679u","name":"1407","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b4950659sfo3","name":"1412","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b495089mn8a0","name":"1314","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b49508opcgig","name":"1207","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b49509g6yeju","name":"1208","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b4950bdsa47y","name":"1414","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b4950dhun7er","name":"1312","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b4950e5olkop","name":"1313","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b4950e7imvbd","name":"1209","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b4950f3kd6zl","name":"1210","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b49516rs8qzt","name":"654","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b495179zvfzu","name":"662","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b4951bkable5","name":"663","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b4951bgucnri","name":"1211","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b4951c3goyxx","name":"1212","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b4951cv2n33x","name":"1213","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b495217hvmxa","name":"669","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b4952134i15p","name":"674","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b49522snygbh","name":"682","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b49522q6bwg7","name":"683","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b49523fw1c85","name":"689","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b495234jws3d","name":"1214","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b49524868p96","name":"1215","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b495529u1m8y","name":"1805","height":0,"width":0,"length":0,"weight":0,"location":"facility"},{"id":"19c76b4958ct5xpsr","name":"1102","height":0,"width":0,"length":0,"weight":17.16,"location":"facility"}],"frames":[{"id":"19c76b49685vf2t3w","name":"TF-1","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685i3m9nw","name":"TF-2","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b4968547tyoy","name":"TF-3","width":2.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685iqw9r5","name":"TF-4","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b496854uslgg","name":"TF-5","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685gdcbpt","name":"TF-6","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685p8fqo4","name":"TF-7","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b496854b7xy5","name":"TF-8","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685r0rzvz","name":"TF-9","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685gj8x19","name":"TF-10","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685eln1gm","name":"TF-11","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685bfpfvl","name":"TF-12","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685asrzm1","name":"TF-13","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685mvmrb3","name":"TF-14","width":2.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b496858z4v2o","name":"TF-15","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b496858z0il7","name":"TF-16","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b496853yq149","name":"TF-17","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685e5wixe","name":"TF-18","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685j1uiq7","name":"TF-19","width":2.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685fudpmy","name":"TF-20","width":2.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685dpm1bb","name":"TF-21","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b496852qrymi","name":"TF-22","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685n2cyay","name":"TF-23","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685ojnfts","name":"TF-24","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685spnqe9","name":"TF-25","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685i51qbb","name":"TF-26","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685wgqfye","name":"TF-27","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b496855dwzkw","name":"TF-28","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685fj8w0j","name":"TF-29","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685s3s3sh","name":"TF-30","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b496857x06z9","name":"TF-31","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685xdd72e","name":"TF-32","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685yvwh4j","name":"TF-33","width":1.1,"location":"facility","cages":["19c76b494884kzx2r"],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685tlbfsu","name":"TF-34","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685skx3ia","name":"TF-35","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685hd8bqb","name":"TF-36","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685vm82n4","name":"TF-37","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685ly11ks","name":"TF-38","width":2.5,"location":"facility","cages":["19c76b49488z7ody3"],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b4968503mtlz","name":"TF-39","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685mcw8yk","name":"TF-40","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685265vko","name":"TF-41","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685p0e9xc","name":"TF-42","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685ycmvy4","name":"TF-43","width":1.1,"location":"facility","cages":["19c76b4948d2f8htb"],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b496855ssvl0","name":"TF-44","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b49685gormow","name":"TF-45","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685ixtgt1","name":"TF-46","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685rrayhh","name":"TF-47","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685iq13hq","name":"TF-48","width":1.5,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false},{"id":"19c76b49685ssy2th","name":"TF-49","width":1.1,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":true},{"id":"19c76b4968585hv1k","name":"TF-50","width":2.3,"location":"facility","cages":[],"fixedForShipping":false,"hasWaler":false}],"rmdSlots":[{"number":1,"A":{"cage1":"19c76b4947arldwi3","cage2":"19c76b4947evqyjps","overridden":false},"B":{"cage1":"19c76b494713v1kk5","cage2":null,"overridden":false}},{"number":2,"A":{"cage1":"19c76b49477sk6twf","cage2":null,"overridden":false},"B":{"cage1":"19c76b4947eomqqa2","cage2":"19c76b49481ju2zpj","overridden":false}},{"number":3,"A":{"cage1":"19c76b49483oc4mr3","cage2":null,"overridden":false},"B":{"cage1":"19c76b49484jid8cu","cage2":null,"overridden":false}},{"number":4,"A":{"cage1":"19c76b4946fcrxl9j","cage2":"19c76b4948357ve62","overridden":false},"B":{"cage1":"19c76b49475gh3x47","cage2":"19c76b49479yaw0d2","overridden":false}},{"number":5,"A":{"cage1":"19c76b49476lfbc8d","cage2":"19c76b494783i24wf","overridden":false},"B":{"cage1":"19c76b49472pf9hgm","cage2":"19c76b49472ense8a","overridden":false}},{"number":6,"A":{"cage1":"19c76b49484p0s5o3","cage2":null,"overridden":false},"B":{"cage1":"19c76b49476z7wc8o","cage2":"19c76b4947b5av12x","overridden":false}},{"number":7,"A":{"cage1":"19c76b4947c4ubj57","cage2":null,"overridden":false},"B":{"cage1":"19c76b494752xbxyr","cage2":null,"overridden":false}},{"number":8,"A":{"cage1":"19c76b494701p7nuh","cage2":null,"overridden":false},"B":{"cage1":"19c76b4947bl05qd6","cage2":"19c76b4947f2mn8q2","overridden":false}},{"number":9,"A":{"cage1":"19c76b49482a27le4","cage2":null,"overridden":false},"B":{"cage1":"19c76b49480n7jj8d","cage2":null,"overridden":false}},{"number":10,"A":{"cage1":"19c76b49479jnq6p1","cage2":null,"overridden":false},"B":{"cage1":null,"cage2":null,"overridden":false}},{"number":11,"A":{"cage1":"19c76b4947fzfoumf","cage2":"19c76b494812ytp1g","overridden":false},"B":{"cage1":"19c76b49480dsffuq","cage2":null,"overridden":false}},{"number":12,"A":{"cage1":"19c76b4947aelzyy6","cage2":null,"overridden":false},"B":{"cage1":"19c76b494773mvbs6","cage2":"19c76b4947c9bxhvh","overridden":false}}],"plannedMovements":[],"shipments":[],"settings":{"movementsPerDay":4}};
 
 function initState() {
   return {
@@ -1580,19 +1582,15 @@ function initState() {
   };
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // STATE & PERSISTENCE
-// ═══════════════════════════════════════════════════════════════════════════════
 let STATE = initState();
 let activeTab = 'dashboard';
 const tabZoom = { dashboard: 1, rmd: 1, movements: 1 };
 const ZOOM_STEPS = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2];
 
-// ── API config ──────────────────────────────────────────────────────────────
 // Set this to your Worker URL, e.g. https://cage-tracker-api.yourname.workers.dev
 const API_BASE = 'https://cage-tracker-api.exposurephotographer0.workers.dev';
 
-// ── Factory tag data (loaded alongside state) ────────────────────────
 let FACTORY_TAG_DATA = {}; // cage_id → { tags: {}, custom_fields: {} }
 
 const FACTORY_TAG_DEFS = [
@@ -1607,7 +1605,6 @@ const FACTORY_TAG_DEFS = [
   { key:'tag_orange',    label:'Orange',      color:'#f97316' },
 ];
 
-// ── PIN Auth ─────────────────────────────────────────────────────────
 let _sessionPin = null;
 let _sessionLevel = null; // 'read', 'write', or 'ship'
 
@@ -1651,7 +1648,6 @@ async function api(path, method = 'GET', body = null) {
   }
 }
 
-// ── Load all state from D1 on startup ───────────────────────────────────────
 async function loadState() {
   if (!STATE.customTabs)     STATE.customTabs     = [];
   if (!STATE.customTabItems) STATE.customTabItems = [];
@@ -1776,7 +1772,6 @@ function normaliseCage(c) {
 // saveState is now a no-op — we save directly to the API on each mutation
 function saveState() {}
 
-// ── UI helpers ───────────────────────────────────────────────────────────────
 function showLoadingOverlay(show) {
   if (!document.body) return; // DOM not ready yet
   let el = document.getElementById('api-loading');
@@ -1809,7 +1804,6 @@ function showSuccess(msg) {
   setTimeout(() => el.remove(), 3000);
 }
 
-// ── Granular save helpers (called after each mutation) ────────────────────────
 async function saveCage(cage) {
   // Strip raw DB snake_case fields that were spread onto the object — send only camelCase
   const { location_detail, departure_date, proposed_ship_day, proposed_trip_id,
@@ -1987,9 +1981,7 @@ async function cycleCageStatus(cageId) {
   await saveCage(c);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // ZOOM HELPERS
-// ═══════════════════════════════════════════════════════════════════════════════
 function zoomBarHTML(tab) {
   const z = tabZoom[tab] || 1;
   const idx = ZOOM_STEPS.indexOf(z);
@@ -2034,9 +2026,7 @@ function _applyZoomTransform(tab) {
   outer.style.height = Math.ceil(naturalH * z) + 'px';
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // RENDER ENGINE
-// ═══════════════════════════════════════════════════════════════════════════════
 function renderMobileNav() {
   const nav = document.getElementById('mobile-nav');
   if (!nav) return;
@@ -2151,10 +2141,7 @@ function renderTab(id) {
 
 function render() { renderSidebar(); renderMain(); }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // DASHBOARD
-// ═══════════════════════════════════════════════════════════════════════════════
-// ── Shipment shading helpers ─────────────────────────────────────────────────
 function getShipmentDays() {
   // If trips are manually pinned, use their departDate/loadDate
   const s = STATE.settings || {};
@@ -2289,7 +2276,6 @@ function renderFrameReturnsStat() {
   const todayD = new Date();
   const todayISO = todayStr();
 
-  // ── Build a unified timeline of "slots" ──────────────────────────────────
   // Each slot is either a trip (with a known unload/return date) or a calendar week.
   // We show a sliding window centred on the current week (slot 0).
 
@@ -2356,7 +2342,6 @@ function renderFrameReturnsStat() {
   const isPast = slot.weekSun.getTime() < todayD.getTime();
   const isFuture = slot.weekMon.getTime() > todayD.getTime();
 
-  // ── Frames for this slot ─────────────────────────────────────────────────
   // "Expected": frames with returnDate in this slot's week (and still away)
   // "Returned": frames that actually came back (returnedAt in this slot's week)
   // If slot is a trip: also match by trip unloadDate exactly
@@ -2396,7 +2381,6 @@ function renderFrameReturnsStat() {
     ).join('');
   }
 
-  // ── Data source label ─────────────────────────────────────────────────────
   const isLiveTrip  = slot.type === 'trip' && !isPast;
   const isAudit     = slot.type === 'trip' && isPast && confirmedBack > 0;
   const dataSource  = isAudit
@@ -2405,7 +2389,6 @@ function renderFrameReturnsStat() {
     ? `<span style="font:500 10px var(--font-mono);color:#27a060;background:#f0fdf4;border:1px solid #86efac;border-radius:4px;padding:1px 6px;margin-left:6px">● live</span>`
     : '';
 
-  // ── Slot label ────────────────────────────────────────────────────────────
   const sunD = slot.weekSun;
   const monStr = `${slot.weekMon.getDate()} ${slot.weekMon.toLocaleString('en-GB',{month:'short'})}`;
   const sunStr = `${sunD.getDate()} ${sunD.toLocaleString('en-GB',{month:'short'})}`;
@@ -2417,7 +2400,6 @@ function renderFrameReturnsStat() {
   const canPrev = targetIdx > 0;
   const canNext = targetIdx < allSlots.length - 1;
 
-  // ── Determine border colour ───────────────────────────────────────────────
   const borderCol = allCount > 0
     ? (isCurrentWeek ? '#a0c8e8' : isPast && confirmedBack > 0 ? '#a0d8b0' : '#d8c8f0')
     : 'var(--border)';
@@ -2482,9 +2464,7 @@ function renderFrameReturnsStat() {
   </div>`;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // WARNINGS ENGINE
-// ═══════════════════════════════════════════════════════════════════════════════
 function computeWarnings() {
   const warnings = [];
   const today = todayStr();
@@ -2575,9 +2555,7 @@ function renderWarningsPanel() {
   </div>`;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // GLOBAL SEARCH
-// ═══════════════════════════════════════════════════════════════════════════════
 function openGlobalSearch() {
   globalSearchOpen = true; globalSearchQuery = ''; globalSearchIdx = 0;
   renderSearchModal(); // focus is handled inside renderSearchModal on first build
@@ -2962,9 +2940,7 @@ function renderDashboardFrames() {
   </div>`;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // CAGES
-// ═══════════════════════════════════════════════════════════════════════════════
 let cageFormOpen = false;
 let cageSearch = '';
 let cageFilter = 'all';
@@ -2974,9 +2950,7 @@ let cageEditing = null;
 let cageSelected = new Set(); // for multi-delete
 let cageHideShipped = true;
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // CAGE LOCATION HISTORY MODAL
-// ═══════════════════════════════════════════════════════════════════════════════
 function openCageHistory(cageId) {
   cageHistoryModal = cageId;
   renderHistoryModal();
@@ -3370,7 +3344,6 @@ async function deleteSelectedCages() {
   await saveRMD();
 }
 
-// ── Bulk assignment ─────────────────────────────────────────────────────────
 async function bulkSetDeparture(dateStr) {
   if (!dateStr || cageSelected.size === 0) return;
   const ids = [...cageSelected];
@@ -3397,7 +3370,6 @@ async function bulkSetTrip(tripId) {
   await Promise.all(cages.map(c => saveCage(c)));
 }
 
-// ── CSV Export ───────────────────────────────────────────────────────────────
 function exportCagesCSV() {
   const headers = ['Name','Height(m)','Width(m)','Length(m)','Weight(t)','Category','Location','Location Detail','Departure Date','Boat Trip','Shipping Preference','Notes'];
   const rows = STATE.cages.map(c => {
@@ -3944,9 +3916,7 @@ async function commitExcelImport(cages) {
   window._pendingImport = null;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // FRAMES
-// ═══════════════════════════════════════════════════════════════════════════════
 let frameFilter = 'all';
 let frameSort = 'number';
 let frameEditing = null;
@@ -4193,9 +4163,7 @@ async function setFrameReturnTrip(fid, tripId) {
   await saveFrame(f);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // RMD STORAGE
-// ═══════════════════════════════════════════════════════════════════════════════
 function renderRMD() {
   const RMD_MAX_LENGTH = 13;
   const avail = STATE.cages.filter(c=>c.location==='facility').sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
@@ -4374,9 +4342,7 @@ async function removeFromRMD(idx,side,slot) {
   await saveRMD();
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // ROOF SLAB STORAGE
-// ══════════════════════════════════════════════════════════════════════════════
 
 function renderRSSPanel(avail) {
   const rssCages = (STATE.rssCages || []).map(id => getCage(id)).filter(Boolean);
@@ -4441,9 +4407,7 @@ async function removeFromRSS(cid) {
   await saveRSS();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // MOVEMENT PLANNER
-// ═══════════════════════════════════════════════════════════════════════════════
 let planFormOpen = false;
 let planFormType = 'facility-to-frame';
 let plannerShowCompleted = false;
@@ -5618,11 +5582,9 @@ async function blankCanvasPlanner() {
   await Promise.all([...pendingIds].map(id => deleteMovementFromAPI(id)));
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
 // SIMULATION MANAGER
 // Simulations are stored in localStorage only — they're planning drafts,
 // not real data. Up to 4 slots. The compare view runs purely in-memory.
-// ═══════════════════════════════════════════════════════════════════════════
 const SIM_STORAGE_KEY = 'ct_simulations_v1';
 const MAX_SIMS = 4;
 const SIM_COLORS = ['#2563b0','#c93030','#1a8a4a','#c08520'];
@@ -5961,7 +5923,6 @@ async function rescheduleMove(id, newDate) {
   showSuccess('Movement rescheduled to ' + fmt(newDate));
 }
 
-// ── Edit planned movement modal ───────────────────────────────────────────────
 function openEditMove(id) {
   const m = STATE.plannedMovements.find(x => x.id === id);
   if (!m) return;
@@ -6140,7 +6101,6 @@ async function deleteMove(id) {
   await deleteMovementFromAPI(id);
 }
 
-// ── Drag & drop reordering for planned movements ──────────────────────────────
 let _dragSrcId = null;
 
 function onMoveDragStart(e) {
@@ -6196,9 +6156,7 @@ function shiftWeek(dir) {
   render();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // SHIPPING
-// ═══════════════════════════════════════════════════════════════════════════════
 let shipFormOpen = false;
 let shipSelected = [];
 let frameReturnsSlide = 0; // 0 = current week, negative = past weeks/trips, positive = future
@@ -6208,7 +6166,6 @@ let globalSearchIdx = 0;
 let cageHistoryModal = null; // cageId of open history modal
 let warningsCollapsed = false;
 
-// ── Boat Trip Diary state ────────────────────────────────────────────────────
 let btFormOpen = false;
 let btEditId = null;
 let btWeekStart = (() => { const d=new Date(); d.setDate(d.getDate()-d.getDay()+1); return toISO(d); })();
@@ -6376,9 +6333,7 @@ function renderBoatDiary() {
   `;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // LASHING LOG
-// ═══════════════════════════════════════════════════════════════════════════════
 
 function isoWeek(dateStr) {
   // Returns "YYYY-Www" ISO week key for a given YYYY-MM-DD string (or today)
@@ -6705,16 +6660,12 @@ async function returnFromClient(fid) {
   await saveFrame(f);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // REPORT
-// ═══════════════════════════════════════════════════════════════════════════════
 let reportFrom = todayStr();
 let reportTo = todayStr();
 let reportSingleDay = todayStr();
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // OVERVIEW / PRESENTATION
-// ═══════════════════════════════════════════════════════════════════════════════
 function renderOverview() {
   const chipClass = (h) => hCat(h).toLowerCase();
   const cageChip = (c) => `<span class="overview-cage-chip ${chipClass(c.height)}">${esc(c.name)}</span>`;
@@ -6826,16 +6777,12 @@ async function clearReportMovements() {
   await Promise.all(ids.map(id => deleteMovementFromAPI(id)));
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // AUDIT LOG
-// ═══════════════════════════════════════════════════════════════════════════════
 let auditFilter = 'all'; // 'all' | 'completed' | 'pending' | 'rmd-to-frame' | 'frame-to-rmd' | 'frame-to-frame' | 'facility-to-frame'
 let auditSearch = '';
 let auditSort = 'date-desc'; // 'date-desc' | 'date-asc'
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // ANALYTICS
-// ═══════════════════════════════════════════════════════════════════════════════
 let _analyticsCharts = {};
 
 
@@ -6844,9 +6791,7 @@ function destroyAnalyticsCharts() {
   _analyticsCharts = {};
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // KPI WEEKLY REPORT TABLE
-// ═══════════════════════════════════════════════════════════════════════════════
 
 const KPI_ROWS = [
   { section: 'GoodsIn',   defaultLabel: 'Goods In' },
@@ -7108,7 +7053,6 @@ function renderAnalytics() {
   const cages = STATE.cages;
   const today = todayStr();
 
-  // ── Live inventory stats ──────────────────────────────────────────────────
   const HEAVY = 6.5; // tonne threshold
   const rmdCages   = cages.filter(c => c.location === 'rmd');
   const frameCages = cages.filter(c => c.location === 'frame');
@@ -7132,7 +7076,6 @@ function renderAnalytics() {
   const frmHeavy = frameCages.filter(c => (c.weight||0) >= HEAVY).length;
   const frmLight = frameCages.filter(c => (c.weight||0) > 0 && (c.weight||0) < HEAVY).length;
 
-  // ── Per-trip data ─────────────────────────────────────────────────────────
   // Shipped cages: use proposedTripId (works for both live & historical as long as it was set)
   // Frames returned: match f.returnDate to trip.unloadDate (historical) OR f.returnedAt (live action)
   const trips = [...(STATE.boatTrips || [])].sort((a, b) => {
@@ -7187,7 +7130,6 @@ function renderAnalytics() {
     };
   }).filter(r => r.hasData || !r.isPast);
 
-  // ── Build chart data ──────────────────────────────────────────────────────
   const chartData = {
     weightLabels: ['Heavy (≥6.5t)', `Light (<6.5t)`, 'Unknown'],
     weightCounts: [heavy, light, noWt],
@@ -7200,7 +7142,6 @@ function renderAnalytics() {
     tripEmptyReturned: tripRows.map(r => r.emptyReturned),
   };
 
-  // ── Weight bar helper ─────────────────────────────────────────────────────
   function weightBar(heavy, light, total) {
     if (total === 0) return '<span style="color:var(--text-muted);font-style:italic;font-size:11px">no data</span>';
     const pH = Math.round((heavy/total)*100);
@@ -7218,7 +7159,6 @@ function renderAnalytics() {
     </div>`;
   }
 
-  // ── Per-trip table rows ───────────────────────────────────────────────────
   const tripTableRows = tripRows.length === 0
     ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted)">No boat trips configured yet</td></tr>`
     : tripRows.map(r => {
@@ -7336,7 +7276,6 @@ function renderAnalytics() {
     </div>
 
     <div id="analytics-data" style="display:none" data-json="${encodeURIComponent(JSON.stringify(chartData))}"></div>
-
 
 
   </div>`;
@@ -8012,15 +7951,15 @@ function renderReport() {
           <button class="btn btn-secondary btn-sm" onclick="reportSingleDay=todayStr();reportFrom=reportSingleDay;reportTo=reportSingleDay;render()">Today</button>
         </div>
         <div style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap">
-          <div class="report-summary-cell" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:6px 14px;text-align:center">
+          <div class="report-summary-cell" class="u-stat-box">
             <div class="report-summary-val" style="color:var(--accent);font-size:18px">${dayMoves.length}</div>
             <div class="report-summary-lbl">Total</div>
           </div>
-          <div class="report-summary-cell" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:6px 14px;text-align:center">
+          <div class="report-summary-cell" class="u-stat-box">
             <div class="report-summary-val" style="color:${overLimit?'var(--red)':'var(--orange)'};font-size:18px">${pending}${overLimit?' ⚠':''}</div>
             <div class="report-summary-lbl">Pending</div>
           </div>
-          <div class="report-summary-cell" style="background:var(--bg-elevated);border:1px solid var(--border);border-radius:6px;padding:6px 14px;text-align:center">
+          <div class="report-summary-cell" class="u-stat-box">
             <div class="report-summary-val" style="color:var(--green);font-size:18px">${done}</div>
             <div class="report-summary-lbl">Done</div>
           </div>
@@ -8230,9 +8169,7 @@ async function printDailyReport() {
   if (statusEl) statusEl.textContent = '';
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // BOAT PLANNER
-// ═══════════════════════════════════════════════════════════════════════════════
 let bpBoatDate = todayStr();
 let bpSelectedCages = new Set();
 let bpGeneratedMovements = null;
@@ -8269,7 +8206,6 @@ async function generateBoatMovements() {
   if (bpSelectedCages.size === 0) return alert('Please select at least one cage to plan for the boat.');
   if (!bpBoatDate) return alert('Please set a boat loading date.');
 
-  // ═══════════════════════════════════════════════════════════════════════
   // GENERATE PLAN — Rewritten to match real operational logic:
   //
   // PRIORITY 1 (HIGHEST): Get facility cages out → into frames → into RMD
@@ -8288,9 +8224,7 @@ async function generateBoatMovements() {
   // CATCH-22 WARNING:
   //   If frames are all away and none returning before boat date, warn that
   //   shipping cages is needed to get frames back.
-  // ═══════════════════════════════════════════════════════════════════════
 
-  // ── Parse guidance hints ─────────────────────────────────────────────
   // Uses token-matching rather than rigid regexes: scan each line for any
   // known cage name and any known frame name. This handles natural language
   // like "TF-3 for 320", "320 → TF-3", "put 320 in TF-3", "use TF-3 for cage 320", etc.
@@ -8311,7 +8245,6 @@ async function generateBoatMovements() {
     gLines.forEach(line => {
       const lower = line.toLowerCase();
 
-      // ── Skip instruction ────────────────────────────────────────────
       const skipMatch = lower.match(/\bskip\b/);
       if (skipMatch) {
         // Find any cage name mentioned on this line (longest-first to avoid partial matches)
@@ -8344,7 +8277,6 @@ async function generateBoatMovements() {
         }
       }
 
-      // ── Frame instruction — find any frame name on this line ────────
       const frameName = frameNames.find(n => lower.includes(n));
       if (frameName) {
         const cageName = cageNames.find(n => lower.includes(n));
@@ -8362,13 +8294,11 @@ async function generateBoatMovements() {
         }
       }
 
-      // ── Unrecognised line ───────────────────────────────────────────
       guidanceParseLog.push(`⚠ Could not parse guidance line: "${line}"`);
     });
     // (guidanceParseLog is flushed into warnings[] below, after warnings is declared)
   }
 
-  // ── Build working-day list ────────────────────────────────────────────
   const DAILY_LIMIT = STATE.settings.movementsPerDay || MAX_MOVES;
   const boatDate    = bpBoatDate; // ISO string
   const todayD      = new Date(); todayD.setHours(12,0,0,0);
@@ -8391,7 +8321,6 @@ async function generateBoatMovements() {
     if (m.date) existingCounts[m.date] = (existingCounts[m.date] || 0) + 1;
   });
 
-  // ── Identify cages ────────────────────────────────────────────────────
   // BOAT CAGES: user-selected, to be shipped on this trip (1 per frame, fixed)
   const boatCages = [...bpSelectedCages]
     .map(id => getCage(id)).filter(Boolean)
@@ -8422,7 +8351,6 @@ async function generateBoatMovements() {
   // Flush guidance parse log now that warnings[] is declared
   if (guidanceParseLog.length) guidanceParseLog.forEach(msg => warnings.push(msg));
 
-  // ── SIMULATED STATE ───────────────────────────────────────────────────
   // We simulate the state of frames and RMD across the planning window.
   // frameSim[frameId] = { frame, cages: [cageId, ...], location, fixedForShipping }
   // rmdSim[`NX`] = { cage1: cageId|null, cage2: cageId|null }
@@ -8441,7 +8369,6 @@ async function generateBoatMovements() {
     };
   });
 
-  // ── REPLAY EXISTING PLANNED MOVEMENTS INTO frameSim ──────────────────
   // STATE.frames only reflects completed moves. Pending planned movements that
   // assign cages to frames must be replayed here so the planner sees
   // already-committed frame assignments and doesn't double-book.
@@ -8511,7 +8438,6 @@ async function generateBoatMovements() {
     });
   }
 
-  // ── LEARN FROM MOVEMENT HISTORY ──────────────────────────────────────
   // Mine completed movements to build soft preferences for frame and RMD
   // slot selection. These are applied as a scoring bonus — they don't
   // override hard rules (width, waler, capacity) but do break ties in
@@ -8526,7 +8452,6 @@ async function generateBoatMovements() {
   const learnedPrefs = (() => {
     const completed = (STATE.plannedMovements || []).filter(m => m.completed);
 
-    // ── Frame preferences ─────────────────────────────────────────────
     const frameCounts  = {};  // cageId  → { frameId: count }
     const widthCounts  = {};  // widthBand (0.1m rounded) → { frameWidth: count }
 
@@ -8547,7 +8472,6 @@ async function generateBoatMovements() {
         widthCounts[band][String(frame.width)] = (widthCounts[band][String(frame.width)] || 0) + 1;
       });
 
-    // ── RMD slot preferences ──────────────────────────────────────────
     const rmdCageCounts   = {};  // cageId  → { rmdKey: count }
     const rmdHeightCounts = {};  // heightCat → { rmdKey: count }
 
@@ -8825,7 +8749,6 @@ async function generateBoatMovements() {
     return f; // any other location — use it
   }
 
-  // ── PHASE 1: PLAN FACILITY EXIT CAGES (HIGHEST PRIORITY) ─────────────
   // For each exit cage: Facility → Frame (transit), then Frame → RMD (storage)
   // If RMD is full: cage stays in frame (frame-as-storage).
   // Frame used for transit is freed after drop-off for boat loading.
@@ -8870,7 +8793,6 @@ async function generateBoatMovements() {
     }
 
     if (rmdSlot) {
-      // ── Path A: Facility → Frame (transit), then Frame → RMD ──────────
       // Two separate moves: lift cage into frame, then crane cage from frame into RMD slot.
       useMove(exitDay);
       frameSim[transitFrame.id].cages.push(cage.id);
@@ -8940,7 +8862,6 @@ async function generateBoatMovements() {
     warnings.push(`🚨 PRODUCTION RISK: Facility exit blocked from ${fmt(productionStoppageDay)} — no frames available. Ship cages to client to get frames returned.`);
   }
 
-  // ── PHASE 2: PLAN BOAT CAGES (SHIP TO CLIENT) ─────────────────────────
   // Rule: 1 cage per frame, frame must be fixed for shipping.
   // Check RMD access order (outside cage must come out before inside cage).
 
@@ -9126,7 +9047,6 @@ async function generateBoatMovements() {
     }
   }
 
-  // ── Fix-for-shipping steps ─────────────────────────────────────────────
   // All frames used for boat cages need fixing down before boat date.
   // Includes: new movements (rmd_to_frame, facility_to_frame, reframe)
   // AND already_framed cages where a pending planned movement puts them in a frame
@@ -9162,7 +9082,6 @@ async function generateBoatMovements() {
     });
   }
 
-  // ── Sort chronologically ───────────────────────────────────────────────
   scheduledSteps.sort((a, b) => {
     // Within the same date: facility exits first, then RMD drops, then boat framing, then fix steps
     const order = {
@@ -9183,7 +9102,6 @@ async function generateBoatMovements() {
     return (order[a.action] ?? 5) - (order[b.action] ?? 5);
   });
 
-  // ── Daily move count warnings ──────────────────────────────────────────
   const countsByDay = {};
   scheduledSteps.forEach(s => { if (s.date) countsByDay[s.date] = (countsByDay[s.date] || 0) + 1; });
   Object.entries(countsByDay).forEach(([day, count]) => {
@@ -9199,7 +9117,6 @@ async function generateBoatMovements() {
     warnings.push(`🚨 CATCH-22: No frames available at facility and none returning before ${fmt(boatDate)}. You must ship cages to the client to get frames back — otherwise production will stop.`);
   }
 
-  // ── Build display list ─────────────────────────────────────────────────
   const moves = [];
   let lastDate = null;
   let moveNum = 1;
@@ -9227,7 +9144,6 @@ async function generateBoatMovements() {
     }
   }
 
-  // ── Learning summary ─────────────────────────────────────────────────
   // Show what the planner learned from history and which assignments were influenced
   {
     const appliedFramePrefs = scheduledSteps
@@ -9307,7 +9223,6 @@ async function generateBoatMovements() {
   render();
 
 }
-// ── Plan Preview Popup — Map View ────────────────────────────────────────────
 // Converts scheduledSteps into fake movements (same schema as STATE.plannedMovements),
 // then temporarily swaps STATE.plannedMovements + mvDayDate to render the existing
 // renderMovementsDayView() map inside a fullscreen overlay.
@@ -9323,7 +9238,6 @@ function openBoatPlanPreview() {
   const existing = document.getElementById('bp-preview-overlay');
   if (existing) existing.remove();
 
-  // ── Colour + label helpers ─────────────────────────────────────────────────
   const ACTION_META = {
     facility_exit_to_frame:     { col:'#2563b0', icon:'🏭', label:'Facility → Frame (transit)'   },
     facility_exit_frame_to_rmd: { col:'#7040c0', icon:'📦', label:'Cage into RMD (via frame)'     },
@@ -9348,7 +9262,6 @@ function openBoatPlanPreview() {
 
   if (!dates.length) { alert('No scheduled steps to preview.'); return; }
 
-  // ── Warning strip ──────────────────────────────────────────────────────────
   const warnHTML = warnings.length
     ? warnings.map(w => {
         const isErr = w.startsWith('🚨');
@@ -9356,7 +9269,6 @@ function openBoatPlanPreview() {
       }).join('')
     : '';
 
-  // ── Build day sections ─────────────────────────────────────────────────────
   let totalMoves = 0;
   const daySectionsHTML = dates.map(d => {
     const steps = byDate[d];
@@ -9416,7 +9328,6 @@ function openBoatPlanPreview() {
       </div>`;
   }).join('');
 
-  // ── Build overlay ──────────────────────────────────────────────────────────
   const overlay = document.createElement('div');
   overlay.id = 'bp-preview-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:1100;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto';
@@ -9572,7 +9483,6 @@ async function commitBoatPlan() {
     fixCount: newMovements.filter(m=>m.typeKey==='frame-fix-shipping').length,
   };
 
-  // ── Save a generated plan snapshot to the audit log ──────────────────────
   {
     if (!STATE.savedPlans) STATE.savedPlans = [];
     const planRef = 'BP-' + new Date().toISOString().slice(0,10) + '-' + Math.floor(Math.random()*9000+1000);
@@ -9761,9 +9671,9 @@ function renderBoatPlanner() {
             <div style="font:700 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">💬 Guidance for Re-generation</div>
             <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px;line-height:1.5">
               Tell the planner how to handle specific cages before regenerating. Examples:<br>
-              <span style="font-family:var(--font-mono);background:var(--bg-elevated);padding:1px 5px;border-radius:3px">put cage 445 in RMD-03A</span> &nbsp;
-              <span style="font-family:var(--font-mono);background:var(--bg-elevated);padding:1px 5px;border-radius:3px">skip cage 320</span> &nbsp;
-              <span style="font-family:var(--font-mono);background:var(--bg-elevated);padding:1px 5px;border-radius:3px">use TF-15 for cage 424</span>
+              <span class="u-mono-tag">put cage 445 in RMD-03A</span> &nbsp;
+              <span class="u-mono-tag">skip cage 320</span> &nbsp;
+              <span class="u-mono-tag">use TF-15 for cage 424</span>
             </div>
             <textarea id="bp-guidance-input" rows="3" placeholder="Enter guidance here, one instruction per line…"
               style="width:100%;font:400 12px var(--font-display);padding:8px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input);resize:vertical;margin-bottom:10px"
@@ -9921,9 +9831,7 @@ function renderBoatPlanner() {
     </div>
   `;
 }
-// ═══════════════════════════════════════════════════════════════════════════════
 // MOVEMENTS MAP TAB
-// ═══════════════════════════════════════════════════════════════════════════════
 let mvFilter = 'all';
 let mvDayView = false;   // false = "all movements" map, true = day-by-day view
 let mvDayDate = null;    // ISO date string of the currently viewed day (null = auto-select today/first day)
@@ -10200,12 +10108,10 @@ async function mvEditDelete(id) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // DAY-BY-DAY MOVEMENTS VIEW
 // Reuses the full map renderer but filtered to one day's moves.
 // Prior-day pending moves are simulated so cage positions reflect the start
 // of the selected day.
-// ─────────────────────────────────────────────────────────────────────────────
 function renderMovementsDayView() {
   const allPending = STATE.plannedMovements.filter(m => !m.completed);
 
@@ -10261,7 +10167,6 @@ function renderMovementsDayView() {
   );
   const allMovesToReverse = [...futureDoneMoves, ...sameDayDoneMoves];
 
-  // ── Simulate cage locations at START of this day ─────────────────────────────
   // Strategy:
   //   1. Start from current STATE (reflects all completed moves so far)
   //   2. UNDO completed moves that happened on or after the viewed date
@@ -10421,7 +10326,6 @@ function renderMovementsDayView() {
       simFrameCages[loc.frameId].push(cid);
   });
 
-  // ── Location totals for end-of-day banner ────────────────────────────────────
   // Clone cageLocSim and apply today's pending moves to get end-of-day positions.
   const eodLocSim = new Map(Array.from(cageLocSim.entries()).map(([k,v]) => [k, {...v}]));
   dayMoves.filter(m => !m.completed).forEach(m => {
@@ -10650,7 +10554,7 @@ function renderMovementsMap(dayCtx) {
           const hasMoves = STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length > 0;
           const isPickedCage = mvPick && mvPick.cageId === cid;
           const pickBtnHTML = `<button onclick="mvPickCage('${cid}')" title="Click to plan movement for cage ${esc(cage.name)}" style="border:none;background:${isPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${isPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${isPickedCage?'✓':'🏷'}</button>`;
-          const cageNameHTML = `<span style="font:600 10px var(--font-mono);${nameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${cid}')" title="Click to view/edit movements for cage ${esc(cage.name)}">${hDot(cage.height)}${tagDot(cage)}${esc(cage.name)}${hasMoves?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length}</span>`:''}</span>${pickBtnHTML}`;
+          const cageNameHTML = `<span style="font:600 10px var(--font-mono);${nameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${cid}')" title="Click to view/edit movements for cage ${esc(cage.name)}">${hDot(cage.height)}${tagDot(cage)}${esc(cage.name)}${hasMoves?` <span class="u-badge-accent">${STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length}</span>`:''}</span>${pickBtnHTML}`;
           slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;background:var(--bg-input);margin-bottom:2px;${bg}">
             <div style="display:flex;align-items:center;">${arrow}${slotTag}${cageNameHTML}</div>
             <div style="font-size:9px;padding-left:${arrow?'14':'0'}px;${detailStyle||'color:var(--text-muted);'}">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</div>
@@ -10782,7 +10686,7 @@ function renderMovementsMap(dayCtx) {
       const fIsPickedCage = mvPick && mvPick.cageId === c.id;
       const fPickBtn = `<button onclick="event.stopPropagation();mvPickCage('${c.id}')" title="Plan movement for cage ${esc(c.name)}" style="border:none;background:${fIsPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${fIsPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${fIsPickedCage?'✓':'🏷'}</button>`;
       html += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${fBg}">
-        <div style="display:flex;align-items:center;gap:2px;">${out?'<span style="color:#c08520;font-weight:800">→</span>':''}<span style="font:600 10px var(--font-mono);${fNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span>${fPickBtn}</div>
+        <div style="display:flex;align-items:center;gap:2px;">${out?'<span style="color:#c08520;font-weight:800">→</span>':''}<span style="font:600 10px var(--font-mono);${fNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${fMoveCount>0?` <span class="u-badge-accent">${fMoveCount}</span>`:''}</span>${fPickBtn}</div>
         <div style="font-size:9px;padding-left:${out?'13':'0'}px;${fDetailStyle}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
       </div>`;
     });
@@ -10807,7 +10711,7 @@ function renderMovementsMap(dayCtx) {
         ? `<span style="color:#27a060;font-weight:800">←</span><span style="color:#c08520;font-weight:800">→</span>`
         : `<span style="color:#27a060;font-weight:800">←</span>`;
       html+=`<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${iBg}">
-        <div style="display:flex;align-items:center;gap:2px;">${iArrow}<span style="font:600 10px var(--font-mono);${iNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${iMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${iMoveCount}</span>`:''}</span>${iPickBtn}</div>
+        <div style="display:flex;align-items:center;gap:2px;">${iArrow}<span style="font:600 10px var(--font-mono);${iNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${iMoveCount>0?` <span class="u-badge-accent">${iMoveCount}</span>`:''}</span>${iPickBtn}</div>
         <div style="font-size:9px;padding-left:13px;${iDetailStyle}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
       </div>`;
     });
@@ -11274,7 +11178,7 @@ function renderMovementsMap(dayCtx) {
                     else { bg = 'background:#fffbeb;border-color:#fbbf24;'; nameCol = 'color:#92400e;'; detailCol = 'color:var(--text-muted);'; }
                     const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
                     cageHTML += `<div id="mvboat-cage-${c.id}-${f.id}" style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${bg}">
-                      <div style="display:flex;align-items:center;gap:2px;"><span style="color:#b45309;font-weight:800">→</span><span style="font:600 10px var(--font-mono);${nameCol}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
+                      <div style="display:flex;align-items:center;gap:2px;"><span style="color:#b45309;font-weight:800">→</span><span style="font:600 10px var(--font-mono);${nameCol}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${fMoveCount>0?` <span class="u-badge-accent">${fMoveCount}</span>`:''}</span></div>
                       <div style="font-size:9px;padding-left:13px;${detailCol}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
                     </div>`;
                   });
@@ -11289,7 +11193,7 @@ function renderMovementsMap(dayCtx) {
                     else { bg = 'background:#f5f3ff;border-color:#c4b5fd;'; nameCol = 'color:#5b21b6;'; detailCol = 'color:var(--text-muted);'; }
                     const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
                     cageHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${bg}">
-                      <div style="display:flex;align-items:center;gap:2px;"><span style="color:#7040c0;font-weight:800">→RMD</span><span style="font:600 10px var(--font-mono);${nameCol}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
+                      <div style="display:flex;align-items:center;gap:2px;"><span style="color:#7040c0;font-weight:800">→RMD</span><span style="font:600 10px var(--font-mono);${nameCol}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${fMoveCount>0?` <span class="u-badge-accent">${fMoveCount}</span>`:''}</span></div>
                       <div style="font-size:9px;padding-left:30px;${detailCol}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
                     </div>`;
                   });
@@ -11304,7 +11208,7 @@ function renderMovementsMap(dayCtx) {
                     else { bg = 'background:#fffbeb;border-color:#fbbf24;'; nameCol = 'color:#92400e;'; detailCol = 'color:var(--text-muted);'; }
                     const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
                     cageHTML += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${bg}">
-                      <div style="display:flex;align-items:center;gap:2px;"><span style="font:600 10px var(--font-mono);${nameCol}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${fMoveCount>0?` <span style="font-size:8px;background:rgba(192,133,32,0.2);color:var(--accent);border-radius:3px;padding:0 3px">${fMoveCount}</span>`:''}</span></div>
+                      <div style="display:flex;align-items:center;gap:2px;"><span style="font:600 10px var(--font-mono);${nameCol}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${fMoveCount>0?` <span class="u-badge-accent">${fMoveCount}</span>`:''}</span></div>
                       <div style="font-size:9px;padding-left:4px;${detailCol}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
                     </div>`;
                   });
@@ -11365,11 +11269,8 @@ function renderMovementsMap(dayCtx) {
 }
 
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// ═══════════════════════════════════════════════════════════════════════════════
 // MOVEMENTS SVG DRAW — uses absolute-positioned SVG within mv-content container
 // Positions calculated relative to the container, not the viewport
-// ═══════════════════════════════════════════════════════════════════════════════
 function mvRedraw() {
   const svg = document.getElementById('mv-svg-arrows');
   const container = document.getElementById('mv-content');
@@ -12003,7 +11904,6 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && cageHistoryModal) closeCageHistory();
 });
 
-// ── PIN Screen ──────────────────────────────────────────────────────
 let _lockoutTimer = null;
 
 function showPinScreen(errorMsg = '', isLocked = false, remaining = 0) {
@@ -12056,9 +11956,7 @@ function clearLockoutCountdown() {
   if (_lockoutTimer) { clearTimeout(_lockoutTimer); _lockoutTimer = null; }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // SETTINGS TAB
-// ═══════════════════════════════════════════════════════════════════════════════
 function renderSettings() {
   const s = STATE.settings;
   const ro = isReadOnly();
@@ -12403,13 +12301,8 @@ document.addEventListener("DOMContentLoaded", async function() {
 });
 
 
-// ═══ Custom Tabs ═══
-
-// ═══════════════════════════════════════════════════════════════════════════
 // CUSTOM TABS SYSTEM
-// ═══════════════════════════════════════════════════════════════════════════
 
-// ── State ──────────────────────────────────────────────────────────────────
 // STATE.customTabs    = array of { id, label, icon, sortOrder }
 // STATE.customTabItems = array of { id, tabId, type, title, content, metadata, sortOrder }
 
@@ -12426,7 +12319,6 @@ const TAB_ICONS = ['📋','📌','⭐','🔖','🗂','📁','💡','🧪','🔬'
 function getCustomTabs() { return (STATE.customTabs || []); }
 function getCustomTabItems(tabId) { return (STATE.customTabItems || []).filter(i => i.tabId === tabId); }
 
-// ── API helpers ────────────────────────────────────────────────────────────
 async function apiAddCustomTab(tab) {
   try { await api('/api/custom_tabs', 'POST', tab); } catch(e) { showError('Failed to save tab: ' + e.message); }
 }
@@ -12446,7 +12338,6 @@ async function apiDeleteCustomTabItem(id) {
   try { await api('/api/custom_tab_items', 'DELETE', { id }); } catch(e) { showError('Failed to delete item: ' + e.message); }
 }
 
-// ── Render a custom tab's content ─────────────────────────────────────────
 function renderCustomTab(tab) {
   const items = getCustomTabItems(tab.id).sort((a,b) => a.sortOrder - b.sortOrder);
   const ro = isReadOnly();
@@ -12519,7 +12410,6 @@ function ctRenderItemBody(item, ro) {
   }
 }
 
-// ── Note ──────────────────────────────────────────────────────────────────
 function ctRenderNote(item, ro) {
   return `<textarea class="ct-note-textarea" placeholder="Write your note here…"
     ${ro ? 'disabled' : `onblur="ctSaveNoteContent('${item.id}',this.value)"`}
@@ -12534,7 +12424,6 @@ async function ctSaveNoteContent(itemId, value) {
   await apiUpdateCustomTabItem(item);
 }
 
-// ── Checklist ─────────────────────────────────────────────────────────────
 function ctRenderChecklist(item, ro) {
   const rows = (item.metadata.rows || []);
   const checkItems = rows.map((r, idx) => `
@@ -12599,7 +12488,6 @@ async function ctChecklistDelete(itemId, idx) {
   ctRefreshItem(item);
 }
 
-// ── Actions ───────────────────────────────────────────────────────────────
 function ctRenderActions(item, ro) {
   const rows = (item.metadata.rows || []);
   const actionItems = rows.map((r, idx) => `
@@ -12671,7 +12559,6 @@ async function ctActionDelete(itemId, idx) {
   ctRefreshItem(item);
 }
 
-// ── Table ─────────────────────────────────────────────────────────────────
 function ctRenderTable(item, ro) {
   const headers   = item.metadata.headers   || ['Column 1', 'Column 2', 'Column 3'];
   const rows      = item.metadata.rows      || [];
@@ -12898,8 +12785,6 @@ async function ctTableResetLayout(itemId) {
   setTimeout(() => ctTableInitResize(itemId), 50);
 }
 
-
-// ── Table Snapshots ───────────────────────────────────────────────────────
 
 // Save a named snapshot of the current table state
 async function ctTableSaveSnapshot(itemId) {
@@ -13162,7 +13047,6 @@ async function ctTableMoveRow(itemId, ri, direction) {
   setTimeout(() => ctTableInitResize(itemId), 30);
 }
 
-// ── Links ─────────────────────────────────────────────────────────────────
 function ctRenderLinks(item, ro) {
   const links = item.metadata.links || [];
   const linkItems = links.map((l, idx) => `
@@ -13226,7 +13110,6 @@ function ctLinkOpen(itemId, idx) {
   if (url) window.open(url, '_blank', 'noopener');
 }
 
-// ── Shared helpers ────────────────────────────────────────────────────────
 
 async function ctSaveTitle(itemId, val) {
   const item = (STATE.customTabItems||[]).find(i => i.id === itemId);
@@ -13312,7 +13195,6 @@ async function ctMoveItem(itemId, tabId, direction) {
   }
 }
 
-// ── Copy item to another tab ──────────────────────────────────────────────
 function ctCopyItemPicker(e, itemId) {
   e.stopPropagation();
   // Remove any existing picker
@@ -13409,7 +13291,6 @@ async function ctCopyItemToTab(itemId, destTabId, btnEl) {
   }
 }
 
-// ── Custom Tab Manager Modal ───────────────────────────────────────────────
 let _ctManagerDragId = null;
 
 function openCustomTabManager() {
@@ -13521,7 +13402,6 @@ async function ctMgrDeleteTab(tabId) {
   renderCustomTabManager();
 }
 
-// ── Drag & drop reorder in manager ────────────────────────────────────────
 function ctMgrDragStart(tabId) { _ctManagerDragId = tabId; }
 function ctMgrDragEnd() { _ctManagerDragId = null; document.querySelectorAll('.ct-tab-row').forEach(r=>r.classList.remove('drag-over')); }
 function ctMgrDragOver(e, tabId) { e.preventDefault(); if(_ctManagerDragId && _ctManagerDragId!==tabId) document.getElementById('ctmgr-row-'+tabId)?.classList.add('drag-over'); }
@@ -13542,7 +13422,6 @@ async function ctMgrDrop(e, targetId) {
   renderSidebar();
 }
 
-// ── Emoji picker ──────────────────────────────────────────────────────────
 function openEmojiPicker(e, tabId) {
   e.stopPropagation();
   const existing = document.getElementById('ct-emoji-picker');
@@ -13581,9 +13460,7 @@ async function ctPickIcon(tabId, icon) {
   renderSidebar();
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // DEPARTURE DASHBOARD TAB
-// ═══════════════════════════════════════════════════════════════════════════════
 let dd_allDepartures   = [];
 let dd_filterShift     = 'ALL';
 let dd_searchTerm      = '';
@@ -13593,7 +13470,6 @@ let dd_pasteContent    = '';
 let dd_innerTab        = 'schedule'; // 'schedule' | 'changes' | 'skipped'
 let dd_tabsVisible     = false;
 
-// ── BDR Deliveries state ───────────────────────────────────────────────────
 let bdr_activeSource   = 'hs';      // 'hs' | 'ni'
 let bdr_hsPaste        = '';
 let bdr_niPaste        = '';
@@ -13695,9 +13571,7 @@ The app finds Shift, VST 110, VST 120, VST 130, VST 140 columns automatically.">
 
 function dd_esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // BDR DELIVERIES TAB
-// ══════════════════════════════════════════════════════════════════════════════
 
 function bdr_esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
@@ -14023,9 +13897,7 @@ async function bdr_doImport() {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
 // BDRs TAB
-// ══════════════════════════════════════════════════════════════════════════════
 
 function renderBdrsTab() {
   let records = [...bdr_records];
@@ -14475,7 +14347,6 @@ function dd_showStatus(msg, type) {
 function dd_setFilter(f) { dd_filterShift=f; renderMain(); }
 function dd_setSearch(v) { dd_searchTerm=v; renderMain(); }
 
-// ── Push modal ────────────────────────────────────────────────────────────────
 function dd_openModal() {
   document.getElementById('dd_modalBackdrop').classList.add('open');
   document.getElementById('dd_pin').value='';
@@ -14488,11 +14359,8 @@ function dd_openModal() {
 }
 function dd_closeModal() { document.getElementById('dd_modalBackdrop').classList.remove('open'); renderMain(); }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // AI PLANNER TAB
-// ═══════════════════════════════════════════════════════════════════════════════
 
-// ── Module state ──────────────────────────────────────────────────────────────
 function dd_setPushBtns(enabled) {
   document.getElementById('dd_confirmBtn').disabled=!enabled;
   document.getElementById('dd_cancelBtn').textContent=enabled?'Cancel':'Close';
@@ -14566,7 +14434,6 @@ async function dd_confirmPush() {
     const currentDate=cage.departure_date||cage.departureDate||null;
     if (currentDate===dateStr) { dd_addResult('dd-result-skip',`⤳ SKIP  Cage ${dep.cage} — already ${dateStr}`); dd_pushLogSkipped.push({cage:dep.cage,reason:`Already set to ${dd_fmtDateDisplay(dateStr)}`,type:'already',shift:dep.shift,vstLabel:dep.vstLabel}); skipped++; continue; }
 
-    // ── Movement-date conflict check ──────────────────────────────────────────
     // If this cage has a pending facility→frame movement planned BEFORE the new
     // departure date, we must push that movement date forward automatically.
     const trackerCage = STATE.cages.find(c => c.id === cage.id || String(c.name).trim() === String(dep.cage).trim());
@@ -14584,7 +14451,6 @@ async function dd_confirmPush() {
         dd_pushLogChanges.push({cage:dep.cage,oldDate:currentDate,newDate:dateStr,shift:dep.shift,vstLabel:dep.vstLabel,movementsPushed:moveConflicts.length});
       }
     }
-    // ─────────────────────────────────────────────────────────────────────────
 
     const payload={id:cage.id,name:cage.name,height:cage.height||0,width:cage.width||0,length:cage.length||0,weight:cage.weight||0,notes:cage.notes||'',location:cage.location||'facility',location_detail:cage.location_detail||cage.locationDetail||'',departure_date:dateStr,proposed_ship_day:cage.proposed_ship_day||cage.proposedShipDay||null,proposed_trip_id:cage.proposed_trip_id||cage.proposedTripId||null,shipping_preference:cage.shipping_preference||cage.shippingPreference||false,into_rmd:cage.into_rmd||cage.intoRmd||null,out_of_rmd:cage.out_of_rmd||cage.outOfRmd||null};
     try {
@@ -14615,11 +14481,8 @@ function dd_showModalSummary(type,msg) {
   if (s) { s.textContent=msg; s.className='dd-push-summary '+type; }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // DOWNTIME TRACKER — full client state, UI render, API persistence
-// ═══════════════════════════════════════════════════════════════════════════════
 
-// ── In-memory state (active tasks only — completed go to D1) ────────────────
 const DT_CATEGORIES = [];
 
 // Per-team live state — each team holds a map of taskId → taskState
@@ -14663,7 +14526,6 @@ function dtAllTasks() {
   );
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
 function dtPad(n) { return String(n).padStart(2,'0'); }
 function dtFmt(s) { return `${dtPad(Math.floor(s/3600))}:${dtPad(Math.floor(s%3600/60))}:${dtPad(s%60)}`; }
 function dtFmtHM(s) { const h=Math.floor(s/3600),m=Math.floor(s%3600/60); return `${h}h ${m}m`; }
@@ -14687,7 +14549,6 @@ function dtPushEv(team, tid, type, label, note) {
   dtState[team][tid].events.push({ time: Date.now(), type, label, note: note||'' });
 }
 
-// ── Chip — shows worst status across all active tasks for a team ─────────────
 const DT_CHIP = {
   idle:     ['dtchip-idle',    'Idle'],
   working:  ['dtchip-working', 'Working'],
@@ -14706,7 +14567,6 @@ function dtChip(team) {
   return `<span class="dt-status-chip ${cls}">${lbl}${count > 1 ? ` \xd7${count}` : ''}</span>`;
 }
 
-// ── API helpers ───────────────────────────────────────────────────────────────
 async function dtApiSaveTask(entry) {
   try {
     await api('/api/downtime/tasks', 'POST', entry);
@@ -14828,7 +14688,6 @@ async function dtRestoreSessions() {
   }
 }
 
-// ── Tick ──────────────────────────────────────────────────────────────────────
 function dtStartTick() {
   if (dtTickHandle) return;
   dtTickHandle = setInterval(dtTick, 1000);
@@ -14852,7 +14711,6 @@ function dtTick() {
   });
 }
 
-// ── Task controls ─────────────────────────────────────────────────────────────
 function dtStartTask(team) {
   const desc = document.getElementById(`dtdesc-${team}`)?.value.trim();
   const ref  = document.getElementById(`dtref-${team}`)?.value.trim();
@@ -15019,7 +14877,6 @@ async function dtConfirmStop() {
   render();
 }
 
-// ── Edit & Retrospective entry helpers ───────────────────────────────────────
 
 let dtEditId = null;       // null = new retrospective entry
 let dtEditTeam = null;
@@ -15204,7 +15061,6 @@ async function dtDeleteLogEntry(id, ev) {
   }
 }
 
-// ── Render: full Downtime tab ────────────────────────────────────────────────
 function renderDowntime() {
   // Kick off a log load if not yet loaded (non-blocking)
   if (!dtLogLoaded && !dtLogLoading) {
@@ -15269,38 +15125,38 @@ function renderDowntime() {
         </div>
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Ref / Item No.</label>
-          <input id="dte-ref" type="text" placeholder="e.g. CAGE-042" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+          <input id="dte-ref" type="text" placeholder="e.g. CAGE-042" class="u-input-base" />
         </div>
       </div>
 
       <div style="margin-bottom:10px">
         <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Task Description</label>
-        <input id="dte-desc" type="text" placeholder="What was the task?" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+        <input id="dte-desc" type="text" placeholder="What was the task?" class="u-input-base" />
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Start Time</label>
-          <input id="dte-start" type="datetime-local" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+          <input id="dte-start" type="datetime-local" class="u-input-base" />
         </div>
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">End Time</label>
-          <input id="dte-end" type="datetime-local" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+          <input id="dte-end" type="datetime-local" class="u-input-base" />
         </div>
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Working (mins)</label>
-          <input id="dte-work" type="number" min="0" placeholder="0" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+          <input id="dte-work" type="number" min="0" placeholder="0" class="u-input-base" />
         </div>
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Break (mins)</label>
-          <input id="dte-break" type="number" min="0" placeholder="0" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+          <input id="dte-break" type="number" min="0" placeholder="0" class="u-input-base" />
         </div>
         <div>
           <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Break Count</label>
-          <input id="dte-bcount" type="number" min="0" placeholder="0" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-base);color:var(--text-primary);font-size:13px;box-sizing:border-box" />
+          <input id="dte-bcount" type="number" min="0" placeholder="0" class="u-input-base" />
         </div>
       </div>
 
@@ -15337,7 +15193,6 @@ function dtSwitchInner(team, tab) {
   render();
 }
 
-// ── Render: one team's view ───────────────────────────────────────────────────
 function dtRenderTeamView(team) {
   const iL      = team === 'lifting';
   const cardCls = iL ? 'dt-lift-card' : 'dt-ext-card';
@@ -15361,7 +15216,6 @@ function dtRenderTeamView(team) {
   `;
 }
 
-// ── Render: the Tasks panel — start form + all active task cards ──────────────
 function dtRenderTasksPanel(team, cardCls, activeTasks) {
   const placeholder = team === 'lifting'
     ? 'e.g. Replace sling on Crane A'
@@ -15392,7 +15246,6 @@ function dtRenderTasksPanel(team, cardCls, activeTasks) {
   );
 }
 
-// ── Render: one active task card ─────────────────────────────────────────────
 function dtRenderActiveTaskCard(team, tid, s) {
   const savedCat = s.currentDtCat || '';
   const catListId = `dtcat-list-${team}-${tid}`;
@@ -15476,7 +15329,6 @@ function dtRenderTeamPanel(team) {
   if (activeTab === 'downtime' && dtTeamTab === team) render();
 }
 
-// ── Render: log ───────────────────────────────────────────────────────────────
 function dtRenderLog(team, entries) {
   if (!dtLogLoaded) {
     return `<div class="dt-log-empty" style="padding:40px 0">
@@ -15564,7 +15416,6 @@ function dtBuildEntry(e, num) {
   </div>`;
 }
 
-// ── Render: summary ───────────────────────────────────────────────────────────
 function dtRenderSummary() {
   const all  = dtLog;
   const lift = all.filter(e => e.team === 'lifting');
@@ -15621,7 +15472,6 @@ function dtRenderSummary() {
   }`;
 }
 
-// ── CSV Export ────────────────────────────────────────────────────────────────
 function dtExportCSV() {
   if (!dtLog.length) { showError('No completed tasks to export.'); return; }
 
