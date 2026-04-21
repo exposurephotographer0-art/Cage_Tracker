@@ -1250,6 +1250,7 @@ tr.dragging { opacity: 0.4; }
 .dd-result-ok   { color:#4caf80; }
 .dd-result-skip { color:#e8a830; }
 .dd-result-err  { color:#f07070; }
+.dd-result-warn { color:#f0b050; }
 
 /* ═══════════════════════════════════════════
    DOWNTIME TRACKER STYLES
@@ -3430,6 +3431,58 @@ function exportMovementsCSV() {
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Validates that a new departure date for a cage does not fall AFTER any
+ * existing planned facility→frame movement for that cage.
+ * If violated, warns the user and offers to push the movement date forward
+ * to match (or they can cancel and fix manually).
+ *
+ * Returns true  → safe to proceed (date is valid, or user accepted the fix)
+ * Returns false → caller should abort the save
+ *
+ * @param {string} cageId
+ * @param {string} newDepDate  YYYY-MM-DD
+ * @returns {boolean}
+ */
+function validateAndFixDepartureDateVsMovements(cageId, newDepDate) {
+  if (!newDepDate) return true; // clearing the date is always fine
+  const cage = getCage(cageId);
+  if (!cage) return true;
+
+  // Find any pending facility→frame movements for this cage whose planned date
+  // is BEFORE the new departure date (i.e. would now be too early)
+  const conflicts = STATE.plannedMovements.filter(m =>
+    !m.completed &&
+    m.cageId === cageId &&
+    m.typeKey === 'facility-to-frame' &&
+    m.date < newDepDate
+  );
+
+  if (!conflicts.length) return true; // no conflict
+
+  const fmt = d => { const [y,mo,dy]=d.split('-'); return `${dy}/${mo}/${y}`; };
+  const conflictLines = conflicts.map(m => `  • ${m.description || 'Facility → Frame'} on ${fmt(m.date)}`).join('\n');
+
+  const msg =
+    `Cage ${cage.name}: the new "Leaves Facility" date (${fmt(newDepDate)}) is ` +
+    `AFTER the following planned movement(s):\n\n${conflictLines}\n\n` +
+    `A cage cannot move to a frame before it has left the facility.\n\n` +
+    `Click OK to automatically push those movement date(s) forward to ${fmt(newDepDate)}.\n` +
+    `Click Cancel to keep the current departure date unchanged.`;
+
+  if (!confirm(msg)) return false; // user cancelled — abort the departure-date change
+
+  // Push conflicting movement dates forward to match the new departure date
+  conflicts.forEach(m => { m.date = newDepDate; });
+  // Persist each adjusted movement
+  conflicts.forEach(m => {
+    // Re-use the existing API helper if available
+    if (typeof addMovementToAPI === 'function') addMovementToAPI(m);
+  });
+  showSuccess(`Movement date(s) for cage ${cage.name} pushed to ${fmt(newDepDate)} to match the new departure date.`);
+  return true;
+}
+
 function startInlineEdit(cageId, field, spanEl) {
   const c = getCage(cageId);
   if (!c) return;
@@ -3452,7 +3505,17 @@ function startInlineEdit(cageId, field, spanEl) {
     saved = true;
     const raw = input.value.trim();
     if (isNumber) { const n = parseFloat(raw); if (!isNaN(n)) c[field] = n; }
-    else if (isDate) { c[field] = raw || null; }
+    else if (isDate) {
+      // Extra validation when editing the departure date
+      if (field === 'departureDate') {
+        if (!validateAndFixDepartureDateVsMovements(cageId, raw || null)) {
+          // User cancelled — abort without saving; restore original display
+          render();
+          return;
+        }
+      }
+      c[field] = raw || null;
+    }
     else { if (raw) c[field] = raw; }
     render();
     saveCage(c);
@@ -3483,7 +3546,9 @@ function saveCageEdit(id) {
   if (!isNaN(w)) c.width = w;
   if (!isNaN(l)) c.length = l;
   if (!isNaN(wt)) c.weight = wt;
-  c.departureDate = dep || null;
+  const newDep = dep || null;
+  if (!validateAndFixDepartureDateVsMovements(id, newDep)) return; // user cancelled
+  c.departureDate = newDep;
   if (intoRmdEl) c.intoRmd = intoRmdEl.value || null;
   if (outOfRmdEl) c.outOfRmd = outOfRmdEl.value || null;
   if (spEl) c.shippingPreference = spEl.checked;
@@ -14345,6 +14410,26 @@ async function dd_confirmPush() {
 
     const currentDate=cage.departure_date||cage.departureDate||null;
     if (currentDate===dateStr) { dd_addResult('dd-result-skip',`⤳ SKIP  Cage ${dep.cage} — already ${dateStr}`); dd_pushLogSkipped.push({cage:dep.cage,reason:`Already set to ${dd_fmtDateDisplay(dateStr)}`,type:'already',shift:dep.shift,vstLabel:dep.vstLabel}); skipped++; continue; }
+
+    // ── Movement-date conflict check ──────────────────────────────────────────
+    // If this cage has a pending facility→frame movement planned BEFORE the new
+    // departure date, we must push that movement date forward automatically.
+    const trackerCage = STATE.cages.find(c => c.id === cage.id || String(c.name).trim() === String(dep.cage).trim());
+    if (trackerCage) {
+      const moveConflicts = STATE.plannedMovements.filter(m =>
+        !m.completed &&
+        m.cageId === trackerCage.id &&
+        m.typeKey === 'facility-to-frame' &&
+        m.date < dateStr
+      );
+      if (moveConflicts.length) {
+        moveConflicts.forEach(m => { m.date = dateStr; });
+        moveConflicts.forEach(m => { if (typeof addMovementToAPI === 'function') addMovementToAPI(m); });
+        dd_addResult('dd-result-warn', `⚠ MOVED  Cage ${dep.cage} — ${moveConflicts.length} planned Facility→Frame movement(s) pushed to ${dateStr} to match new departure date`);
+        dd_pushLogChanges.push({cage:dep.cage,oldDate:currentDate,newDate:dateStr,shift:dep.shift,vstLabel:dep.vstLabel,movementsPushed:moveConflicts.length});
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const payload={id:cage.id,name:cage.name,height:cage.height||0,width:cage.width||0,length:cage.length||0,weight:cage.weight||0,notes:cage.notes||'',location:cage.location||'facility',location_detail:cage.location_detail||cage.locationDetail||'',departure_date:dateStr,proposed_ship_day:cage.proposed_ship_day||cage.proposedShipDay||null,proposed_trip_id:cage.proposed_trip_id||cage.proposedTripId||null,shipping_preference:cage.shipping_preference||cage.shippingPreference||false,into_rmd:cage.into_rmd||cage.intoRmd||null,out_of_rmd:cage.out_of_rmd||cage.outOfRmd||null};
     try {
