@@ -5276,6 +5276,7 @@ async function completeMove(id) {
   if (cage) await saveCage(cage);
   if (frame) await saveFrame(frame);
   await saveRMD();
+  await saveRSS();
 }
 
 function setMoveNote(id, note) {
