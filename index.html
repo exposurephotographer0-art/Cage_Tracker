@@ -9927,6 +9927,7 @@ function renderBoatPlanner() {
 let mvFilter = 'all';
 let mvDayView = false;   // false = "all movements" map, true = day-by-day view
 let mvDayDate = null;    // ISO date string of the currently viewed day (null = auto-select today/first day)
+let mvSidebarShowCompleted = false; // whether to show completed moves in the sidebar list
 
 // ── Click-to-Plan state ──
 // mvPick = null (idle) | { cageId, cageName, fromLocation, fromDetail }
@@ -10854,10 +10855,12 @@ function renderMovementsMap(dayCtx) {
       return (a.sortOrder ?? 999999) - (b.sortOrder ?? 999999);
     });
 
-  // Apply same type filter as the map (pending only for filter, but show completed separately)
-  const sidebarFiltered = mvFilter === 'all'
+  // Apply same type filter as the map; respect completed toggle
+  const sidebarAll = mvFilter === 'all'
     ? sidebarMoves
     : sidebarMoves.filter(m => m.typeKey === mvFilter);
+  const sbCompletedCount = sidebarAll.filter(m => m.completed).length;
+  const sidebarFiltered = mvSidebarShowCompleted ? sidebarAll : sidebarAll.filter(m => !m.completed);
 
   let moveListHTML = '';
   if (!sidebarFiltered.length) {
@@ -11343,7 +11346,10 @@ function renderMovementsMap(dayCtx) {
           <!-- Sidebar -->
           <div style="display:flex;flex-direction:column;gap:12px">
             <div class="card" style="position:sticky;top:20px;max-height:calc(100vh - 120px);overflow-y:auto">
-              <div class="card-title" style="margin-bottom:10px">Planned Movements</div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                <div class="card-title" style="margin:0">Planned Movements</div>
+                ${sbCompletedCount > 0 ? `<button class="btn btn-secondary btn-xs" onclick="mvSidebarShowCompleted=!mvSidebarShowCompleted;render()" title="${mvSidebarShowCompleted ? 'Hide completed movements' : 'Show completed movements'}">${mvSidebarShowCompleted ? '🙈 Hide Done' : '👁 Done (' + sbCompletedCount + ')'}</button>` : ''}
+              </div>
               ${moveListHTML||'<div class="empty-msg">No movements match filter</div>'}
               <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border)">
                 <button class="btn btn-primary" style="width:100%" onclick="planFormOpen=!planFormOpen;render()" title="Plan a new movement">+ Plan Movements</button>
