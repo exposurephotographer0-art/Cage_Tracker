@@ -10542,7 +10542,7 @@ function renderMovementsMap(dayCtx) {
   function buildRssCard() {
     const rssCages = isDayView
       ? [...dayCtx.cageLocSim.entries()].filter(([,loc]) => loc.location==='rss').map(([cid]) => getCage(cid)).filter(Boolean)
-      : (STATE.rssCages || []).map(id => getCage(id)).filter(Boolean);
+      : STATE.cages.filter(c => c.location === 'rss');
     const pendingOut = filtered.filter(m => m.typeKey === 'rss-to-frame');
     const pendingIn  = filtered.filter(m => m.typeKey === 'frame-to-rss' || m.typeKey === 'rmd-to-rss' || (m.typeKey === 'frame-to-rmd' && m.rmdSlot === 'RSS'));
     const isActive = pendingOut.length > 0 || pendingIn.length > 0;
