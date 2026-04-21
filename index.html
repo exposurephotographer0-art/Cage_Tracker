@@ -1496,7 +1496,7 @@ function tagDot(cage) {
 }
 function cageLabel(c) { return `${esc(c.name)} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
 function cageLabelRaw(c) { return `${c.name} · ${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t`; }
-function locBadge(l) { return {facility:'blue', rmd:'green', rss:'blue', frame:'orange', shipped:'purple'}[l] || 'accent'; }
+function locBadge(l) { return {facility:'blue', rmd:'green', rss:'green', frame:'orange', shipped:'purple'}[l] || 'accent'; }
 function locLabel(c) {
   if (c.location === 'facility') return 'In Facility';
   if (c.location === 'rmd') return 'RMD ' + (c.locationDetail||'');
@@ -4360,6 +4360,7 @@ const MOVE_TYPES = [
   {value:'rmd-to-frame',      label:'RMD / Roof Slab → Frame'},
   {value:'rmd-to-rss',        label:'RMD → Roof Slab Storage'},
   {value:'rss-to-rmd',        label:'Roof Slab Storage → RMD'},
+  {value:'rss-to-frame',      label:'Roof Slab Storage → Frame'},
   {value:'frame-fix-shipping', label:'Fix cage to frame for shipping'},
 ];
 
@@ -5044,7 +5045,6 @@ async function completeMove(id) {
     else if (m.typeKey === 'frame-to-rss') recordLocationChange(cage, 'rss', 'Roof Slab Storage');
     else if (m.typeKey === 'rmd-to-rss') recordLocationChange(cage, 'rss', 'Roof Slab Storage');
     else if (m.typeKey === 'rss-to-rmd') recordLocationChange(cage, 'rmd', m.rmdSlot ? 'RMD-'+m.rmdSlot : 'RMD');
-    else if (m.typeKey === 'facility-to-rmd' && m.rmdNumber != null) recordLocationChange(cage, 'rmd', `RMD-${m.rmdNumber}${m.rmdSide||''}`);
     else if (m.typeKey === 'frame-to-frame' && frame) recordLocationChange(cage, 'frame', frame.name);
   }
 
@@ -5068,7 +5068,24 @@ async function completeMove(id) {
     cage.locationDetail = frame.name;
     cage.departureDate = null; // cage has left facility
   }
-  // rss-to-frame is now handled by rmd-to-frame (which includes rss cages)
+  else if (m.typeKey === 'rss-to-frame' && cage && frame) {
+    clearCageFromCurrentLocation(cage.id);
+    if (frame.cages.length >= 2) {
+      const override = confirm(`⚠️ Override: ${frame.name} already has max cages.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
+      if (!override) return;
+    } else if (frame.cages.length === 1) {
+      const existing = getCage(frame.cages[0]);
+      if (existing && !canFitTwo(existing, cage, frame.width)) {
+        const override = confirm(`⚠️ Warning: cages don't fit together in ${frame.name}.\n\nClick OK to override and complete the movement anyway, or Cancel to abort.`);
+        if (!override) return;
+      }
+    }
+    frame.cages.push(cage.id);
+    cage.location = 'frame';
+    cage.locationDetail = frame.name;
+    cage.departureDate = null;
+    cage.outOfRmd = todayStr();
+  }
   else if (m.typeKey === 'frame-to-rss' && cage) {
     // Remove from its current frame
     const srcFrame = STATE.frames.find(f => f.cages.includes(cage.id));
@@ -9771,19 +9788,19 @@ function mvPickCage(cageId) {
 
 // Step 2: user clicks a destination → show date modal and add movement
 function mvPickDestination(destType, destId, destLabel) {
+  if (!mvPick) return;
   if (destType === 'rss') {
-    // Direct click-to-plan: set planFormType to the appropriate rss move type
-    const cage = getCage(mvPick ? mvPick.cageId : '');
-    if (cage) {
-      if (cage.location === 'rss') { planFormType = 'rss-to-frame'; }
-      else { planFormType = 'facility-to-rss'; }
-    }
-    planFormOpen = true;
-    mvPick = null;
-    render();
+    const fromLoc = mvPick.fromLocation;
+    let typeKey = '';
+    if (fromLoc === 'frame') typeKey = 'frame-to-rss';
+    else if (fromLoc === 'rmd') typeKey = 'rmd-to-rss';
+    else if (fromLoc === 'rss') { alert('Cage is already in Roof Slab Storage.'); return; }
+    else { alert(`Cannot plan movement from ${fromLoc} to Roof Slab Storage.`); return; }
+    const cage = getCage(mvPick.cageId);
+    const desc = cage ? `${cage.name} → Roof Slab Storage` : destLabel;
+    _mvPick_showDateModal(typeKey, destType, destId, desc);
     return;
   }
-  if (!mvPick) return;
   const cage = getCage(mvPick.cageId);
   if (!cage) { mvPick = null; render(); return; }
 
@@ -9792,6 +9809,8 @@ function mvPickDestination(destType, destId, destLabel) {
   if (mvPick.fromLocation === 'facility' && destType === 'frame') typeKey = 'facility-to-frame';
   else if (mvPick.fromLocation === 'facility' && destType === 'rmd') typeKey = 'facility-to-rmd';
   else if (mvPick.fromLocation === 'rmd' && destType === 'frame') typeKey = 'rmd-to-frame';
+  else if (mvPick.fromLocation === 'rss' && destType === 'frame') typeKey = 'rss-to-frame';
+  else if (mvPick.fromLocation === 'rss' && destType === 'rmd') typeKey = 'rss-to-rmd';
   else if (mvPick.fromLocation === 'frame' && destType === 'rmd') typeKey = 'frame-to-rmd';
   else if (mvPick.fromLocation === 'frame' && destType === 'frame') typeKey = 'frame-to-frame';
   else {
@@ -9810,7 +9829,10 @@ function mvPickDestination(destType, destId, destLabel) {
     parts = [cage.name, destLabel];
   }
   const desc = parts.filter(Boolean).join(' → ');
+  _mvPick_showDateModal(typeKey, destType, destId, desc);
+}
 
+function _mvPick_showDateModal(typeKey, destType, destId, desc) {
   // Show date picker modal
   const overlay = document.createElement('div');
   overlay.id = 'mv-pick-date-overlay';
@@ -10196,6 +10218,15 @@ function renderMovementsDayView() {
       const slot = m.rmdNumber != null ? `RMD-${m.rmdNumber}${m.rmdSide||''}` : (m.rmdSlot||'RMD');
       cageLocSim.set(m.cageId, { location:'rmd', locationDetail: slot, frameId:null });
     }
+    else if (m.typeKey === 'rss-to-frame') {
+      // Cage was in rss before this move — put it back
+      cageLocSim.set(m.cageId, { location:'rss', locationDetail:'Roof Slab Storage', frameId:null });
+    }
+    else if (m.typeKey === 'rss-to-rmd') {
+      // Cage was in rss before — put it back
+      simRmdRemoveCage(m.cageId);
+      cageLocSim.set(m.cageId, { location:'rss', locationDetail:'Roof Slab Storage', frameId:null });
+    }
   });
 
   // Step 2: APPLY prior pending moves forward (these haven't happened yet in STATE)
@@ -10211,6 +10242,12 @@ function renderMovementsDayView() {
     } else if (m.typeKey === 'frame-to-rss' || m.typeKey === 'rmd-to-rss') {
       simRmdRemoveCage(m.cageId);
       cageLocSim.set(m.cageId, { location:'rss', locationDetail:'Roof Slab Storage', frameId:null });
+    } else if (m.typeKey === 'rss-to-frame') {
+      cageLocSim.set(m.cageId, { location:'frame', locationDetail: getFrame(m.frameId)?.name||'', frameId: m.frameId||null });
+    } else if (m.typeKey === 'rss-to-rmd') {
+      const slot = m.rmdNumber != null ? `RMD-${m.rmdNumber}${m.rmdSide||''}` : (m.rmdSlot||'RMD');
+      cageLocSim.set(m.cageId, { location:'rmd', locationDetail: slot, frameId:null });
+      simRmdAddCage(m);
     }
   });
 
@@ -10238,6 +10275,11 @@ function renderMovementsDayView() {
       eodLocSim.set(m.cageId, { location:'rmd', locationDetail: slot, frameId:null });
     } else if (m.typeKey === 'frame-to-rss' || m.typeKey === 'rmd-to-rss') {
       eodLocSim.set(m.cageId, { location:'rss', locationDetail:'Roof Slab Storage', frameId:null });
+    } else if (m.typeKey === 'rss-to-frame') {
+      eodLocSim.set(m.cageId, { location:'frame', locationDetail: getFrame(m.frameId)?.name||'', frameId: m.frameId||null });
+    } else if (m.typeKey === 'rss-to-rmd') {
+      const slot = m.rmdNumber != null ? `RMD-${m.rmdNumber}${m.rmdSide||''}` : (m.rmdSlot||'RMD');
+      eodLocSim.set(m.cageId, { location:'rmd', locationDetail: slot, frameId:null });
     }
   });
   let _rmdCount = 0, _frameFacCount = 0, _frameBoatCount = 0, _rssCount = 0;
@@ -10501,7 +10543,7 @@ function renderMovementsMap(dayCtx) {
       ? [...dayCtx.cageLocSim.entries()].filter(([,loc]) => loc.location==='rss').map(([cid]) => getCage(cid)).filter(Boolean)
       : (STATE.rssCages || []).map(id => getCage(id)).filter(Boolean);
     const pendingOut = filtered.filter(m => m.typeKey === 'rss-to-frame');
-    const pendingIn  = filtered.filter(m => m.typeKey === 'facility-to-rss' || m.typeKey === 'frame-to-rss' || m.typeKey === 'rmd-to-rss' || (m.typeKey === 'frame-to-rmd' && m.rmdSlot === 'RSS'));
+    const pendingIn  = filtered.filter(m => m.typeKey === 'frame-to-rss' || m.typeKey === 'rmd-to-rss' || (m.typeKey === 'frame-to-rmd' && m.rmdSlot === 'RSS'));
     const isActive = pendingOut.length > 0 || pendingIn.length > 0;
     const border = isActive ? 'border:2px solid var(--accent);box-shadow:0 0 0 3px rgba(192,133,32,0.15);' : 'border:1px solid #a0c8e8;';
     let html = '';
