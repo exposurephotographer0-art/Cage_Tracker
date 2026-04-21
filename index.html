@@ -4768,31 +4768,81 @@ function renderPlanner() {
   const week2HTML = weekDays.slice(7).map(renderWeekDay).join('');
 
 
-  let sorted = plannerShowCompleted ? sortedAll : sortedAll.filter(m => !m.completed);
+  // Sort table by date ascending (soonest first), then shift (day before night), then sortOrder within day
+  let sorted = (plannerShowCompleted ? sortedAll : sortedAll.filter(m => !m.completed))
+    .slice()
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date.localeCompare(b.date);
+      const shiftA = a.shift === 'night' ? 1 : 0;
+      const shiftB = b.shift === 'night' ? 1 : 0;
+      if (shiftA !== shiftB) return shiftA - shiftB;
+      return (a.sortOrder ?? 999999) - (b.sortOrder ?? 999999);
+    });
   const completedCount = sortedAll.filter(m => m.completed).length;
-  let tableRows = sorted.length === 0
-    ? '<tr><td colspan="9" class="empty-msg" style="text-align:center;padding:20px">' + (plannerShowCompleted ? 'No movements planned' : 'No pending movements — all done!') + '</td></tr>'
-    : sorted.map((m, i)=>`
-      <tr data-id="${m.id}" draggable="true" style="opacity:${m.completed?'0.5':'1'}" ondragstart="onMoveDragStart(event)" ondragover="onMoveDragOver(event)" ondrop="onMoveDrop(event)" ondragend="onMoveDragEnd(event)" ondragleave="onMoveDragLeave(event)">
-        <td style="width:24px;padding:4px 2px"><span class="drag-handle" title="Drag to reorder">⠿</span></td>
-        <td style="width:28px;text-align:center;font:700 11px var(--font-mono);color:${m.completed?'var(--text-muted)':'var(--accent)'}">${i+1}</td>
-        <td style="font-family:var(--font-mono)">
-          ${!m.completed ? `<input type="date" value="${m.date}" title="Click to change date" style="border:none;background:transparent;font:600 12px var(--font-mono);color:var(--accent);cursor:pointer;width:130px;padding:2px 4px;border-radius:4px;border:1px solid transparent" onmouseover="this.style.borderColor='var(--border)'" onmouseout="this.style.borderColor='transparent'" onchange="rescheduleMove('${m.id}',this.value)" />` : `<span>${fmt(m.date)}</span>`}
+
+  // Build grouped-by-day rows
+  let tableRows = '';
+  if (sorted.length === 0) {
+    tableRows = '<tr><td colspan="8" class="empty-msg" style="text-align:center;padding:20px">' + (plannerShowCompleted ? 'No movements planned' : 'No pending movements — all done!') + '</td></tr>';
+  } else {
+    // Group movements by date
+    const dayGroups = [];
+    sorted.forEach(m => {
+      const last = dayGroups[dayGroups.length - 1];
+      if (last && last.date === m.date) { last.moves.push(m); }
+      else { dayGroups.push({ date: m.date, moves: [m] }); }
+    });
+
+    const todayISO = todayStr();
+    dayGroups.forEach(group => {
+      const d = new Date(group.date + 'T12:00:00');
+      const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()];
+      const isToday = group.date === todayISO;
+      const isPast  = group.date < todayISO;
+      const dayDiff = Math.ceil((new Date(group.date + 'T12:00:00') - new Date(todayISO + 'T12:00:00')) / 86400000);
+      const relLabel = isToday ? 'Today' : isPast ? `${Math.abs(dayDiff)}d ago` : `in ${dayDiff}d`;
+      const pendingInDay = group.moves.filter(m => !m.completed).length;
+      const headerBg = isToday ? '#fef9ec' : isPast ? '#f8f8f8' : '#f0f5ff';
+      const headerBorder = isToday ? '#e8c84a' : isPast ? '#ddd' : '#c3d9f7';
+      const headerColor = isToday ? 'var(--accent)' : isPast ? 'var(--text-muted)' : 'var(--blue)';
+
+      // Day header row
+      tableRows += `<tr style="background:${headerBg};border-top:2px solid ${headerBorder}">
+        <td colspan="8" style="padding:7px 10px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font:700 13px var(--font-mono);color:${headerColor}">${dow} ${fmt(group.date)}</span>
+            <span style="font:500 10px var(--font-mono);color:${headerColor};opacity:0.75;background:${headerBorder};padding:1px 7px;border-radius:10px">${relLabel}</span>
+            <span style="font:600 10px var(--font-mono);color:var(--text-muted);margin-left:auto">${pendingInDay} movement${pendingInDay !== 1 ? 's' : ''}</span>
+          </div>
         </td>
-        <td>${m.shift==='night'?'🌙 Night':'☀ Day'}</td>
-        <td>${esc(m.type)}</td>
-        <td style="font-weight:600;color:var(--text-primary)">${esc(m.description)}</td>
-        <td style="color:var(--text-muted)">
-          ${esc(m.notes||'')}
-          ${m.completed && m.completionNote ? `<div style="font-style:italic;font-size:10px;color:var(--purple)">"${esc(m.completionNote)}"</div>` : ''}
-          ${!m.completed ? `<input class="move-note-edit" placeholder="Add note…" value="${esc(m.completionNote||'')}" onchange="setMoveNote('${m.id}',this.value)" title="Completion note (saved when you tick done)"/>` : ''}
-        </td>
-        <td><span class="badge ${m.completed?'badge-green':'badge-yellow'}">${m.completed?'Done':'Pending'}</span></td>
-        <td style="white-space:nowrap">
-          ${!m.completed ? `<button class="btn btn-primary btn-xs" onclick="completeMove('${m.id}')">✓</button> <button class="btn btn-secondary btn-xs" onclick="openEditMove('${m.id}')" title="Edit this movement">✏ Edit</button> ` : ''}
-          <button class="btn btn-danger btn-xs" onclick="deleteMove('${m.id}')">Del</button>
-        </td>
-      </tr>`).join('');
+      </tr>`;
+
+      // Movement rows for this day, numbered within the day
+      group.moves.forEach((m, dayIdx) => {
+        tableRows += `
+        <tr data-id="${m.id}" draggable="true" style="opacity:${m.completed ? '0.5' : '1'}" ondragstart="onMoveDragStart(event)" ondragover="onMoveDragOver(event)" ondrop="onMoveDrop(event)" ondragend="onMoveDragEnd(event)" ondragleave="onMoveDragLeave(event)">
+          <td style="width:24px;padding:4px 2px"><span class="drag-handle" title="Drag to reorder within day">⠿</span></td>
+          <td style="width:28px;text-align:center;font:700 11px var(--font-mono);color:${m.completed ? 'var(--text-muted)' : 'var(--accent)'}">${dayIdx + 1}</td>
+          <td style="font-family:var(--font-mono)">
+            ${!m.completed ? `<input type="date" value="${m.date}" title="Click to change date" style="border:none;background:transparent;font:600 12px var(--font-mono);color:var(--accent);cursor:pointer;width:130px;padding:2px 4px;border-radius:4px;border:1px solid transparent" onmouseover="this.style.borderColor='var(--border)'" onmouseout="this.style.borderColor='transparent'" onchange="rescheduleMove('${m.id}',this.value)" />` : `<span>${fmt(m.date)}</span>`}
+          </td>
+          <td>${m.shift === 'night' ? '🌙 Night' : '☀ Day'}</td>
+          <td>${esc(m.type)}</td>
+          <td style="font-weight:600;color:var(--text-primary)">${esc(m.description)}</td>
+          <td style="color:var(--text-muted)">
+            ${esc(m.notes || '')}
+            ${m.completed && m.completionNote ? `<div style="font-style:italic;font-size:10px;color:var(--purple)">"${esc(m.completionNote)}"</div>` : ''}
+            ${!m.completed ? `<input class="move-note-edit" placeholder="Add note…" value="${esc(m.completionNote || '')}" onchange="setMoveNote('${m.id}',this.value)" title="Completion note (saved when you tick done)"/>` : ''}
+          </td>
+          <td style="white-space:nowrap">
+            <span class="badge ${m.completed ? 'badge-green' : 'badge-yellow'}" style="margin-right:4px">${m.completed ? 'Done' : 'Pending'}</span>
+            ${!m.completed ? `<button class="btn btn-primary btn-xs" onclick="completeMove('${m.id}')">✓</button> <button class="btn btn-secondary btn-xs" onclick="openEditMove('${m.id}')" title="Edit this movement">✏ Edit</button> ` : ''}
+            <button class="btn btn-danger btn-xs" onclick="deleteMove('${m.id}')">Del</button>
+          </td>
+        </tr>`;
+      });
+    });
+  }
 
   // Build RMD & Frame summary sidebar for planner
   const _plannerShipDays = getShipmentDays();
@@ -4895,7 +4945,7 @@ function renderPlanner() {
           </div>
           <div style="overflow-x:auto">
             <table><thead><tr>
-              <th style="width:24px"></th><th style="width:28px;text-align:center">#</th><th>Date</th><th>Shift</th><th>Type</th><th>Description</th><th>Notes</th><th>Status</th><th>Actions</th>
+              <th style="width:24px"></th><th style="width:28px;text-align:center">#</th><th>Date</th><th>Shift</th><th>Type</th><th>Description</th><th>Notes</th><th>Actions</th>
             </tr></thead><tbody>${tableRows}</tbody></table>
           </div>
         </div>
