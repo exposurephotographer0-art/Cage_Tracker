@@ -12048,6 +12048,15 @@ function renderSettings() {
         <span id="migrate-msg" style="font-size:12px;display:none"></span>
       </div>
     </div>` : ''}
+
+    <div class="card" style="max-width:620px;margin-top:18px">
+      <div class="card-title">&#128190; Export Database</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Export the entire D1 database to a single Excel file. Each data table is exported as a separate sheet — Cages, Frames, RMD Slots, Planned Movements, Shipments, Boat Trips, Downtime Tasks, and Settings.</p>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-primary" id="db-export-btn" onclick="exportFullDatabase()">&#11015; Export to Excel</button>
+        <span id="db-export-msg" style="font-size:12px;display:none"></span>
+      </div>
+    </div>
   `;
 }
 
@@ -12071,6 +12080,203 @@ async function runMigration() {
     }
   }
   if (btn) { btn.disabled = false; btn.textContent = '⚡ Run Migration'; }
+}
+
+async function exportFullDatabase() {
+  const btn = document.getElementById('db-export-btn');
+  const msg = document.getElementById('db-export-msg');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Exporting…'; }
+  if (msg) { msg.style.display = 'none'; }
+
+  try {
+    // Fetch downtime tasks from API (not in STATE)
+    let downtimeTasks = [];
+    try {
+      const dtData = await api('/api/downtime/tasks');
+      downtimeTasks = (dtData.tasks || []).map(t => ({
+        ...t,
+        dt_events: (typeof t.dt_events === 'string') ? JSON.parse(t.dt_events) : (t.dtEvents || [])
+      }));
+    } catch(e) { /* downtime may be unavailable */ }
+
+    const wb = XLSX.utils.book_new();
+    const pad = v => (v === null || v === undefined) ? '' : v;
+    const fmt = ms => ms ? new Date(ms).toLocaleString('en-GB') : '';
+    const fmtD = ms => ms ? new Date(ms).toLocaleDateString('en-GB') : '';
+
+    // ── Sheet 1: Cages ──────────────────────────────────────────────
+    const cageHdr = ['ID','Name','Height (m)','Width (m)','Length (m)','Weight (t)',
+      'Location','Location Detail','Departure Date','Proposed Ship Day','Proposed Trip ID',
+      'Tag','Notes','RSS'];
+    const cageRows = STATE.cages.map(c => [
+      pad(c.id), pad(c.name),
+      pad(c.height), pad(c.width), pad(c.length), pad(c.weight),
+      pad(c.location), pad(c.locationDetail || c.location_detail),
+      pad(c.departureDate || c.departure_date),
+      pad(c.proposedShipDay || c.proposed_ship_day),
+      pad(c.proposedTripId || c.proposed_trip_id),
+      pad(c.tag), pad(c.notes),
+      pad(c.rss ? 'Yes' : '')
+    ]);
+    const wsC = XLSX.utils.aoa_to_sheet([cageHdr, ...cageRows]);
+    wsC['!cols'] = cageHdr.map((h, i) => ({ wch: [20,10,12,12,12,12,12,16,16,18,18,10,30,8][i] || 14 }));
+    XLSX.utils.book_append_sheet(wb, wsC, 'Cages');
+
+    // ── Sheet 2: Frames ─────────────────────────────────────────────
+    const frameHdr = ['ID','Name','Width (m)','Location','Has Waler','Fixed for Shipping','Cages (count)','Cage Names'];
+    const frameRows = STATE.frames.map(f => {
+      const cageNames = (f.cages || []).map(id => { const c = STATE.cages.find(x => x.id === id); return c ? c.name : id; }).join(', ');
+      return [pad(f.id), pad(f.name), pad(f.width), pad(f.location),
+        f.hasWaler ? 'Yes' : 'No', f.fixedForShipping ? 'Yes' : 'No',
+        (f.cages || []).length, pad(cageNames)];
+    });
+    const wsF = XLSX.utils.aoa_to_sheet([frameHdr, ...frameRows]);
+    wsF['!cols'] = [20,10,12,12,12,18,14,30].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, wsF, 'Frames');
+
+    // ── Sheet 3: RMD Slots ──────────────────────────────────────────
+    const rmdHdr = ['Slot','Side','Inner Cage ID','Inner Cage Name','Outer Cage ID','Outer Cage Name','Overridden'];
+    const rmdRows = [];
+    (STATE.rmdSlots || []).forEach(slot => {
+      ['A','B'].forEach(side => {
+        const s = slot[side] || {};
+        const c1 = STATE.cages.find(x => x.id === s.cage1);
+        const c2 = STATE.cages.find(x => x.id === s.cage2);
+        rmdRows.push([
+          pad(slot.number), side,
+          pad(s.cage1), c1 ? c1.name : '',
+          pad(s.cage2), c2 ? c2.name : '',
+          s.overridden ? 'Yes' : 'No'
+        ]);
+      });
+    });
+    const wsR = XLSX.utils.aoa_to_sheet([rmdHdr, ...rmdRows]);
+    wsR['!cols'] = [8,8,20,14,20,14,12].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, wsR, 'RMD Slots');
+
+    // ── Sheet 4: Planned Movements ──────────────────────────────────
+    const moveHdr = ['ID','Cage ID','Cage Name','From','To','To Detail','Date','Completed',
+      'Completed Date','Sort Order','Notes','Trip ID'];
+    const moveRows = (STATE.plannedMovements || []).map(m => {
+      const c = STATE.cages.find(x => x.id === m.cageId);
+      return [
+        pad(m.id), pad(m.cageId), c ? c.name : '',
+        pad(m.from), pad(m.to), pad(m.toDetail || m.to_detail),
+        pad(m.date), m.completed ? 'Yes' : 'No',
+        pad(m.completedDate || m.completed_date),
+        pad(m.sortOrder || m.sort_order), pad(m.notes), pad(m.tripId || m.trip_id)
+      ];
+    });
+    const wsM = XLSX.utils.aoa_to_sheet([moveHdr, ...moveRows]);
+    wsM['!cols'] = [20,20,12,12,12,16,12,10,16,12,30,20].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, wsM, 'Planned Movements');
+
+    // ── Sheet 5: Shipments ──────────────────────────────────────────
+    const shipHdr = ['ID','Trip ID','Frame ID','Frame Name','Cage IDs','Cage Names',
+      'Ship Date','Status','Notes'];
+    const shipRows = (STATE.shipments || []).map(s => {
+      const frame = STATE.frames.find(x => x.id === s.frameId || x.id === s.frame_id);
+      const cageIds = (s.cageIds || s.cage_ids || []);
+      const cageNames = cageIds.map(id => { const c = STATE.cages.find(x => x.id === id); return c ? c.name : id; }).join(', ');
+      return [
+        pad(s.id), pad(s.tripId || s.trip_id),
+        pad(s.frameId || s.frame_id), frame ? frame.name : '',
+        cageIds.join(', '), pad(cageNames),
+        pad(s.shipDate || s.ship_date), pad(s.status), pad(s.notes)
+      ];
+    });
+    const wsS = XLSX.utils.aoa_to_sheet([shipHdr, ...shipRows]);
+    wsS['!cols'] = [20,20,20,12,30,30,14,12,30].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, wsS, 'Shipments');
+
+    // ── Sheet 6: Boat Trips ─────────────────────────────────────────
+    const btHdr = ['ID','Name','Client','Depart Date','Return Date',
+      'Load Date','Status','Notes'];
+    const btRows = (STATE.boatTrips || []).map(t => [
+      pad(t.id), pad(t.name), pad(t.client),
+      pad(t.departDate || t.depart_date),
+      pad(t.returnDate || t.return_date),
+      pad(t.loadDate || t.load_date),
+      pad(t.status), pad(t.notes)
+    ]);
+    const wsBT = XLSX.utils.aoa_to_sheet([btHdr, ...btRows]);
+    wsBT['!cols'] = [20,20,20,14,14,14,12,30].map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, wsBT, 'Boat Trips');
+
+    // ── Sheet 7: Downtime Tasks ──────────────────────────────────────
+    const maxDT = downtimeTasks.length
+      ? Math.max(1, ...downtimeTasks.map(e => (e.dt_events || []).length))
+      : 1;
+    const dtHdr = ['ID','Date','Team','Description','Ref','Start','End',
+      'Work (min)','Downtime (min)','Break (min)','DT Events','Notes'];
+    for (let i = 1; i <= maxDT; i++) dtHdr.push(`DT${i} Dur (min)`, `DT${i} Category`, `DT${i} Description`);
+    const dtRows = downtimeTasks.map(e => {
+      const dtEvs = e.dt_events || [];
+      const stMs = e.start_time || e.startTime || 0;
+      const enMs = e.end_time   || e.endTime   || 0;
+      const row = [
+        pad(e.id),
+        fmtD(stMs),
+        e.team === 'lifting' ? 'Lifting' : 'External Works',
+        pad(e.task_desc || e.taskDesc),
+        pad(e.task_ref  || e.taskRef),
+        fmt(stMs), fmt(enMs),
+        Math.round((e.work_secs  || e.workSecs  || 0) / 60),
+        Math.round((e.down_secs  || e.downSecs  || 0) / 60),
+        Math.round((e.break_secs || e.breakSecs || 0) / 60),
+        dtEvs.length,
+        pad(e.task_comment || e.taskComment)
+      ];
+      for (let j = 0; j < maxDT; j++) {
+        const d = dtEvs[j];
+        d ? row.push(Math.round((d.durSecs || 0) / 60), pad(d.category || 'Uncategorised'), pad(d.comment))
+          : row.push('', '', '');
+      }
+      return row;
+    });
+    const wsDT = XLSX.utils.aoa_to_sheet([dtHdr, ...dtRows]);
+    wsDT['!cols'] = dtHdr.map(() => ({ wch: 16 }));
+    XLSX.utils.book_append_sheet(wb, wsDT, 'Downtime Tasks');
+
+    // ── Sheet 8: Settings ────────────────────────────────────────────
+    const s = STATE.settings || {};
+    const settHdr = ['Setting', 'Value'];
+    const settRows = [
+      ['Movements Per Day',             s.movementsPerDay],
+      ['Height Short/Medium Threshold (m)', s.heightShortMax],
+      ['Height Medium/Tall Threshold (m)',  s.heightMedMax],
+      ['Waler Required Below Length (m)',   s.walerLengthThreshold],
+      ['Double Cage Spare Width (m)',        s.doubleSpareWidth],
+      ['Double Cage Max Weight (t)',         s.doubleMaxWeight],
+      ['Frame Spare Width (m)',              s.frameSpare],
+      ['Frame Tier 1 Width (m)',             s.frameTierSmall],
+      ['Frame Tier 2 Width (m)',             s.frameTierMed],
+      ['Next Ship Trip ID',                  s.nextShipTripId || ''],
+      ['Second Ship Trip ID',                s.secondShipTripId || ''],
+    ].map(r => [r[0], pad(r[1])]);
+    const wsST = XLSX.utils.aoa_to_sheet([settHdr, ...settRows]);
+    wsST['!cols'] = [{ wch: 36 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, wsST, 'Settings');
+
+    // ── Download ────────────────────────────────────────────────────
+    const d = new Date();
+    const stamp = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    XLSX.writeFile(wb, `cage_tracker_export_${stamp}.xlsx`);
+
+    if (msg) {
+      msg.style.display = 'inline';
+      msg.style.color = 'var(--green)';
+      msg.textContent = `✓ Exported ${STATE.cages.length} cages, ${STATE.frames.length} frames, ${(STATE.plannedMovements||[]).length} movements, ${(STATE.shipments||[]).length} shipments, ${(STATE.boatTrips||[]).length} boat trips, ${downtimeTasks.length} downtime tasks.`;
+    }
+  } catch(e) {
+    if (msg) {
+      msg.style.display = 'inline';
+      msg.style.color = 'var(--red)';
+      msg.textContent = '✗ Export failed: ' + e.message;
+    }
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = '⬇ Export to Excel'; }
 }
 
 async function applyShipmentAssignment() {
