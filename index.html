@@ -2946,11 +2946,21 @@ function renderDashboardFrames() {
 let cageFormOpen = false;
 let cageSearch = '';
 let cageFilter = 'all';
-let cageSort = 'number'; // 'number' | 'name' | 'departure' | 'shipday'
-let cageHeightFilter = 'all'; // 'all' | 'short' | 'medium' | 'tall'
+let cageSort = 'number'; // 'number'|'name'|'departure'|'liveneed'|'shipday'|'weight'|'width'|'height'|'length'
+let cageSortDir = 'asc'; // 'asc'|'desc'
+let cageHeightFilter = 'all'; // 'all'|'short'|'medium'|'tall'
 let cageEditing = null;
-let cageSelected = new Set(); // for multi-delete
+let cageSelected = new Set();
 let cageHideShipped = true;
+// Extended filters
+let cageTripFilter    = '';    // '' = any trip, '__none__' = no trip assigned, else trip id
+let cageLiveNeedFilter = 'all'; // 'all'|'red'|'orange'|'green'|'has'|'none'
+let cageCommentsFilter = 'all'; // 'all'|'has'|'none'
+let cageSp2Filter     = false;
+let cageWeightMin     = '', cageWeightMax = '';
+let cageWidthMin      = '', cageWidthMax  = '';
+let cageDepFrom       = '', cageDepTo     = '';
+let cageFilterPanelOpen = false; // show/hide range filter row
 
 // CAGE LOCATION HISTORY MODAL
 function openCageHistory(cageId) {
@@ -3030,38 +3040,73 @@ function renderHistoryModal() {
 }
 
 function renderCages() {
+  const today = new Date(); today.setHours(0,0,0,0);
   const filtered = STATE.cages.filter(c=>{
     if (cageHideShipped && c.location === 'shipped') return false;
-    if (cageSearch && !c.name.toLowerCase().includes(cageSearch.toLowerCase())) return false;
-    if (cageFilter === 'has-departure') return !!c.departureDate;
-    if (cageFilter === 'has-shipday') return !!c.proposedShipDay;
-    if (cageFilter === 'ship-pref') return !!c.shippingPreference;
-    if (cageFilter === 'status-green') return c.cageStatus === 'green';
-    if (cageFilter === 'status-red') return c.cageStatus === 'red';
-    if (cageFilter !== 'all' && c.location !== cageFilter) return false;
-    if (cageHeightFilter === 'short' && hCat(c.height) !== 'Short') return false;
+    // Search: name + comments
+    if (cageSearch) {
+      const q = cageSearch.toLowerCase();
+      if (!c.name.toLowerCase().includes(q) && !(c.comments||'').toLowerCase().includes(q)) return false;
+    }
+    // Location / special quick-filter
+    if (cageFilter === 'has-departure')  { if (!c.departureDate) return false; }
+    else if (cageFilter === 'has-shipday')    { if (!c.proposedShipDay) return false; }
+    else if (cageFilter === 'ship-pref')      { if (!c.shippingPreference) return false; }
+    else if (cageFilter === 'status-green')   { if (c.cageStatus !== 'green') return false; }
+    else if (cageFilter === 'status-red')     { if (c.cageStatus !== 'red') return false; }
+    else if (cageFilter !== 'all') { if (c.location !== cageFilter) return false; }
+    // Height category
+    if (cageHeightFilter === 'short'  && hCat(c.height) !== 'Short')  return false;
     if (cageHeightFilter === 'medium' && hCat(c.height) !== 'Medium') return false;
-    if (cageHeightFilter === 'tall' && hCat(c.height) !== 'Tall') return false;
+    if (cageHeightFilter === 'tall'   && hCat(c.height) !== 'Tall')   return false;
+    // SP2
+    if (cageSp2Filter && !c.shippingPreference2) return false;
+    // Comments
+    if (cageCommentsFilter === 'has'  &&  !c.comments) return false;
+    if (cageCommentsFilter === 'none' && !!c.comments) return false;
+    // Live Need Date urgency
+    if (cageLiveNeedFilter !== 'all') {
+      if (cageLiveNeedFilter === 'has'  && !c.liveNeedDate)  return false;
+      if (cageLiveNeedFilter === 'none' &&  c.liveNeedDate)  return false;
+      if (['red','orange','green'].includes(cageLiveNeedFilter)) {
+        if (!c.liveNeedDate) return false;
+        const d = Math.ceil((new Date(c.liveNeedDate+'T00:00:00') - today) / 86400000);
+        if (cageLiveNeedFilter === 'red'    && d > 21)         return false;
+        if (cageLiveNeedFilter === 'orange' && (d <= 21 || d > 35)) return false;
+        if (cageLiveNeedFilter === 'green'  && d <= 35)        return false;
+      }
+    }
+    // Boat trip
+    if (cageTripFilter === '__none__' &&  c.proposedTripId) return false;
+    if (cageTripFilter && cageTripFilter !== '__none__' && c.proposedTripId !== cageTripFilter) return false;
+    // Weight range
+    const wMin = cageWeightMin !== '' ? parseFloat(cageWeightMin) : null;
+    const wMax = cageWeightMax !== '' ? parseFloat(cageWeightMax) : null;
+    if (wMin !== null && (c.weight||0) < wMin) return false;
+    if (wMax !== null && (c.weight||0) > wMax) return false;
+    // Width range
+    const wdMin = cageWidthMin !== '' ? parseFloat(cageWidthMin) : null;
+    const wdMax = cageWidthMax !== '' ? parseFloat(cageWidthMax) : null;
+    if (wdMin !== null && (c.width||0) < wdMin) return false;
+    if (wdMax !== null && (c.width||0) > wdMax) return false;
+    // Departure date range
+    if (cageDepFrom && (!c.departureDate || c.departureDate < cageDepFrom)) return false;
+    if (cageDepTo   && (!c.departureDate || c.departureDate > cageDepTo))   return false;
     return true;
   }).sort((a, b) => {
-    if (cageSort === 'number') {
-      return a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: 'base'});
-    }
-    if (cageSort === 'departure') {
-      // Cages with a departure date first, ascending; nulls at end
-      if (a.departureDate && b.departureDate) return a.departureDate.localeCompare(b.departureDate);
-      if (a.departureDate) return -1;
-      if (b.departureDate) return 1;
-      return a.name.localeCompare(b.name, undefined, {numeric: true});
-    }
-    if (cageSort === 'shipday') {
-      // Cages with a ship day first, ascending; nulls at end
-      if (a.proposedShipDay && b.proposedShipDay) return a.proposedShipDay.localeCompare(b.proposedShipDay);
-      if (a.proposedShipDay) return -1;
-      if (b.proposedShipDay) return 1;
-      return a.name.localeCompare(b.name, undefined, {numeric: true});
-    }
-    return a.name.localeCompare(b.name);
+    let r = 0;
+    const nullLast = (va, vb, cmp) => va && vb ? cmp(va,vb) : va ? -1 : vb ? 1 : a.name.localeCompare(b.name,undefined,{numeric:true});
+    if      (cageSort === 'number')   r = a.name.localeCompare(b.name, undefined, {numeric:true, sensitivity:'base'});
+    else if (cageSort === 'name')     r = a.name.localeCompare(b.name);
+    else if (cageSort === 'departure')r = nullLast(a.departureDate, b.departureDate, (x,y)=>x.localeCompare(y));
+    else if (cageSort === 'liveneed') r = nullLast(a.liveNeedDate,  b.liveNeedDate,  (x,y)=>x.localeCompare(y));
+    else if (cageSort === 'shipday')  r = nullLast(a.proposedShipDay,b.proposedShipDay,(x,y)=>x.localeCompare(y));
+    else if (cageSort === 'weight')   r = (a.weight||0) - (b.weight||0);
+    else if (cageSort === 'width')    r = (a.width||0)  - (b.width||0);
+    else if (cageSort === 'height')   r = (a.height||0) - (b.height||0);
+    else if (cageSort === 'length')   r = (a.length||0) - (b.length||0);
+    else r = a.name.localeCompare(b.name);
+    return cageSortDir === 'desc' ? -r : r;
   });
 
   let formHTML = '';
@@ -3225,48 +3270,167 @@ function renderCages() {
       </tr>`;
     }).join('');
 
+  // ── count active filters for badge ──
+  const _activeFilters = [
+    cageFilter !== 'all',
+    cageHeightFilter !== 'all',
+    cageSp2Filter,
+    cageCommentsFilter !== 'all',
+    cageLiveNeedFilter !== 'all',
+    cageTripFilter !== '',
+    cageWeightMin !== '' || cageWeightMax !== '',
+    cageWidthMin  !== '' || cageWidthMax  !== '',
+    cageDepFrom   !== '' || cageDepTo     !== '',
+  ].filter(Boolean).length;
+
+  const _tripOpts = (STATE.boatTrips||[])
+    .sort((a,b)=>(a.departDate||a.loadDate||'').localeCompare(b.departDate||b.loadDate||''))
+    .map(t=>`<option value="${t.id}" ${cageTripFilter===t.id?'selected':''}>${esc(tripLabel(t))}</option>`)
+    .join('');
+
+  const _fBtn = (active, label, onclick, title='') =>
+    `<button class="filter-btn ${active?'active':''}" onclick="${onclick}" ${title?`title="${title}"`:''}>${label}</button>`;
+
+  const _sdIcon = cageSortDir === 'desc' ? '↓' : '↑';
+
   return `
     <div class="flex-between" style="margin-bottom:16px">
-      <h2 class="section-title" style="margin:0">Cage Inventory</h2>
+      <h2 class="section-title" style="margin:0">Cage Inventory <span style="font:400 12px var(--font-mono);color:var(--text-muted)">${filtered.length} / ${STATE.cages.length}</span></h2>
       <div style="display:flex;gap:8px">
         <button class="btn btn-secondary" onclick="document.getElementById('live-need-import').click()">📥 Import Live Need</button>
         <button class="btn btn-primary" onclick="cageFormOpen=!cageFormOpen;render()">+ Add Cage</button>
       </div>
     </div>
     ${formHTML}
-    <div class="filter-bar">
-      <div style="display:flex;gap:4px;align-items:center;max-width:280px;flex:1">
-        <input id="cage-search-input" style="flex:1" placeholder="Search cages… (Enter)" value="${esc(cageSearch)}"
-          onkeydown="if(event.key==='Enter'){cageSearch=this.value;render();}"
-          onkeyup="if(this.value===''){cageSearch='';render();}"/>
-        ${cageSearch ? `<button class="btn btn-secondary btn-sm" style="white-space:nowrap;padding:4px 8px" onclick="cageSearch='';render()">✕</button>` : ''}
+
+    <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-lg);padding:10px 14px;margin-bottom:10px">
+
+      <!-- ROW 1: search + primary column dropdowns + sort + clear -->
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        <div style="display:flex;gap:4px;align-items:center;min-width:180px;flex:1;max-width:260px">
+          <input id="cage-search-input" style="flex:1" placeholder="Search name or comments…" value="${esc(cageSearch)}"
+            onkeydown="if(event.key==='Enter'){cageSearch=this.value;render();}"
+            onkeyup="if(this.value===''){cageSearch='';render();}"/>
+          ${cageSearch ? `<button class="btn btn-secondary btn-sm" style="padding:4px 7px" onclick="cageSearch='';render()">✕</button>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted);white-space:nowrap">Location</span>
+          <select style="font-size:11px;padding:4px 7px" onchange="cageFilter=this.value;render()">
+            <option value="all"      ${cageFilter==='all'||['status-green','status-red','has-departure','has-shipday','ship-pref'].includes(cageFilter)?'':'selected'} ${cageFilter==='all'?'selected':''}>All</option>
+            <option value="facility" ${cageFilter==='facility'?'selected':''}>Facility</option>
+            <option value="rmd"      ${cageFilter==='rmd'?'selected':''}>RMD</option>
+            <option value="rss"      ${cageFilter==='rss'?'selected':''}>Roof Slab</option>
+            <option value="frame"    ${cageFilter==='frame'?'selected':''}>Frame</option>
+            <option value="shipped"  ${cageFilter==='shipped'?'selected':''}>Shipped</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted);white-space:nowrap">Height</span>
+          <select style="font-size:11px;padding:4px 7px" onchange="cageHeightFilter=this.value;render()">
+            <option value="all"    ${cageHeightFilter==='all'?'selected':''}>All</option>
+            <option value="short"  ${cageHeightFilter==='short'?'selected':''}>Short</option>
+            <option value="medium" ${cageHeightFilter==='medium'?'selected':''}>Medium</option>
+            <option value="tall"   ${cageHeightFilter==='tall'?'selected':''}>Tall</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted);white-space:nowrap">Status</span>
+          <select style="font-size:11px;padding:4px 7px" onchange="cageFilter=this.value;render()">
+            <option value="all"          ${!['status-green','status-red'].includes(cageFilter)?'selected':''}>Any</option>
+            <option value="status-green" ${cageFilter==='status-green'?'selected':''}>🟩 Green</option>
+            <option value="status-red"   ${cageFilter==='status-red'?'selected':''}>🟥 Red</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted);white-space:nowrap">Live Need</span>
+          <select style="font-size:11px;padding:4px 7px" onchange="cageLiveNeedFilter=this.value;render()">
+            <option value="all"    ${cageLiveNeedFilter==='all'?'selected':''}>Any</option>
+            <option value="red"    ${cageLiveNeedFilter==='red'?'selected':''}>🔴 &lt;3 wks</option>
+            <option value="orange" ${cageLiveNeedFilter==='orange'?'selected':''}>🟠 3–5 wks</option>
+            <option value="green"  ${cageLiveNeedFilter==='green'?'selected':''}>🟢 &gt;5 wks</option>
+            <option value="has"    ${cageLiveNeedFilter==='has'?'selected':''}>Has date</option>
+            <option value="none"   ${cageLiveNeedFilter==='none'?'selected':''}>No date</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted);white-space:nowrap">Trip</span>
+          <select style="font-size:11px;padding:4px 7px;max-width:140px" onchange="cageTripFilter=this.value;render()">
+            <option value=""         ${cageTripFilter===''?'selected':''}>Any</option>
+            <option value="__none__" ${cageTripFilter==='__none__'?'selected':''}>No trip</option>
+            ${_tripOpts}
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted);white-space:nowrap">Comments</span>
+          <select style="font-size:11px;padding:4px 7px" onchange="cageCommentsFilter=this.value;render()">
+            <option value="all"  ${cageCommentsFilter==='all'?'selected':''}>Any</option>
+            <option value="has"  ${cageCommentsFilter==='has'?'selected':''}>Has comment</option>
+            <option value="none" ${cageCommentsFilter==='none'?'selected':''}>No comment</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:4px;margin-left:auto">
+          <span style="font:600 10px var(--font-mono);color:var(--text-muted);white-space:nowrap">Sort</span>
+          <select style="font-size:11px;padding:4px 7px" onchange="cageSort=this.value;render()">
+            <option value="number"    ${cageSort==='number'?'selected':''}>Number</option>
+            <option value="name"      ${cageSort==='name'?'selected':''}>A–Z</option>
+            <option value="departure" ${cageSort==='departure'?'selected':''}>Departure</option>
+            <option value="liveneed"  ${cageSort==='liveneed'?'selected':''}>Live Need</option>
+            <option value="shipday"   ${cageSort==='shipday'?'selected':''}>Ship Day</option>
+            <option value="weight"    ${cageSort==='weight'?'selected':''}>Weight</option>
+            <option value="width"     ${cageSort==='width'?'selected':''}>Width</option>
+            <option value="height"    ${cageSort==='height'?'selected':''}>Height</option>
+            <option value="length"    ${cageSort==='length'?'selected':''}>Length</option>
+          </select>
+          <button class="filter-btn ${cageSortDir==='asc'?'active':''}" onclick="cageSortDir=cageSortDir==='asc'?'desc':'asc';render()" title="Toggle sort direction" style="font-size:13px;padding:3px 8px;min-width:28px">${_sdIcon}</button>
+        </div>
+        ${_activeFilters > 0 ? `<button class="btn btn-secondary btn-sm" onclick="cageFilter='all';cageHeightFilter='all';cageSp2Filter=false;cageCommentsFilter='all';cageLiveNeedFilter='all';cageTripFilter='';cageWeightMin='';cageWeightMax='';cageWidthMin='';cageWidthMax='';cageDepFrom='';cageDepTo='';render()" style="white-space:nowrap;background:#fce8e8;border-color:#e8b0b0;color:var(--red)">✕ Clear ${_activeFilters} filter${_activeFilters!==1?'s':''}</button>` : ''}
       </div>
-      <button class="filter-btn ${cageFilter==='all'?'active':''}" onclick="cageFilter='all';render()">All</button>
-      <button class="filter-btn ${cageFilter==='facility'?'active':''}" onclick="cageFilter='facility';render()">Facility</button>
-      <button class="filter-btn ${cageFilter==='rmd'?'active':''}" onclick="cageFilter='rmd';render()">RMD</button>
-      <button class="filter-btn ${cageFilter==='rss'?'active':''}" onclick="cageFilter='rss';render()">Roof Slab</button>
-      <button class="filter-btn ${cageFilter==='frame'?'active':''}" onclick="cageFilter='frame';render()">Frame</button>
-      <button class="filter-btn ${cageFilter==='shipped'?'active':''}" onclick="cageFilter='shipped';cageHideShipped=false;render()">Shipped</button>
-      <button class="filter-btn ${cageFilter==='has-departure'?'active':''}" onclick="cageFilter='has-departure';render()" title="Cages with a Leaves Facility date set">📅 Has Departure</button>
-      <button class="filter-btn ${cageFilter==='has-shipday'?'active':''}" onclick="cageFilter='has-shipday';render()" title="Cages with a Proposed Ship Day set">🚢 Has Ship Day</button>
-      <button class="filter-btn ${cageFilter==='ship-pref'?'active':''}" onclick="cageFilter='ship-pref';render()" title="Cages marked as Shipping Preference">🟡 Ship Pref</button>
-      <button class="filter-btn ${cageFilter==='status-green'?'active':''}" onclick="cageFilter='status-green';render()" title="Cages with Green status tag" style="color:var(--green)">🟩 Green Status</button>
-      <button class="filter-btn ${cageFilter==='status-red'?'active':''}" onclick="cageFilter='status-red';render()" title="Cages with Red status tag" style="color:var(--red)">🟥 Red Status</button>
-      <button class="filter-btn ${cageHideShipped?'active':''}" onclick="cageHideShipped=!cageHideShipped;render()" title="Toggle visibility of shipped cages" style="${cageHideShipped?'':'opacity:0.6'}">🚫 Hide Shipped</button>
-      <div style="width:1px;height:20px;background:var(--border);margin:0 4px"></div>
-      <span style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;white-space:nowrap">Height:</span>
-      <button class="filter-btn ${cageHeightFilter==='all'?'active':''}" onclick="cageHeightFilter='all';render()">All</button>
-      <button class="filter-btn ${cageHeightFilter==='short'?'active':''}" onclick="cageHeightFilter='short';render()" style="color:var(--green)">Short</button>
-      <button class="filter-btn ${cageHeightFilter==='medium'?'active':''}" onclick="cageHeightFilter='medium';render()" style="color:var(--yellow)">Medium</button>
-      <button class="filter-btn ${cageHeightFilter==='tall'?'active':''}" onclick="cageHeightFilter='tall';render()" style="color:var(--red)">Tall</button>
-      <div style="margin-left:auto;display:flex;align-items:center;gap:6px">
-        <span style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase">Sort:</span>
-        <button class="filter-btn ${cageSort==='number'?'active':''}" onclick="cageSort='number';render()" title="Sort by cage number"># Number</button>
-        <button class="filter-btn ${cageSort==='name'?'active':''}" onclick="cageSort='name';render()" title="Sort alphabetically">A–Z</button>
-        <button class="filter-btn ${cageSort==='departure'?'active':''}" onclick="cageSort='departure';render()" title="Sort by Leaves Facility date">📅 Departure</button>
-        <button class="filter-btn ${cageSort==='shipday'?'active':''}" onclick="cageSort='shipday';render()" title="Sort by Proposed Ship Day">🚢 Ship Day</button>
+
+      <!-- ROW 2: quick-toggle chips -->
+      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+        ${_fBtn(cageFilter==='ship-pref',    '🟡 Ship Pref',     "cageFilter=cageFilter==='ship-pref'?'all':'ship-pref';render()",    'Shipping Preference cages')}
+        ${_fBtn(cageSp2Filter,              '🔵 SP2',            "cageSp2Filter=!cageSp2Filter;render()",                            'Shipping Preference 2')}
+        ${_fBtn(cageFilter==='has-departure','📅 Has Departure',  "cageFilter=cageFilter==='has-departure'?'all':'has-departure';render()")}
+        ${_fBtn(cageFilter==='has-shipday',  '🚢 Has Ship Day',   "cageFilter=cageFilter==='has-shipday'?'all':'has-shipday';render()")}
+        ${_fBtn(!cageHideShipped,           '👁 Show Shipped',   "cageHideShipped=!cageHideShipped;render()",                        'Show shipped cages')}
+        <div style="width:1px;height:16px;background:var(--border);margin:0 2px"></div>
+        <button class="filter-btn ${cageFilterPanelOpen?'active':''}" onclick="cageFilterPanelOpen=!cageFilterPanelOpen;render()" title="Numeric and date range filters">
+          ${cageFilterPanelOpen?'▲':'▼'} Ranges${(cageWeightMin||cageWeightMax||cageWidthMin||cageWidthMax||cageDepFrom||cageDepTo)?'<span style="color:#ef4444;margin-left:3px">●</span>':''}
+        </button>
       </div>
+
+      <!-- ROW 3: collapsible range filters -->
+      ${cageFilterPanelOpen ? `
+      <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+        <div>
+          <div style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Weight (t)</div>
+          <div style="display:flex;gap:4px;align-items:center">
+            <input type="number" placeholder="Min" value="${cageWeightMin}" step="0.1" style="width:64px;font-size:11px;padding:4px 6px" oninput="cageWeightMin=this.value;render()"/>
+            <span style="color:var(--text-muted)">–</span>
+            <input type="number" placeholder="Max" value="${cageWeightMax}" step="0.1" style="width:64px;font-size:11px;padding:4px 6px" oninput="cageWeightMax=this.value;render()"/>
+          </div>
+        </div>
+        <div>
+          <div style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Width (m)</div>
+          <div style="display:flex;gap:4px;align-items:center">
+            <input type="number" placeholder="Min" value="${cageWidthMin}" step="0.01" style="width:64px;font-size:11px;padding:4px 6px" oninput="cageWidthMin=this.value;render()"/>
+            <span style="color:var(--text-muted)">–</span>
+            <input type="number" placeholder="Max" value="${cageWidthMax}" step="0.01" style="width:64px;font-size:11px;padding:4px 6px" oninput="cageWidthMax=this.value;render()"/>
+          </div>
+        </div>
+        <div>
+          <div style="font:600 10px var(--font-mono);color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Departure date</div>
+          <div style="display:flex;gap:4px;align-items:center">
+            <input type="date" value="${cageDepFrom}" style="font-size:11px;padding:4px 6px" title="From" onchange="cageDepFrom=this.value;render()"/>
+            <span style="color:var(--text-muted)">–</span>
+            <input type="date" value="${cageDepTo}" style="font-size:11px;padding:4px 6px" title="To" onchange="cageDepTo=this.value;render()"/>
+          </div>
+        </div>
+        ${(cageWeightMin||cageWeightMax||cageWidthMin||cageWidthMax||cageDepFrom||cageDepTo)?`<button class="btn btn-secondary btn-sm" style="margin-bottom:2px" onclick="cageWeightMin='';cageWeightMax='';cageWidthMin='';cageWidthMax='';cageDepFrom='';cageDepTo='';render()">✕ Clear ranges</button>`:''}
+      </div>` : ''}
+
     </div>
+
     ${cageSelected.size > 0 ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:#fef0e6;border:1px solid #e8c8a0;border-radius:8px;padding:8px 14px;margin-bottom:10px">
       <span style="font-weight:600;font-size:13px;color:var(--orange);white-space:nowrap">${cageSelected.size} cage${cageSelected.size>1?'s':''} selected</span>
       <div style="display:flex;align-items:center;gap:5px">
@@ -3293,8 +3457,7 @@ function renderCages() {
         <tbody>${rows}</tbody>
       </table>
     </div>
-  `;
-}
+  `;\n}
 
 async function addCage() {
   const name = document.getElementById('cf-name').value.trim();
