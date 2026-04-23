@@ -10522,6 +10522,20 @@ function renderMovementsDayView() {
   return renderMovementsMap({ dayMoves, simFrameCages, simRmdState, cageLocSim, dayIdx, dates, prevDay, nextDay, dayTabsHTML, simReturnedFrameIds, dayLocationBannerHTML });
 }
 
+// ── Live Need Date badge for movements map cage cards ──────────────────
+// Returns a small coloured date line. Red <3wk, orange 3-5wk, green >5wk.
+function liveNeedBadgeHTML(cage, extraStyle) {
+  if (!cage || !cage.liveNeedDate) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const need  = new Date(cage.liveNeedDate + 'T00:00:00');
+  const days  = Math.ceil((need - today) / 86400000);
+  let color;
+  if      (days <= 21) color = '#ef4444';   // red  — within 3 weeks
+  else if (days <= 35) color = '#f97316';   // orange — 3-5 weeks
+  else                 color = '#22c55e';   // green — over 5 weeks
+  return `<div style="font-size:8px;font-weight:700;color:${color};${extraStyle||''}">📅 LND: ${fmt(cage.liveNeedDate)}</div>`;
+}
+
 function renderMovementsMap(dayCtx) {
   // dayCtx is passed when called from renderMovementsDayView
   const isDayView = !!dayCtx;
@@ -10658,6 +10672,7 @@ function renderMovementsMap(dayCtx) {
           slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;background:var(--bg-input);margin-bottom:2px;${bg}">
             <div style="display:flex;align-items:center;">${arrow}${slotTag}${cageNameHTML}</div>
             <div style="font-size:9px;padding-left:${arrow?'14':'0'}px;${detailStyle||'color:var(--text-muted);'}">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</div>
+            ${liveNeedBadgeHTML(cage, `padding-left:${arrow?'14':'0'}px;`)}
           </div>`;
         }
       });
@@ -10687,6 +10702,7 @@ function renderMovementsMap(dayCtx) {
           slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #4aad72;background:#f0faf4;margin-bottom:2px;">
             <div style="display:flex;align-items:center;gap:3px;"><span style="color:#27a060;font-weight:800;margin-right:2px">←</span><span style="font:600 10px var(--font-mono);display:inline-flex;align-items:center;">${hDot(c.height)}${tagDot(c)}${esc(c.name)}</span></div>
             <div style="color:var(--text-muted);font-size:9px;padding-left:14px">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
+            ${liveNeedBadgeHTML(c, 'padding-left:14px;')}
           </div>`;
         });
       });
@@ -10722,6 +10738,7 @@ function renderMovementsMap(dayCtx) {
         html += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;margin-bottom:2px;${bg}">
           <div style="display:flex;align-items:center;">${mvOut?'<span style="color:#c08520;font-weight:800;margin-right:4px">→</span>':''}<span style="font:600 10px var(--font-mono);${nameStyle}">${hDot(cage.height)}${tagDot(cage)}${esc(cage.name)}</span>${pickBtn}</div>
           <div style="font-size:9px;color:var(--text-muted)">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</div>
+          ${liveNeedBadgeHTML(cage)}
         </div>`;
       });
       // Incoming cages
@@ -10730,6 +10747,7 @@ function renderMovementsMap(dayCtx) {
         html += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #4aad72;background:#f0faf4;margin-bottom:2px;">
           <div style="display:flex;align-items:center;gap:3px;"><span style="color:#27a060;font-weight:800">←</span><span style="font:600 10px var(--font-mono);display:inline-flex;align-items:center;">${hDot(cage.height)}${tagDot(cage)}${esc(cage.name)}</span></div>
           <div style="color:var(--text-muted);font-size:9px;padding-left:14px">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</div>
+          ${liveNeedBadgeHTML(cage, 'padding-left:14px;')}
         </div>`;
       });
     }
@@ -10788,6 +10806,7 @@ function renderMovementsMap(dayCtx) {
       html += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${fBg}">
         <div style="display:flex;align-items:center;gap:2px;">${out?'<span style="color:#c08520;font-weight:800">→</span>':''}<span style="font:600 10px var(--font-mono);${fNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${fMoveCount>0?` <span class="u-badge-accent">${fMoveCount}</span>`:''}</span>${fPickBtn}</div>
         <div style="font-size:9px;padding-left:${out?'13':'0'}px;${fDetailStyle}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
+        ${liveNeedBadgeHTML(c, `padding-left:${out?'13':'0'}px;`)}
       </div>`;
     });
     inIds.forEach(cid=>{
@@ -10813,6 +10832,7 @@ function renderMovementsMap(dayCtx) {
       html+=`<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${iBg}">
         <div style="display:flex;align-items:center;gap:2px;">${iArrow}<span style="font:600 10px var(--font-mono);${iNameStyle}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${iMoveCount>0?` <span class="u-badge-accent">${iMoveCount}</span>`:''}</span>${iPickBtn}</div>
         <div style="font-size:9px;padding-left:13px;${iDetailStyle}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
+        ${liveNeedBadgeHTML(c, 'padding-left:13px;')}
       </div>`;
     });
     if(!html) html='<div style="font-size:10px;color:var(--text-muted);font-style:italic">empty</div>';
@@ -11189,6 +11209,7 @@ function renderMovementsMap(dayCtx) {
                               <button onclick="mvPickCage('${c.id}')" title="Plan movement for cage ${esc(c.name)}" style="border:none;background:${mvPick&&mvPick.cageId===c.id?'var(--accent)':'rgba(192,133,32,0.15)'};color:${mvPick&&mvPick.cageId===c.id?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;font-weight:700">${mvPick&&mvPick.cageId===c.id?'✓':'🏷'}</button>
                             </div>
                             <div style="font-size:9px;color:var(--text-muted);padding-left:12px">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
+                            ${liveNeedBadgeHTML(c, 'padding-left:12px;')}
                           </div>`;
                         }).join('');
                         return `<div style="margin-bottom:6px">
