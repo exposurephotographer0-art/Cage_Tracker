@@ -1766,6 +1766,7 @@ function normaliseCage(c) {
     intoRmd: c.into_rmd || c.intoRmd || null,
     outOfRmd: c.out_of_rmd || c.outOfRmd || null,
     cageStatus: c.cage_status || c.cageStatus || null,
+    liveNeedDate: c.live_need_date || c.liveNeedDate || null,
   };
 }
 
@@ -3154,6 +3155,7 @@ function renderCages() {
           <td><input id="ce-l-${c.id}" type="number" step="0.01" value="${c.length}" style="width:70px;font-size:12px"/></td>
           <td><input id="ce-wt-${c.id}" type="number" step="0.01" value="${c.weight}" style="width:70px;font-size:12px"/></td>
           <td><input id="ce-dep-${c.id}" type="date" value="${c.departureDate||''}" style="width:130px;font-size:12px"/></td>
+          <td><input id="ce-live-need-${c.id}" type="date" value="${c.liveNeedDate||''}" style="width:130px;font-size:12px"/></td>
           <td>${tripSelectHTML(c.id, c.proposedTripId||null)}</td>
           <td><input id="ce-into-rmd-${c.id}" type="date" value="${c.intoRmd||''}" style="width:130px;font-size:12px"/></td>
           <td><input id="ce-out-rmd-${c.id}" type="date" value="${c.outOfRmd||''}" style="width:130px;font-size:12px"/></td>
@@ -3187,6 +3189,7 @@ function renderCages() {
         <td style="font-family:var(--font-mono)"><span class="editable-cell" onclick="startInlineEdit('${c.id}','length',this)">${c.length}</span></td>
         <td style="font-family:var(--font-mono)"><span class="editable-cell" onclick="startInlineEdit('${c.id}','weight',this)">${c.weight}</span></td>
         <td style="font-size:11px"><span class="editable-cell" onclick="startInlineEdit('${c.id}','departureDate',this)" title="Click to edit departure date">${c.departureDate ? fmt(c.departureDate) : '<span style="color:var(--text-muted)">—</span>'}</span> ${depBadge}</td>
+        <td style="font-size:11px"><span class="editable-cell" onclick="startInlineEdit('${c.id}','liveNeedDate',this)" title="Click to edit live need date">${c.liveNeedDate ? fmt(c.liveNeedDate) : '<span style="color:var(--text-muted)">—</span>'}</span></td>
         <td style="font-size:11px">${tripSelectHTML(c.id, c.proposedTripId||null)}</td>
         <td style="font-size:11px"><span class="editable-cell" onclick="startInlineEdit('${c.id}','intoRmd',this)" title="Click to edit Into RMD date">${c.intoRmd ? fmt(c.intoRmd) : '<span style="color:var(--text-muted)">—</span>'}</span></td>
         <td style="font-size:11px"><span class="editable-cell" onclick="startInlineEdit('${c.id}','outOfRmd',this)" title="Click to edit Out of RMD date">${c.outOfRmd ? fmt(c.outOfRmd) : '<span style="color:var(--text-muted)">—</span>'}</span></td>
@@ -3223,8 +3226,7 @@ function renderCages() {
     <div class="flex-between" style="margin-bottom:16px">
       <h2 class="section-title" style="margin:0">Cage Inventory</h2>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-secondary" onclick="exportCagesCSV()">📤 Export CSV</button>
-        <button class="btn btn-secondary" onclick="document.getElementById('excel-import').click()">📥 Import from Excel</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('live-need-import').click()">📥 Import Live Need</button>
         <button class="btn btn-primary" onclick="cageFormOpen=!cageFormOpen;render()">+ Add Cage</button>
       </div>
     </div>
@@ -3283,7 +3285,7 @@ function renderCages() {
       <table>
         <thead><tr>
           <th style="width:32px"><input type="checkbox" id="cage-select-all" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)" onchange="toggleAllCages(this.checked,${JSON.stringify(filtered.map(c=>c.id))})"/></th>
-          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Boat Trip</th><th>Into RMD</th><th>Out of RMD</th><th>Category</th><th>Location</th><th>Tags</th><th title="Cage Status — Red or Green tag">Status</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th title="Shipping Preference 2 — highlight blue across all views">🔵 SP2</th><th>Move</th><th></th>
+          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Live Need Date</th><th>Boat Trip</th><th>Into RMD</th><th>Out of RMD</th><th>Category</th><th>Location</th><th>Tags</th><th title="Cage Status — Red or Green tag">Status</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th title="Shipping Preference 2 — highlight blue across all views">🔵 SP2</th><th>Move</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -3489,7 +3491,7 @@ function validateAndFixDepartureDateVsMovements(cageId, newDepDate) {
 function startInlineEdit(cageId, field, spanEl) {
   const c = getCage(cageId);
   if (!c) return;
-  const isDate = field === 'departureDate' || field === 'proposedShipDay' || field === 'intoRmd' || field === 'outOfRmd';
+  const isDate = field === 'departureDate' || field === 'proposedShipDay' || field === 'intoRmd' || field === 'outOfRmd' || field === 'liveNeedDate';
   const isNumber = ['height','width','length','weight'].includes(field);
   const currentVal = c[field] != null ? c[field] : '';
   const input = document.createElement('input');
@@ -3554,6 +3556,8 @@ function saveCageEdit(id) {
   c.departureDate = newDep;
   if (intoRmdEl) c.intoRmd = intoRmdEl.value || null;
   if (outOfRmdEl) c.outOfRmd = outOfRmdEl.value || null;
+  const liveNeedEl = document.getElementById('ce-live-need-'+id);
+  if (liveNeedEl) c.liveNeedDate = liveNeedEl.value || null;
   if (spEl) c.shippingPreference = spEl.checked;
   if (sp2El) c.shippingPreference2 = sp2El.checked;
   const tagEl = document.getElementById('ce-cstatus-'+id);
@@ -3914,6 +3918,102 @@ async function commitExcelImport(cages) {
     await addCageToAPI(cage);
   }
   window._pendingImport = null;
+}
+
+// ── Import Live Need Dates from ARMF Excel ─────────────────────────────
+// Reads "Production Number" (= cage name) and "Live need date for sort"
+// Only updates cages that already exist in the system — ignores unmatched rows.
+async function handleLiveNeedImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+      // Find header row containing "Production Number"
+      let headerIdx = -1, headers = [];
+      for (let i = 0; i < Math.min(20, allRows.length); i++) {
+        const found = allRows[i].findIndex(c => String(c).toLowerCase().includes('production number'));
+        if (found !== -1) { headerIdx = i; headers = allRows[i].map(h => String(h).trim()); break; }
+      }
+      if (headerIdx === -1) return alert('Could not find a "Production Number" column header in the first 20 rows.');
+
+      const findIdx = (...kws) => {
+        for (const kw of kws) {
+          const idx = headers.findIndex(h => h.toLowerCase().includes(kw.toLowerCase()));
+          if (idx !== -1) return idx;
+        }
+        return -1;
+      };
+
+      const colProd = findIdx('production number');
+      const colLiveNeed = findIdx('live need date for sort', 'live need date', 'live need');
+      if (colProd === -1) return alert('Could not find "Production Number" column.');
+      if (colLiveNeed === -1) return alert('Could not find "Live need date for sort" column.');
+
+      // Build a lookup map: cage name (lower) → cage object
+      const cageByName = new Map(STATE.cages.map(c => [String(c.name).toLowerCase().trim(), c]));
+
+      let updated = 0, notFound = 0, noDate = 0;
+      const updates = [];
+
+      allRows.slice(headerIdx + 1).forEach(row => {
+        const rawProd = row[colProd];
+        if (rawProd === undefined || rawProd === null || String(rawProd).trim() === '') return;
+        const nameKey = String(rawProd).trim().toLowerCase();
+        if (nameKey === 'production number' || nameKey.startsWith('=')) return;
+
+        const cage = cageByName.get(nameKey);
+        if (!cage) { notFound++; return; }
+
+        // Parse the live need date — may be a JS Date object (cellDates:true) or a string
+        const rawDate = row[colLiveNeed];
+        let dateStr = null;
+        if (rawDate instanceof Date && !isNaN(rawDate)) {
+          dateStr = rawDate.toISOString().slice(0, 10);
+        } else if (rawDate !== undefined && rawDate !== null && String(rawDate).trim() !== '') {
+          // Try to parse string dates like "2026-07-06" or Excel serial numbers
+          const s = String(rawDate).trim();
+          if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+            dateStr = s;
+          } else if (/^\d+$/.test(s)) {
+            // Excel serial date
+            const d = new Date(Math.round((parseInt(s) - 25569) * 86400 * 1000));
+            if (!isNaN(d)) dateStr = d.toISOString().slice(0, 10);
+          } else {
+            const d = new Date(s);
+            if (!isNaN(d)) dateStr = d.toISOString().slice(0, 10);
+          }
+        }
+
+        if (!dateStr) { noDate++; return; }
+        cage.liveNeedDate = dateStr;
+        updates.push(cage);
+        updated++;
+      });
+
+      if (updates.length === 0) {
+        return alert(`No matching cages updated.\n• ${notFound} production number(s) not found in system\n• ${noDate} row(s) had no valid date`);
+      }
+
+      render();
+      showSuccess(`✅ Live Need Date updated for ${updated} cage${updated !== 1 ? 's' : ''}${notFound > 0 ? ` · ${notFound} not found` : ''}${noDate > 0 ? ` · ${noDate} no date` : ''}`);
+
+      // Save to API
+      for (const cage of updates) {
+        await saveCage(cage);
+      }
+    } catch (err) {
+      alert('Error reading Excel file: ' + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  input.value = '';
 }
 
 // FRAMES
@@ -15798,6 +15898,7 @@ function dtExportCSV() {
     <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#8895a7;font-size:14px">Loading...</div>
   </main>
 <input type="file" id="excel-import" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleExcelImport(this)">
+<input type="file" id="live-need-import" accept=".xlsx,.xls" style="display:none" onchange="handleLiveNeedImport(this)">
 
 <!-- mobile bottom nav -->
 <nav id="mobile-nav"></nav>
