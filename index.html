@@ -1767,6 +1767,7 @@ function normaliseCage(c) {
     outOfRmd: c.out_of_rmd || c.outOfRmd || null,
     cageStatus: c.cage_status || c.cageStatus || null,
     liveNeedDate: c.live_need_date || c.liveNeedDate || null,
+    comments: c.comments || '',
   };
 }
 
@@ -3169,6 +3170,7 @@ function renderCages() {
             <option value="green" ${c.cageStatus==='green'?'selected':''}>🟩 Green</option>
             <option value="red" ${c.cageStatus==='red'?'selected':''}>🟥 Red</option>
           </select></td>
+          <td><input id="ce-comments-${c.id}" value="${esc(c.comments||'')}" placeholder="Comments…" style="width:160px;font-size:11px"/></td>
           <td colspan="2" style="white-space:nowrap">
             <button class="btn btn-primary btn-xs" onclick="saveCageEdit('${c.id}')">✓ Save</button>
             <button class="btn btn-secondary btn-xs" style="margin-left:4px" onclick="cageEditing=null;render()">Cancel</button>
@@ -3210,6 +3212,7 @@ function renderCages() {
         <td style="text-align:center">
           <input type="checkbox" title="Shipping Preference 2 — highlights blue across all views" ${c.shippingPreference2?'checked':''} onchange="toggleShippingPreference2('${c.id}',this.checked)" style="width:15px;height:15px;cursor:pointer;accent-color:#3b82f6"/>
         </td>
+        <td style="max-width:200px;font-size:11px;color:var(--text-muted)"><span class="editable-cell" onclick="startInlineEdit('${c.id}','comments',this)" title="Click to edit comments" style="display:block;white-space:pre-wrap;word-break:break-word">${c.comments ? esc(c.comments) : '<span style="color:var(--text-muted)">—</span>'}</span></td>
         <td style="white-space:nowrap">
           <select style="font-size:11px;padding:3px 6px;max-width:180px" onchange="changeCageLocation('${c.id}',this.value);this.value=''">
             ${cageLocationOpts(c)}
@@ -3285,7 +3288,7 @@ function renderCages() {
       <table>
         <thead><tr>
           <th style="width:32px"><input type="checkbox" id="cage-select-all" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)" onchange="toggleAllCages(this.checked,${JSON.stringify(filtered.map(c=>c.id))})"/></th>
-          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Live Need Date</th><th>Boat Trip</th><th>Into RMD</th><th>Out of RMD</th><th>Category</th><th>Location</th><th>Tags</th><th title="Cage Status — Red or Green tag">Status</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th title="Shipping Preference 2 — highlight blue across all views">🔵 SP2</th><th>Move</th><th></th>
+          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Live Need Date</th><th>Boat Trip</th><th>Into RMD</th><th>Out of RMD</th><th>Category</th><th>Location</th><th>Tags</th><th title="Cage Status — Red or Green tag">Status</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th title="Shipping Preference 2 — highlight blue across all views">🔵 SP2</th><th>Comments</th><th>Move</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -3493,17 +3496,27 @@ function startInlineEdit(cageId, field, spanEl) {
   if (!c) return;
   const isDate = field === 'departureDate' || field === 'proposedShipDay' || field === 'intoRmd' || field === 'outOfRmd' || field === 'liveNeedDate';
   const isNumber = ['height','width','length','weight'].includes(field);
+  const isTextarea = field === 'comments';
   const currentVal = c[field] != null ? c[field] : '';
-  const input = document.createElement('input');
-  input.type = isDate ? 'date' : isNumber ? 'number' : 'text';
-  input.value = currentVal;
+
+  let input;
+  if (isTextarea) {
+    input = document.createElement('textarea');
+    input.value = currentVal;
+    input.rows = 3;
+    input.style.cssText = 'width:200px;font-size:11px;resize:vertical;font-family:var(--font-mono)';
+  } else {
+    input = document.createElement('input');
+    input.type = isDate ? 'date' : isNumber ? 'number' : 'text';
+    input.value = currentVal;
+    if (isNumber) { input.step = '0.01'; input.style.width = '75px'; }
+    else if (isDate) { input.style.width = '145px'; }
+    else { input.style.width = Math.max(80, (spanEl.offsetWidth || 80) + 20) + 'px'; }
+  }
   input.className = 'inline-edit-input';
-  if (isNumber) { input.step = '0.01'; input.style.width = '75px'; }
-  else if (isDate) { input.style.width = '145px'; }
-  else { input.style.width = Math.max(80, (spanEl.offsetWidth || 80) + 20) + 'px'; }
   spanEl.replaceWith(input);
   input.focus();
-  if (!isDate) input.select();
+  if (!isDate && !isTextarea) input.select();
   let saved = false;
   const save = () => {
     if (saved) return;
@@ -3511,23 +3524,22 @@ function startInlineEdit(cageId, field, spanEl) {
     const raw = input.value.trim();
     if (isNumber) { const n = parseFloat(raw); if (!isNaN(n)) c[field] = n; }
     else if (isDate) {
-      // Extra validation when editing the departure date
       if (field === 'departureDate') {
         if (!validateAndFixDepartureDateVsMovements(cageId, raw || null)) {
-          // User cancelled — abort without saving; restore original display
           render();
           return;
         }
       }
       c[field] = raw || null;
     }
+    else if (isTextarea) { c[field] = raw; }
     else { if (raw) c[field] = raw; }
     render();
     saveCage(c);
   };
   input.addEventListener('blur', save);
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { input.blur(); }
+    if (e.key === 'Enter' && !isTextarea) { input.blur(); }
     if (e.key === 'Escape') { saved = true; render(); }
   });
 }
@@ -3558,6 +3570,8 @@ function saveCageEdit(id) {
   if (outOfRmdEl) c.outOfRmd = outOfRmdEl.value || null;
   const liveNeedEl = document.getElementById('ce-live-need-'+id);
   if (liveNeedEl) c.liveNeedDate = liveNeedEl.value || null;
+  const commentsEl = document.getElementById('ce-comments-'+id);
+  if (commentsEl) c.comments = commentsEl.value.trim();
   if (spEl) c.shippingPreference = spEl.checked;
   if (sp2El) c.shippingPreference2 = sp2El.checked;
   const tagEl = document.getElementById('ce-cstatus-'+id);
@@ -10090,6 +10104,21 @@ function openMvCageMovements(cageId) {
 }
 
 let _mvEditCageId = null;
+let mvCageCommentsDirty = false;
+
+async function mvSaveCageComments(cageId) {
+  if (!mvCageCommentsDirty) return;
+  const ta = document.getElementById('mv-cage-comments');
+  if (!ta) return;
+  const cage = getCage(cageId);
+  if (!cage) return;
+  cage.comments = ta.value.trim();
+  mvCageCommentsDirty = false;
+  const statusEl = document.getElementById('mv-comments-status');
+  if (statusEl) statusEl.textContent = 'Saving…';
+  await saveCage(cage);
+  if (statusEl) { statusEl.textContent = '✓ Saved'; setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000); }
+}
 
 function renderMvCageEditModal() {
   const existing = document.getElementById('mv-cage-edit-overlay');
@@ -10162,6 +10191,15 @@ function renderMvCageEditModal() {
         <button class="btn btn-secondary btn-sm" onclick="_mvEditCageId=null;document.getElementById('mv-cage-edit-overlay').remove()">✕</button>
       </div>
       <div style="flex:1;overflow-y:auto;padding:14px 18px">
+        <div style="margin-bottom:16px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;padding:12px 14px">
+          <div style="font:600 11px var(--font-mono);color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">💬 Comments</div>
+          <textarea id="mv-cage-comments" rows="3"
+            style="width:100%;font-size:12px;font-family:var(--font-mono);resize:vertical;background:var(--bg-input);border:1px solid var(--border);border-radius:6px;padding:8px 10px;color:var(--text-primary);box-sizing:border-box"
+            placeholder="Add notes or comments about this cage…"
+            oninput="mvCageCommentsDirty=true"
+            onblur="mvSaveCageComments('${cage.id}')">${esc(cage.comments||'')}</textarea>
+          <div id="mv-comments-status" style="font-size:10px;color:var(--text-muted);margin-top:3px;min-height:14px"></div>
+        </div>
         ${movesHTML}
         <button class="btn btn-primary btn-sm" style="width:100%;margin-top:4px"
           onclick="_mvEditCageId=null;document.getElementById('mv-cage-edit-overlay').remove();planFormOpen=true;render()">
