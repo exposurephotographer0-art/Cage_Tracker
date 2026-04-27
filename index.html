@@ -1814,6 +1814,25 @@ async function saveCage(cage) {
   try { await api('/api/cages', 'PUT', clean); }
   catch(e) { showError('Failed to save cage: ' + e.message); }
 }
+
+async function saveFactoryField(cageId, field, value) {
+  if (!FACTORY_TAG_DATA[cageId]) FACTORY_TAG_DATA[cageId] = {};
+  FACTORY_TAG_DATA[cageId][field] = value;
+  const fd = FACTORY_TAG_DATA[cageId];
+  try {
+    await api('/api/factory-data', 'PUT', {
+      cage_id:           cageId,
+      cage_location:     fd.cage_location     || '',
+      field_view_link:   fd.field_view_link   || '',
+      tags:              fd.tags              || {},
+      custom_fields:     fd.custom_fields     || {},
+      meshes:            fd.meshes            || {},
+      mesh_comments:     fd.mesh_comments     || {},
+      mesh_grns:         fd.mesh_grns         || {},
+      mesh_area_comments:fd.mesh_area_comments|| {},
+    });
+  } catch(e) { showError('Failed to save: ' + e.message); }
+}
 async function addCageToAPI(cage) {
   try { await api('/api/cages', 'POST', cage); }
   catch(e) { showError('Failed to add cage: ' + e.message); }
@@ -3207,6 +3226,8 @@ function renderCages() {
           <td><input id="ce-out-rmd-${c.id}" type="date" value="${c.outOfRmd||''}" style="width:130px;font-size:12px"/></td>
           <td><span class="badge badge-${hBadge(c.height)}">${hCat(c.height)}</span></td>
           <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
+          <td><input id="ce-cage-loc-${c.id}" value="${esc((FACTORY_TAG_DATA[c.id]||{}).cage_location||'')}" placeholder="Location…" style="width:120px;font-size:11px"/></td>
+          <td><input id="ce-fvl-${c.id}" type="url" value="${esc((FACTORY_TAG_DATA[c.id]||{}).field_view_link||'')}" placeholder="https://…" style="width:150px;font-size:11px"/></td>
           <td>—</td>
           <td style="text-align:center"><input type="checkbox" id="ce-sp-${c.id}" ${c.shippingPreference?'checked':''} style="width:15px;height:15px;accent-color:#e8b800" title="Shipping Preference"/></td>
           <td style="text-align:center"><input type="checkbox" id="ce-sp2-${c.id}" ${c.shippingPreference2?'checked':''} style="width:15px;height:15px;accent-color:#3b82f6" title="Shipping Preference 2"/></td>
@@ -3242,6 +3263,8 @@ function renderCages() {
         <td style="font-size:11px"><span class="editable-cell" onclick="startInlineEdit('${c.id}','outOfRmd',this)" title="Click to edit Out of RMD date">${c.outOfRmd ? fmt(c.outOfRmd) : '<span style="color:var(--text-muted)">—</span>'}</span></td>
         <td><span class="badge badge-${hBadge(c.height)}">${hCat(c.height)}</span></td>
         <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
+        <td style="max-width:140px;font-size:11px;color:var(--text-secondary)"><span class="editable-cell" onclick="startFactoryInlineEdit('${c.id}','cage_location',this)" title="Click to edit cage location">${(()=>{ const v=(FACTORY_TAG_DATA[c.id]||{}).cage_location||''; return v?esc(v):'<span style="color:var(--text-muted)">—</span>'; })()}</span></td>
+        <td style="white-space:nowrap">${(()=>{ const v=(FACTORY_TAG_DATA[c.id]||{}).field_view_link||''; return v?`<a href="${esc(v)}" target="_blank" rel="noopener" class="btn btn-secondary btn-xs" style="text-decoration:none" title="${esc(v)}">🔗 Open</a><span class="editable-cell" onclick="startFactoryInlineEdit('${c.id}','field_view_link',this)" title="Click to edit link" style="font-size:10px;color:var(--text-muted);margin-left:5px;cursor:pointer">✎</span>`:`<span class="editable-cell" onclick="startFactoryInlineEdit('${c.id}','field_view_link',this)" title="Click to add Field View link" style="color:var(--text-muted);font-size:11px">+ Add link</span>`; })()}</td>
         <td style="white-space:nowrap">${(()=>{
           const fd = FACTORY_TAG_DATA[c.id] || {};
           const tags = fd.tags || {};
@@ -3452,7 +3475,7 @@ function renderCages() {
       <table>
         <thead><tr>
           <th style="width:32px"><input type="checkbox" id="cage-select-all" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)" onchange="toggleAllCages(this.checked,${JSON.stringify(filtered.map(c=>c.id))})"/></th>
-          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Live Need Date</th><th>Boat Trip</th><th>Into RMD</th><th>Out of RMD</th><th>Category</th><th>Location</th><th>Tags</th><th title="Cage Status — Red or Green tag">Status</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th title="Shipping Preference 2 — highlight blue across all views">🔵 SP2</th><th>Comments</th><th>Move</th><th></th>
+          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Live Need Date</th><th>Boat Trip</th><th>Into RMD</th><th>Out of RMD</th><th>Category</th><th>Location</th><th>Cage Location</th><th>Field View</th><th>Tags</th><th title="Cage Status — Red or Green tag">Status</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th title="Shipping Preference 2 — highlight blue across all views">🔵 SP2</th><th>Comments</th><th>Move</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -3655,6 +3678,33 @@ function validateAndFixDepartureDateVsMovements(cageId, newDepDate) {
   return true;
 }
 
+// Inline edit for factory-data fields (cage_location, field_view_link)
+function startFactoryInlineEdit(cageId, field, spanEl) {
+  if (!FACTORY_TAG_DATA[cageId]) FACTORY_TAG_DATA[cageId] = {};
+  const currentVal = FACTORY_TAG_DATA[cageId][field] || '';
+  const isUrl = field === 'field_view_link';
+  const input = document.createElement('input');
+  input.type = isUrl ? 'url' : 'text';
+  input.value = currentVal;
+  input.className = 'inline-edit-input';
+  input.style.width = Math.max(120, (spanEl.offsetWidth || 120) + 20) + 'px';
+  input.placeholder = isUrl ? 'https://…' : 'Location…';
+  spanEl.replaceWith(input);
+  input.focus(); input.select();
+  let saved = false;
+  const save = () => {
+    if (saved) return; saved = true;
+    const val = input.value.trim();
+    render();
+    saveFactoryField(cageId, field, val);
+  };
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { input.blur(); }
+    if (e.key === 'Escape') { saved = true; render(); }
+  });
+}
+
 function startInlineEdit(cageId, field, spanEl) {
   const c = getCage(cageId);
   if (!c) return;
@@ -3743,6 +3793,13 @@ function saveCageEdit(id) {
   cageEditing = null;
   render();
   saveCage(c);
+  // Save factory fields if edited
+  const cageLoc = document.getElementById('ce-cage-loc-'+id);
+  const fvl     = document.getElementById('ce-fvl-'+id);
+  if (cageLoc || fvl) {
+    if (cageLoc) saveFactoryField(id, 'cage_location', cageLoc.value.trim());
+    if (fvl)     saveFactoryField(id, 'field_view_link', fvl.value.trim());
+  }
 }
 
 async function deleteCage(id) {
