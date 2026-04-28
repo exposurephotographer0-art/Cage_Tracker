@@ -4264,17 +4264,57 @@ async function handleLiveNeedImport(input) {
       render();
       showSuccess(`⏳ Saving ${updated} cage${updated !== 1 ? 's' : ''}… please wait`);
 
-      // Fire all saves in parallel so a single timeout doesn't abort the rest.
-      // Promise.allSettled means every save is attempted regardless of failures.
-      const saveResults = await Promise.allSettled([
-        ...updates.map(cage => saveCage(cage)),
-        ...locationUpdates.map(({ cageId, prefix }) => saveFactoryField(cageId, 'cage_location', prefix)),
-      ]);
+      // Build save tasks as raw api() calls so errors propagate correctly.
+      // saveCage/saveFactoryField swallow errors internally so we bypass them here.
+      const buildCageSave = cage => {
+        const { location_detail, departure_date, proposed_ship_day, proposed_trip_id,
+          shipping_preference, shipping_preference2, location_history, into_rmd, out_of_rmd,
+          created_at, ...clean } = cage;
+        return () => api('/api/cages', 'PUT', clean);
+      };
+      const buildLocSave = (cageId, prefix) => {
+        const fd = FACTORY_TAG_DATA[cageId] || {};
+        return () => api('/api/factory-data', 'PUT', {
+          cage_id:            cageId,
+          cage_location:      prefix,
+          field_view_link:    fd.field_view_link    || '',
+          tags:               fd.tags               || {},
+          custom_fields:      fd.custom_fields      || {},
+          meshes:             fd.meshes             || {},
+          mesh_comments:      fd.mesh_comments      || {},
+          mesh_grns:          fd.mesh_grns          || {},
+          mesh_area_comments: fd.mesh_area_comments || {},
+        });
+      };
 
-      const failedSaves = saveResults.filter(r => r.status === 'rejected');
-      if (failedSaves.length > 0) {
-        showError(`⚠ ${failedSaves.length} save${failedSaves.length !== 1 ? 's' : ''} failed — try refreshing and re-importing, or check your connection.`);
-        console.error('Import save failures:', failedSaves.map(f => f.reason));
+      const tasks = [
+        ...updates.map(cage => buildCageSave(cage)),
+        ...locationUpdates.map(({ cageId, prefix }) => buildLocSave(cageId, prefix)),
+      ];
+
+      // Process in batches of 5 to stay within D1 write limits.
+      // Each failed task is retried once after a short pause before being counted as failed.
+      const BATCH = 5;
+      let savesFailed = 0;
+      for (let i = 0; i < tasks.length; i += BATCH) {
+        const batch = tasks.slice(i, i + BATCH);
+        const results = await Promise.allSettled(batch.map(fn => fn()));
+        // Retry any that failed
+        const retries = results
+          .map((r, idx) => r.status === 'rejected' ? batch[idx] : null)
+          .filter(Boolean);
+        if (retries.length > 0) {
+          await new Promise(r => setTimeout(r, 600));
+          const retryResults = await Promise.allSettled(retries.map(fn => fn()));
+          savesFailed += retryResults.filter(r => r.status === 'rejected').length;
+          retryResults.filter(r => r.status === 'rejected').forEach(r => console.error('Import save retry failed:', r.reason));
+        }
+        // Small gap between batches
+        if (i + BATCH < tasks.length) await new Promise(r => setTimeout(r, 150));
+      }
+
+      if (savesFailed > 0) {
+        showError(`⚠ ${savesFailed} save${savesFailed !== 1 ? 's' : ''} failed after retry — try re-importing the affected rows.`);
       } else {
         showSuccess(`✅ Live Need Date updated for ${updated} cage${updated !== 1 ? 's' : ''}${locUpdated > 0 ? ` · Cage Location set for ${locUpdated}` : ''}${notFound > 0 ? ` · ${notFound} not found` : ''}${noDate > 0 ? ` · ${noDate} no date` : ''}`);
       }
