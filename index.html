@@ -5137,7 +5137,7 @@ function renderPlanner() {
           </td>
           <td>${m.shift === 'night' ? '🌙 Night' : '☀ Day'}</td>
           <td>${esc(m.type)}</td>
-          <td style="font-weight:600;color:var(--text-primary)">${esc(m.description)}</td>
+          <td style="font-weight:600;color:var(--text-primary)">${(()=>{ const _pc=getCage(m.cageId); return (_pc&&cageBolted(_pc)==='Yes'&&!m.completed)?`<span style="font:700 8px var(--font-mono);background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;border-radius:3px;padding:0 4px;margin-right:5px;vertical-align:middle">BOLTED</span>`:''; })()} ${esc(m.description)}</td>
           <td style="color:var(--text-muted)">
             ${esc(m.notes || '')}
             ${m.completed && m.completionNote ? `<div style="font-style:italic;font-size:10px;color:var(--purple)">"${esc(m.completionNote)}"</div>` : ''}
@@ -8258,6 +8258,7 @@ function renderReport() {
   const movesHTML = dayMoves.length ? dayMoves.map((m,i) => `
     <div class="report-move-row" style="opacity:${m.completed?0.55:1}">
       <span class="report-move-num">${i+1}.</span>
+      ${(()=>{ const _rc=getCage(m.cageId); return (_rc&&cageBolted(_rc)==='Yes')?`<span style="font:700 8px var(--font-mono);background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;border-radius:3px;padding:0 4px;flex-shrink:0">BOLTED</span>`:''; })()}
       <span class="report-move-desc">${esc(m.description)}</span>
       <span class="report-move-type">(${esc(m.type)})</span>
       <span style="color:var(--text-muted)">${m.shift==='night'?'🌙 Night':'☀ Day'}</span>
@@ -10945,7 +10946,7 @@ function renderMovementsMap(dayCtx) {
           const isPickedCage = mvPick && mvPick.cageId === cid;
           const pickBtnHTML = `<button onclick="mvPickCage('${cid}')" title="Click to plan movement for cage ${esc(cage.name)}" style="border:none;background:${isPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${isPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${isPickedCage?'✓':'🏷'}</button>`;
           const cageNameHTML = `<span style="font:600 10px var(--font-mono);${nameStyle}${mvCmtColor(cage)}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${cid}')" title="Click to view/edit movements for cage ${esc(cage.name)}">${hDot(cage.height)}${tagDot(cage)}${esc(cage.name)}${hasMoves?` <span class="u-badge-accent">${STATE.plannedMovements.filter(m=>m.cageId===cid&&!m.completed).length}</span>`:''}</span>${pickBtnHTML}`;
-          slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;background:var(--bg-input);margin-bottom:2px;${bg}">
+          slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;background:var(--bg-input);margin-bottom:2px;${bg}${cageBolted(cage)==='Yes'?'outline:2px solid var(--red);outline-offset:-1px;':''}">
             <div style="display:flex;align-items:center;">${arrow}${slotTag}${cageNameHTML}</div>
             <div style="font-size:9px;padding-left:${arrow?'14':'0'}px;${detailStyle||'color:var(--text-muted);'}">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</div>
             ${liveNeedBadgeHTML(cage, `padding-left:${arrow?'14':'0'}px;`)}
@@ -10975,7 +10976,7 @@ function renderMovementsMap(dayCtx) {
         slotsHTML += `<div style="font:700 8px var(--font-mono);color:#27a060;text-transform:uppercase;letter-spacing:.05em;margin:5px 0 3px">${sideLabel}</div>`;
         incomingBySide[side].forEach(m => {
           const c = getCage(m.cageId); if (!c) return;
-          slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #4aad72;background:#f0faf4;margin-bottom:2px;">
+          slotsHTML += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #4aad72;background:#f0faf4;margin-bottom:2px;${cageBolted(c)==='Yes'?'outline:2px solid var(--red);outline-offset:-1px;':''}">
             <div style="display:flex;align-items:center;gap:3px;"><span style="color:#27a060;font-weight:800;margin-right:2px">←</span><span style="font:600 10px var(--font-mono);display:inline-flex;align-items:center;">${hDot(c.height)}${tagDot(c)}${esc(c.name)}</span></div>
             <div style="color:var(--text-muted);font-size:9px;padding-left:14px">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
             ${liveNeedBadgeHTML(c, 'padding-left:14px;')}
@@ -11011,7 +11012,7 @@ function renderMovementsMap(dayCtx) {
         const nameStyle = shipmentShadeNameColor(_rs) || '';
         const isPickedCage = mvPick && mvPick.cageId === cage.id;
         const pickBtn = `<button onclick="mvPickCage('${cage.id}')" title="Plan movement for cage ${esc(cage.name)}" style="border:none;background:${isPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${isPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${isPickedCage?'✓':'🏷'}</button>`;
-        html += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;margin-bottom:2px;${bg}">
+        html += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid;margin-bottom:2px;${bg}${cageBolted(cage)==='Yes'?'outline:2px solid var(--red);outline-offset:-1px;':''}">
           <div style="display:flex;align-items:center;">${mvOut?'<span style="color:#c08520;font-weight:800;margin-right:4px">→</span>':''}<span style="font:600 10px var(--font-mono);${nameStyle}">${hDot(cage.height)}${tagDot(cage)}${esc(cage.name)}</span>${pickBtn}</div>
           <div style="font-size:9px;color:var(--text-muted)">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</div>
           ${liveNeedBadgeHTML(cage)}
@@ -11020,7 +11021,7 @@ function renderMovementsMap(dayCtx) {
       // Incoming cages
       pendingIn.forEach(m => {
         const cage = getCage(m.cageId); if (!cage || rssCages.find(x=>x.id===cage.id)) return;
-        html += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #4aad72;background:#f0faf4;margin-bottom:2px;">
+        html += `<div style="font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid #4aad72;background:#f0faf4;margin-bottom:2px;${cageBolted(cage)==='Yes'?'outline:2px solid var(--red);outline-offset:-1px;':''}">
           <div style="display:flex;align-items:center;gap:3px;"><span style="color:#27a060;font-weight:800">←</span><span style="font:600 10px var(--font-mono);display:inline-flex;align-items:center;">${hDot(cage.height)}${tagDot(cage)}${esc(cage.name)}</span></div>
           <div style="color:var(--text-muted);font-size:9px;padding-left:14px">${cage.width}m · ${hCat(cage.height)} · ${lCat(cage.length)} · ${cage.weight}t</div>
           ${liveNeedBadgeHTML(cage, 'padding-left:14px;')}
@@ -11079,7 +11080,7 @@ function renderMovementsMap(dayCtx) {
       const fMoveCount = STATE.plannedMovements.filter(m=>m.cageId===c.id&&!m.completed).length;
       const fIsPickedCage = mvPick && mvPick.cageId === c.id;
       const fPickBtn = `<button onclick="event.stopPropagation();mvPickCage('${c.id}')" title="Plan movement for cage ${esc(c.name)}" style="border:none;background:${fIsPickedCage?'var(--accent)':'rgba(192,133,32,0.15)'};color:${fIsPickedCage?'#fff':'var(--accent)'};border-radius:4px;padding:1px 5px;font-size:9px;cursor:pointer;margin-left:4px;flex-shrink:0;font-weight:700">${fIsPickedCage?'✓':'🏷'}</button>`;
-      html += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${fBg}">
+      html += `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${fBg}${cageBolted(c)==='Yes'?'outline:2px solid var(--red);outline-offset:-1px;':''}">
         <div style="display:flex;align-items:center;gap:2px;">${out?'<span style="color:#c08520;font-weight:800">→</span>':''}<span style="font:600 10px var(--font-mono);${fNameStyle}${mvCmtColor(c)}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${fMoveCount>0?` <span class="u-badge-accent">${fMoveCount}</span>`:''}</span>${fPickBtn}</div>
         <div style="font-size:9px;padding-left:${out?'13':'0'}px;${fDetailStyle}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
         ${liveNeedBadgeHTML(c, `padding-left:${out?'13':'0'}px;`)}
@@ -11105,7 +11106,7 @@ function renderMovementsMap(dayCtx) {
       const iArrow = isTransit
         ? `<span style="color:#27a060;font-weight:800">←</span><span style="color:#c08520;font-weight:800">→</span>`
         : `<span style="color:#27a060;font-weight:800">←</span>`;
-      html+=`<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${iBg}">
+      html+=`<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid;margin-bottom:2px;${iBg}${cageBolted(c)==='Yes'?'outline:2px solid var(--red);outline-offset:-1px;':''}">
         <div style="display:flex;align-items:center;gap:2px;">${iArrow}<span style="font:600 10px var(--font-mono);${iNameStyle}${mvCmtColor(c)}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;display:inline-flex;align-items:center;" onclick="openMvCageMovements('${c.id}')" title="Click to view/edit movements">${hDot(c.height)}${tagDot(c)}${esc(c.name)}${iMoveCount>0?` <span class="u-badge-accent">${iMoveCount}</span>`:''}</span>${iPickBtn}</div>
         <div style="font-size:9px;padding-left:13px;${iDetailStyle}">${c.width}m · ${hCat(c.height)} · ${lCat(c.length)} · ${c.weight}t</div>
         ${liveNeedBadgeHTML(c, 'padding-left:13px;')}
@@ -11222,6 +11223,7 @@ function renderMovementsMap(dayCtx) {
           <div style="width:20px;height:20px;border-radius:50%;background:${m.completed?'#aaa':col};color:#fff;font:700 10px var(--font-mono);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px">${dayIdx+1}</div>
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:4px;">
+              ${cage&&cageBolted(cage)==='Yes'&&!m.completed?`<span style="font:700 8px var(--font-mono);background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;border-radius:3px;padding:0 4px;flex-shrink:0">BOLTED</span>`:''}
               <span style="font:700 12px var(--font-mono);${cage&&cage.comments?'color:#ef4444;':'color:var(--text-primary);'}cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px;${m.completed?'text-decoration:line-through;color:var(--text-muted);':''}" onclick="openMvCageMovements('${m.cageId}')" title="Click to view/edit movements">${cage?esc(cage.name):'?'}</span>
               <span style="font-size:10px">${shiftIcon}</span>
               ${m.completed ? '<span style="font:600 9px var(--font-mono);color:var(--green);background:#e6f5ec;border:1px solid #b0dcc0;border-radius:8px;padding:0 5px">✓ Done</span>' : ''}
@@ -11392,6 +11394,7 @@ function renderMovementsMap(dayCtx) {
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:14px;height:14px;background:#3b1d6e;border-radius:3px;display:inline-block"></span>Next shipment</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:14px;height:14px;background:#c8b8e8;border-radius:3px;display:inline-block"></span>2nd shipment</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:14px;height:14px;background:#fff8c5;border:1px solid #e8d850;border-radius:3px;display:inline-block"></span>Ship preference</span>
+      <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:14px;height:14px;border:2px solid var(--red);border-radius:3px;display:inline-block"></span>Bolted</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#0891b2;border-radius:2px;display:inline-block"></span>Roof Slab in/out</span>
       <span style="display:inline-flex;align-items:center;gap:5px;font:500 11px var(--font-display);color:var(--text-secondary)"><span style="width:24px;height:3px;background:#7c3aed;border-radius:2px;display:inline-block"></span>Roof Slab → RMD</span>
       <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">${filtered.length} movement${filtered.length!==1?'s':''}</span>
@@ -11477,7 +11480,7 @@ function renderMovementsMap(dayCtx) {
                           const daysLeft = Math.ceil((depDate - _now) / 86400000);
                           const isOverdue = daysLeft < 0;
                           const datCol = isOverdue ? 'var(--red)' : daysLeft <= 3 ? 'var(--orange)' : 'var(--text-muted)';
-                          return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid ${hasPlan?'#93c5fd':'var(--border)'};background:${hasPlan?'#eff6ff':'var(--bg-input)'};margin-bottom:2px;">
+                          return `<div style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid ${hasPlan?'#93c5fd':'var(--border)'};background:${hasPlan?'#eff6ff':'var(--bg-input)'};margin-bottom:2px;${cageBolted(c)==='Yes'?'outline:2px solid var(--red);outline-offset:-1px;':''}">
                             <div style="display:flex;align-items:center;gap:3px;">
                               ${hasPlan ? '<span style="color:#2563b0;font-weight:800;flex-shrink:0">→</span>' : '<span style="width:9px;flex-shrink:0"></span>'}
                               ${hDot(c.height)}${tagDot(c)}<span style="font:600 10px var(--font-mono)">${esc(c.name)}</span>
