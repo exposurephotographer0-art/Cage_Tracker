@@ -4197,14 +4197,16 @@ async function handleLiveNeedImport(input) {
 
       const colProd = findIdx('production number');
       const colLiveNeed = findIdx('live need date for sort', 'live need date', 'live need');
+      const colName = findIdx('name'); // first 4 chars → cage location
       if (colProd === -1) return alert('Could not find "Production Number" column.');
       if (colLiveNeed === -1) return alert('Could not find "Live need date for sort" column.');
 
       // Build a lookup map: cage name (lower) → cage object
       const cageByName = new Map(STATE.cages.map(c => [String(c.name).toLowerCase().trim(), c]));
 
-      let updated = 0, notFound = 0, noDate = 0;
+      let updated = 0, notFound = 0, noDate = 0, locUpdated = 0;
       const updates = [];
+      const locationUpdates = []; // { cageId, prefix }
 
       allRows.slice(headerIdx + 1).forEach(row => {
         const rawProd = row[colProd];
@@ -4239,6 +4241,20 @@ async function handleLiveNeedImport(input) {
         cage.liveNeedDate = dateStr;
         updates.push(cage);
         updated++;
+
+        // Extract cage location prefix from first 4 chars of the Name column
+        if (colName !== -1) {
+          const rawNameVal = row[colName];
+          if (rawNameVal !== undefined && rawNameVal !== null) {
+            const prefix = String(rawNameVal).trim().slice(0, 4);
+            if (prefix.length === 4) {
+              if (!FACTORY_TAG_DATA[cage.id]) FACTORY_TAG_DATA[cage.id] = {};
+              FACTORY_TAG_DATA[cage.id].cage_location = prefix;
+              locationUpdates.push({ cageId: cage.id, prefix });
+              locUpdated++;
+            }
+          }
+        }
       });
 
       if (updates.length === 0) {
@@ -4246,11 +4262,15 @@ async function handleLiveNeedImport(input) {
       }
 
       render();
-      showSuccess(`✅ Live Need Date updated for ${updated} cage${updated !== 1 ? 's' : ''}${notFound > 0 ? ` · ${notFound} not found` : ''}${noDate > 0 ? ` · ${noDate} no date` : ''}`);
+      showSuccess(`✅ Live Need Date updated for ${updated} cage${updated !== 1 ? 's' : ''}${locUpdated > 0 ? ` · Cage Location set for ${locUpdated}` : ''}${notFound > 0 ? ` · ${notFound} not found` : ''}${noDate > 0 ? ` · ${noDate} no date` : ''}`);
 
-      // Save to API
+      // Save live need dates to API
       for (const cage of updates) {
         await saveCage(cage);
+      }
+      // Save cage location prefixes to API
+      for (const { cageId, prefix } of locationUpdates) {
+        await saveFactoryField(cageId, 'cage_location', prefix);
       }
     } catch (err) {
       alert('Error reading Excel file: ' + err.message);
