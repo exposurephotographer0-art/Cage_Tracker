@@ -4198,13 +4198,14 @@ async function handleLiveNeedImport(input) {
       const colProd = findIdx('production number');
       const colLiveNeed = findIdx('live need date for sort', 'live need date', 'live need');
       const colName = findIdx('name'); // first 4 chars → cage location
+      const colArmfWeight = findIdx('armf cage weight', 'cage weight');
       if (colProd === -1) return alert('Could not find "Production Number" column.');
       if (colLiveNeed === -1) return alert('Could not find "Live need date for sort" column.');
 
       // Build a lookup map: cage name (lower) → cage object
       const cageByName = new Map(STATE.cages.map(c => [String(c.name).toLowerCase().trim(), c]));
 
-      let updated = 0, notFound = 0, noDate = 0, locUpdated = 0;
+      let updated = 0, notFound = 0, noDate = 0, locUpdated = 0, weightUpdated = 0;
       const updates = [];
       const locationUpdates = []; // { cageId, prefix }
 
@@ -4239,6 +4240,22 @@ async function handleLiveNeedImport(input) {
 
         if (!dateStr) { noDate++; return; }
         cage.liveNeedDate = dateStr;
+
+        // Pull cage weight from "ARMF Cage Weight" column (e.g. "4.6 (Crane Reading)" → 4.6)
+        if (colArmfWeight !== -1) {
+          const rawWt = row[colArmfWeight];
+          if (rawWt !== undefined && rawWt !== null && String(rawWt).trim() !== '') {
+            const wtMatch = String(rawWt).trim().match(/^(\d+\.?\d*)/);
+            if (wtMatch) {
+              const parsedWt = parseFloat(wtMatch[1]);
+              if (!isNaN(parsedWt) && parsedWt > 0) {
+                cage.weight = parsedWt;
+                weightUpdated++;
+              }
+            }
+          }
+        }
+
         updates.push(cage);
         updated++;
 
@@ -4316,7 +4333,7 @@ async function handleLiveNeedImport(input) {
       if (savesFailed > 0) {
         showError(`⚠ ${savesFailed} save${savesFailed !== 1 ? 's' : ''} failed after retry — try re-importing the affected rows.`);
       } else {
-        showSuccess(`✅ Live Need Date updated for ${updated} cage${updated !== 1 ? 's' : ''}${locUpdated > 0 ? ` · Cage Location set for ${locUpdated}` : ''}${notFound > 0 ? ` · ${notFound} not found` : ''}${noDate > 0 ? ` · ${noDate} no date` : ''}`);
+        showSuccess(`✅ Live Need Date updated for ${updated} cage${updated !== 1 ? 's' : ''}${weightUpdated > 0 ? ` · Weight updated for ${weightUpdated}` : ''}${locUpdated > 0 ? ` · Cage Location set for ${locUpdated}` : ''}${notFound > 0 ? ` · ${notFound} not found` : ''}${noDate > 0 ? ` · ${noDate} no date` : ''}`);
       }
     } catch (err) {
       alert('Error reading Excel file: ' + err.message);
