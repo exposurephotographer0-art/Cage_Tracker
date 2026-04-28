@@ -4262,15 +4262,21 @@ async function handleLiveNeedImport(input) {
       }
 
       render();
-      showSuccess(`✅ Live Need Date updated for ${updated} cage${updated !== 1 ? 's' : ''}${locUpdated > 0 ? ` · Cage Location set for ${locUpdated}` : ''}${notFound > 0 ? ` · ${notFound} not found` : ''}${noDate > 0 ? ` · ${noDate} no date` : ''}`);
+      showSuccess(`⏳ Saving ${updated} cage${updated !== 1 ? 's' : ''}… please wait`);
 
-      // Save live need dates to API
-      for (const cage of updates) {
-        await saveCage(cage);
-      }
-      // Save cage location prefixes to API
-      for (const { cageId, prefix } of locationUpdates) {
-        await saveFactoryField(cageId, 'cage_location', prefix);
+      // Fire all saves in parallel so a single timeout doesn't abort the rest.
+      // Promise.allSettled means every save is attempted regardless of failures.
+      const saveResults = await Promise.allSettled([
+        ...updates.map(cage => saveCage(cage)),
+        ...locationUpdates.map(({ cageId, prefix }) => saveFactoryField(cageId, 'cage_location', prefix)),
+      ]);
+
+      const failedSaves = saveResults.filter(r => r.status === 'rejected');
+      if (failedSaves.length > 0) {
+        showError(`⚠ ${failedSaves.length} save${failedSaves.length !== 1 ? 's' : ''} failed — try refreshing and re-importing, or check your connection.`);
+        console.error('Import save failures:', failedSaves.map(f => f.reason));
+      } else {
+        showSuccess(`✅ Live Need Date updated for ${updated} cage${updated !== 1 ? 's' : ''}${locUpdated > 0 ? ` · Cage Location set for ${locUpdated}` : ''}${notFound > 0 ? ` · ${notFound} not found` : ''}${noDate > 0 ? ` · ${noDate} no date` : ''}`);
       }
     } catch (err) {
       alert('Error reading Excel file: ' + err.message);
