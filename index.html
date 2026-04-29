@@ -3237,7 +3237,7 @@ function renderCages() {
           <td><span class="badge badge-${hBadge(c.height)}">${hCat(c.height)}</span></td>
           <td>—</td>
           <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
-          <td><input id="ce-cage-loc-${c.id}" value="${esc((FACTORY_TAG_DATA[c.id]||{}).cage_location||'')}" placeholder="Location…" style="width:120px;font-size:11px"/></td>
+          <td><input id="ce-cage-loc-${c.id}" value="${esc((FACTORY_TAG_DATA[c.id]||{}).cage_location||'')}" placeholder="Reference…" style="width:120px;font-size:11px"/></td>
           <td><input id="ce-fvl-${c.id}" type="url" value="${esc((FACTORY_TAG_DATA[c.id]||{}).field_view_link||'')}" placeholder="https://…" style="width:150px;font-size:11px"/></td>
           <td>—</td>
           <td style="text-align:center"><input type="checkbox" id="ce-sp-${c.id}" ${c.shippingPreference?'checked':''} style="width:15px;height:15px;accent-color:#e8b800" title="Shipping Preference"/></td>
@@ -3275,7 +3275,7 @@ function renderCages() {
         <td><span class="badge badge-${hBadge(c.height)}">${hCat(c.height)}</span></td>
         <td>${(()=>{ const b=cageBolted(c); if(b===null) return '<span style="color:var(--text-muted)">—</span>'; return b==='Yes' ? '<span class="badge badge-green">Yes</span>' : '<span class="badge badge-red">No</span>'; })()}</td>
         <td><span class="badge badge-${locBadge(c.location)}">${esc(locLabel(c))}</span></td>
-        <td style="max-width:140px;font-size:11px;color:var(--text-secondary)"><span class="editable-cell" onclick="startFactoryInlineEdit('${c.id}','cage_location',this)" title="Click to edit cage location">${(()=>{ const v=(FACTORY_TAG_DATA[c.id]||{}).cage_location||''; return v?esc(v):'<span style="color:var(--text-muted)">—</span>'; })()}</span></td>
+        <td style="max-width:140px;font-size:11px;color:var(--text-secondary)"><span class="editable-cell" onclick="startFactoryInlineEdit('${c.id}','cage_location',this)" title="Click to edit cage reference">${(()=>{ const v=(FACTORY_TAG_DATA[c.id]||{}).cage_location||''; return v?esc(v):'<span style="color:var(--text-muted)">—</span>'; })()}</span></td>
         <td style="white-space:nowrap">${(()=>{ const v=(FACTORY_TAG_DATA[c.id]||{}).field_view_link||''; return v?`<a href="${esc(v)}" target="_blank" rel="noopener" class="btn btn-secondary btn-xs" style="text-decoration:none" title="${esc(v)}">🔗 Open</a><span class="editable-cell" onclick="startFactoryInlineEdit('${c.id}','field_view_link',this)" title="Click to edit link" style="font-size:10px;color:var(--text-muted);margin-left:5px;cursor:pointer">✎</span>`:`<span class="editable-cell" onclick="startFactoryInlineEdit('${c.id}','field_view_link',this)" title="Click to add Field View link" style="color:var(--text-muted);font-size:11px">+ Add link</span>`; })()}</td>
         <td style="white-space:nowrap">${(()=>{
           const fd = FACTORY_TAG_DATA[c.id] || {};
@@ -3488,7 +3488,7 @@ function renderCages() {
       <table>
         <thead><tr>
           <th style="width:32px"><input type="checkbox" id="cage-select-all" style="width:14px;height:14px;cursor:pointer;accent-color:var(--accent)" onchange="toggleAllCages(this.checked,${JSON.stringify(filtered.map(c=>c.id))})"/></th>
-          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Live Need Date</th><th>Boat Trip</th><th>Into RMD</th><th>Out of RMD</th><th>Category</th><th title="Bolted: weight ÷ height vs threshold in Settings">Bolted</th><th>Location</th><th>Cage Location</th><th>Field View</th><th>Tags</th><th title="Cage Status — Red or Green tag">Status</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th title="Shipping Preference 2 — highlight blue across all views">🔵 SP2</th><th>Comments</th><th>Move</th><th></th>
+          <th>Name <span style="font-weight:400;font-size:9px;color:var(--accent)">click to edit</span></th><th>H(m)</th><th>W(m)</th><th>L(m)</th><th>Wt(t)</th><th>Leaves Facility</th><th>Live Need Date</th><th>Boat Trip</th><th>Into RMD</th><th>Out of RMD</th><th>Category</th><th title="Bolted: weight ÷ height vs threshold in Settings">Bolted</th><th>Location</th><th>Cage Reference</th><th>Field View</th><th>Tags</th><th title="Cage Status — Red or Green tag">Status</th><th title="Shipping Preference — highlight yellow across all views">🟡 Ship Pref</th><th title="Shipping Preference 2 — highlight blue across all views">🔵 SP2</th><th>Comments</th><th>Move</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -3540,16 +3540,23 @@ async function applyRefreshSelections(selectedIds, changes) {
 
     // Re-sync local STATE
     try {
-      const stateRes = await fetch(API_BASE + '/api/state', { headers: { Authorization: 'Bearer ' + _sessionPin } });
+      const [stateRes, fdRes] = await Promise.all([
+        fetch(API_BASE + '/api/state',        { headers: { Authorization: 'Bearer ' + _sessionPin } }),
+        fetch(API_BASE + '/api/factory-data', { headers: { Authorization: 'Bearer ' + _sessionPin } }),
+      ]);
       if (stateRes.ok) {
         const sd = await stateRes.json();
         if (sd.cages) {
           STATE.cages = sd.cages.map(c => ({
             ...c, height:c.height||0, width:c.width||0, length:c.length||0, weight:c.weight||0,
           }));
-          render();
         }
       }
+      if (fdRes.ok) {
+        const fd = await fdRes.json();
+        if (fd.data) FACTORY_TAG_DATA = fd.data;
+      }
+      render();
     } catch(e) { /* non-fatal */ }
   } catch(e) {
     showError('Apply failed: ' + e.message);
@@ -4480,9 +4487,9 @@ async function handleLiveNeedImport(input) {
       // Build a lookup map: cage name (lower) → cage object
       const cageByName = new Map(STATE.cages.map(c => [String(c.name).toLowerCase().trim(), c]));
 
-      let updated = 0, notFound = 0, noDate = 0, locUpdated = 0, weightUpdated = 0;
+      let updated = 0, notFound = 0, noDate = 0, weightUpdated = 0;
       const updates = [];
-      const locationUpdates = []; // { cageId, prefix }
+      const locationUpdates = [];
 
       allRows.slice(headerIdx + 1).forEach(row => {
         const rawProd = row[colProd];
@@ -4533,20 +4540,6 @@ async function handleLiveNeedImport(input) {
 
         updates.push(cage);
         updated++;
-
-        // Extract cage location prefix from first 4 chars of the Name column
-        if (colName !== -1) {
-          const rawNameVal = row[colName];
-          if (rawNameVal !== undefined && rawNameVal !== null) {
-            const prefix = String(rawNameVal).trim().slice(0, 4);
-            if (prefix.length === 4) {
-              if (!FACTORY_TAG_DATA[cage.id]) FACTORY_TAG_DATA[cage.id] = {};
-              FACTORY_TAG_DATA[cage.id].cage_location = prefix;
-              locationUpdates.push({ cageId: cage.id, prefix });
-              locUpdated++;
-            }
-          }
-        }
       });
 
       if (updates.length === 0) {
@@ -4564,24 +4557,8 @@ async function handleLiveNeedImport(input) {
           created_at, ...clean } = cage;
         return () => api('/api/cages', 'PUT', clean);
       };
-      const buildLocSave = (cageId, prefix) => {
-        const fd = FACTORY_TAG_DATA[cageId] || {};
-        return () => api('/api/factory-data', 'PUT', {
-          cage_id:            cageId,
-          cage_location:      prefix,
-          field_view_link:    fd.field_view_link    || '',
-          tags:               fd.tags               || {},
-          custom_fields:      fd.custom_fields      || {},
-          meshes:             fd.meshes             || {},
-          mesh_comments:      fd.mesh_comments      || {},
-          mesh_grns:          fd.mesh_grns          || {},
-          mesh_area_comments: fd.mesh_area_comments || {},
-        });
-      };
-
       const tasks = [
         ...updates.map(cage => buildCageSave(cage)),
-        ...locationUpdates.map(({ cageId, prefix }) => buildLocSave(cageId, prefix)),
       ];
 
       // Process in batches of 5 to stay within D1 write limits.
@@ -4608,7 +4585,7 @@ async function handleLiveNeedImport(input) {
       if (savesFailed > 0) {
         showError(`⚠ ${savesFailed} save${savesFailed !== 1 ? 's' : ''} failed after retry — try re-importing the affected rows.`);
       } else {
-        showSuccess(`✅ Live Need Date updated for ${updated} cage${updated !== 1 ? 's' : ''}${weightUpdated > 0 ? ` · Weight updated for ${weightUpdated}` : ''}${locUpdated > 0 ? ` · Cage Location set for ${locUpdated}` : ''}${notFound > 0 ? ` · ${notFound} not found` : ''}${noDate > 0 ? ` · ${noDate} no date` : ''}`);
+        showSuccess(`✅ Live Need Date updated for ${updated} cage${updated !== 1 ? 's' : ''}${weightUpdated > 0 ? ` · Weight updated for ${weightUpdated}` : ''}${notFound > 0 ? ` · ${notFound} not found` : ''}${noDate > 0 ? ` · ${noDate} no date` : ''}`);
       }
     } catch (err) {
       alert('Error reading Excel file: ' + err.message);
