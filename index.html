@@ -3331,6 +3331,7 @@ function renderCages() {
       <h2 class="section-title" style="margin:0">Cage Inventory <span style="font:400 12px var(--font-mono);color:var(--text-muted)">${filtered.length} / ${STATE.cages.length}</span></h2>
       <div style="display:flex;gap:8px">
         <button class="btn btn-secondary" onclick="document.getElementById('live-need-import').click()">📥 Import Live Need</button>
+        <button class="btn btn-secondary" onclick="refreshFromAnalyses()" title="Update cage dimensions from accepted analyses">↻ Refresh Cage Table</button>
         <button class="btn btn-primary" onclick="cageFormOpen=!cageFormOpen;render()">+ Add Cage</button>
       </div>
     </div>
@@ -3491,6 +3492,180 @@ function renderCages() {
       </table>
     </div>
   `;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// REFRESH CAGE TABLE FROM ANALYSES
+// ═══════════════════════════════════════════════════════════════════════
+
+async function refreshFromAnalyses() {
+  if (!_sessionPin) { showError('Write PIN required to refresh cage data.'); return; }
+
+  const btn = [...document.querySelectorAll('button')].find(b => b.textContent.includes('Refresh Cage Table'));
+  if (btn) { btn.disabled = true; btn.textContent = '↻ Refreshing…'; }
+
+  let result;
+  try {
+    const res = await api('/api/refresh-from-analyses', 'POST', {});
+    result = res;
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh Cage Table'; }
+    showError('Refresh failed: ' + e.message);
+    return;
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = '↻ Refresh Cage Table'; }
+
+  // Re-sync local STATE so UI reflects updated values immediately
+  try {
+    const stateRes = await fetch(API_BASE + '/api/state', { headers: { Authorization: 'Bearer ' + _sessionPin } });
+    if (stateRes.ok) {
+      const stateData = await stateRes.json();
+      if (stateData.cages) {
+        STATE.cages = stateData.cages.map(c => ({
+          ...c,
+          height: c.height || 0, width: c.width || 0, length: c.length || 0, weight: c.weight || 0,
+        }));
+        render();
+      }
+    }
+  } catch(e) { /* non-fatal — UI will refresh on next full load */ }
+
+  // Open results popup
+  _openRefreshPopup(result);
+}
+
+function _openRefreshPopup(result) {
+  const { changes = [], skipped = [], summary = {} } = result;
+  const updated   = changes.filter(c => c.status === 'updated');
+  const unchanged = changes.filter(c => c.status === 'unchanged');
+
+  const fieldUnit = { height:'m', width:'m', length:'m', weight:'t' };
+
+  const updatedRows = updated.map(c => `
+    <tr style="background:#f0fdf4">
+      <td style="font-weight:700;padding:6px 10px;border-bottom:1px solid #e2e8f0">${esc(c.cageName)}</td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0">
+        ${c.diffs.map(d =>
+          `<div style="margin-bottom:3px">
+            <span style="font-weight:600;color:#374151">${d.label}:</span>
+            <span style="color:#ef4444;text-decoration:line-through;margin:0 4px">${d.old}${fieldUnit[d.field]}</span>
+            <span style="color:#6b7280">→</span>
+            <span style="color:#16a34a;margin-left:4px;font-weight:600">${d.new}${fieldUnit[d.field]}</span>
+          </div>`
+        ).join('')}
+      </td>
+      <td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;color:#6b7280;font-size:11px">v${c.version}</td>
+    </tr>`).join('');
+
+  const unchangedRows = unchanged.length > 0 ? `
+    <tr><td colspan="3" style="padding:10px;background:#f8fafc;font-size:12px;color:#6b7280;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">
+      No changes (${unchanged.length} cage${unchanged.length !== 1 ? 's' : ''})
+    </td></tr>
+    ${unchanged.map(c => `
+    <tr>
+      <td style="padding:4px 10px;color:#9ca3af;font-size:12px;border-bottom:1px solid #f1f5f9">${esc(c.cageName)}</td>
+      <td style="padding:4px 10px;color:#9ca3af;font-size:12px;border-bottom:1px solid #f1f5f9">All dimensions match</td>
+      <td style="padding:4px 10px;color:#9ca3af;font-size:12px;border-bottom:1px solid #f1f5f9">v${c.version}</td>
+    </tr>`).join('')}` : '';
+
+  const skippedRows = skipped.length > 0 ? `
+    <tr><td colspan="3" style="padding:10px;background:#fff7ed;font-size:12px;color:#92400e;font-weight:600;text-transform:uppercase;letter-spacing:0.05em">
+      No matching cage (${skipped.length})
+    </td></tr>
+    ${skipped.map(s => `
+    <tr>
+      <td style="padding:4px 10px;color:#f97316;font-size:12px;border-bottom:1px solid #fef3c7">${esc(s.productionNumber)}</td>
+      <td colspan="2" style="padding:4px 10px;color:#9ca3af;font-size:12px;border-bottom:1px solid #fef3c7">${esc(s.reason)}</td>
+    </tr>`).join('')}` : '';
+
+  const noChangesMsg = updated.length === 0 && skipped.length === 0
+    ? `<div style="text-align:center;padding:32px;color:#6b7280">
+        <div style="font-size:28px;margin-bottom:8px">✓</div>
+        <div style="font-weight:600">All cage dimensions are already up to date.</div>
+       </div>` : '';
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cage Refresh Results</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+           background: #f8fafc; color: #1e293b; padding: 0; }
+    .header { background: linear-gradient(135deg,#e8a830,#c08520); color:#fff;
+              padding:16px 24px; display:flex; align-items:center; gap:12px; }
+    .header h1 { font-size:16px; font-weight:700; letter-spacing:-0.02em; }
+    .header .sub { font-size:11px; opacity:.85; margin-top:2px; }
+    .summary { display:flex; gap:12px; padding:16px 24px; background:#fff;
+               border-bottom:1px solid #e2e8f0; }
+    .stat { flex:1; text-align:center; padding:10px; border-radius:8px; border:1px solid #e2e8f0; }
+    .stat-num { font-size:22px; font-weight:700; }
+    .stat-lbl { font-size:10px; color:#6b7280; text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
+    .stat.updated  { border-color:#86efac; background:#f0fdf4; }
+    .stat.updated .stat-num { color:#16a34a; }
+    .stat.unchanged { border-color:#e2e8f0; }
+    .stat.unchanged .stat-num { color:#6b7280; }
+    .stat.skipped  { border-color:#fed7aa; background:#fff7ed; }
+    .stat.skipped .stat-num  { color:#f97316; }
+    .body { padding:16px 24px; }
+    table { width:100%; border-collapse:collapse; background:#fff;
+            border-radius:8px; overflow:hidden; border:1px solid #e2e8f0; }
+    th { padding:8px 10px; background:#f1f5f9; font-size:11px; font-weight:600;
+         text-transform:uppercase; letter-spacing:.06em; color:#475569;
+         text-align:left; border-bottom:2px solid #e2e8f0; }
+    .close-btn { display:block; margin:16px auto 0; padding:8px 24px;
+                 background:#1e293b; color:#fff; border:none; border-radius:6px;
+                 font-size:13px; font-weight:600; cursor:pointer; }
+    .close-btn:hover { background:#334155; }
+    .timestamp { font-size:10px; color:rgba(255,255,255,0.7); margin-top:2px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div>
+      <h1>⬡ Cage Table Refresh</h1>
+      <div class="sub">Dimensions updated from accepted analyses</div>
+      <div class="timestamp">${new Date().toLocaleString()}</div>
+    </div>
+  </div>
+  <div class="summary">
+    <div class="stat updated">
+      <div class="stat-num">${summary.updated || 0}</div>
+      <div class="stat-lbl">Updated</div>
+    </div>
+    <div class="stat unchanged">
+      <div class="stat-num">${summary.unchanged || 0}</div>
+      <div class="stat-lbl">Unchanged</div>
+    </div>
+    <div class="stat skipped">
+      <div class="stat-num">${summary.skipped || 0}</div>
+      <div class="stat-lbl">No Match</div>
+    </div>
+  </div>
+  <div class="body">
+    ${noChangesMsg}
+    ${(updatedRows || unchangedRows || skippedRows) ? `
+    <table>
+      <thead><tr>
+        <th style="width:100px">Cage</th>
+        <th>Changes</th>
+        <th style="width:60px">Version</th>
+      </tr></thead>
+      <tbody>${updatedRows}${unchangedRows}${skippedRows}</tbody>
+    </table>` : ''}
+    <button class="close-btn" onclick="window.close()">Close</button>
+  </div>
+</body>
+</html>`;
+
+  const popup = window.open('', 'refreshResults',
+    'width=560,height=600,scrollbars=yes,resizable=yes,toolbar=no,menubar=no');
+  if (!popup) { alert('Please allow pop-ups for this site to see the refresh results.'); return; }
+  popup.document.open();
+  popup.document.write(html);
+  popup.document.close();
 }
 
 async function addCage() {
