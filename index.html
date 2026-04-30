@@ -10874,9 +10874,14 @@ function renderMovementsDayView() {
     m.completed && m.date && m.date > mvDayDate
   ).sort((a, b) => (b.date||'').localeCompare(a.date||''));
   // Also reverse completed moves ON this day (we want start-of-day, before today's moves ran)
-  const sameDayDoneMoves = STATE.plannedMovements.filter(m =>
-    m.completed && m.date && m.date === mvDayDate
-  );
+  // EXCEPTION: in "Proposed Only" mode for today, we DON'T reverse today's completed moves —
+  // they've already happened so the current STATE already reflects them. We just want to see
+  // the real current state with only the still-pending moves shown as arrows.
+  const sameDayDoneMoves = (isViewingToday && mvTodayProposedOnly)
+    ? []
+    : STATE.plannedMovements.filter(m =>
+        m.completed && m.date && m.date === mvDayDate
+      );
   const allMovesToReverse = [...futureDoneMoves, ...sameDayDoneMoves];
 
   // Strategy:
@@ -16535,7 +16540,7 @@ function dtExportCSV() {
     <div id="hdr-time" style="font:700 15px var(--font-mono);color:#e8a830;letter-spacing:0.05em"></div>
     <div id="hdr-date" style="font:500 10px var(--font-mono);color:#8899aa;letter-spacing:0.06em"></div>
   </div>
-  <a href="cage_traveller.html" title="Open Cage Traveller" style="border:1px solid rgba(184,114,0,0.4);background:rgba(184,114,0,0.12);color:#e8a830;border-radius:6px;padding:6px 12px;font:600 11px var(--font-display);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.12s;flex-shrink:0;text-decoration:none" onmouseover="this.style.background='rgba(184,114,0,0.22)';this.style.color='#ffcc60'" onmouseout="this.style.background='rgba(184,114,0,0.12)';this.style.color='#e8a830'">
+  <a href="https://construction-bm0.pages.dev/" title="Open Cage Traveller" style="border:1px solid rgba(184,114,0,0.4);background:rgba(184,114,0,0.12);color:#e8a830;border-radius:6px;padding:6px 12px;font:600 11px var(--font-display);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.12s;flex-shrink:0;text-decoration:none" onmouseover="this.style.background='rgba(184,114,0,0.22)';this.style.color='#ffcc60'" onmouseout="this.style.background='rgba(184,114,0,0.12)';this.style.color='#e8a830'">
     📋 <span>Cage Traveller</span>
   </a>
   <button onclick="logout()" title="Log out and switch PIN" style="border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#aabbcc;border-radius:6px;padding:6px 12px;font:600 11px var(--font-display);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.12s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,0.14)';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,0.07)';this.style.color='#aabbcc'">
