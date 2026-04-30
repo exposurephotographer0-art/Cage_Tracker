@@ -1935,6 +1935,7 @@ function tripSelectHTML(cageId, currentTripId) {
         const db=b.departDate||b.loadDate||b.returnDate||'';
         return da.localeCompare(db);
       })
+      .filter(t => !t.departed || t.id === currentTripId) // hide departed unless already assigned
       .map(t=>{
         const dateStr = t.departDate ? ` (Depart: ${fmt(t.departDate)})` : t.loadDate ? ` (Load: ${fmt(t.loadDate)})` : '';
         return `<option value="${t.id}" ${currentTripId===t.id?'selected':''}>${esc(t.label||'Trip')}${dateStr}</option>`;
@@ -3477,7 +3478,7 @@ function renderCages() {
         <label style="font-size:11px;color:var(--text-muted);white-space:nowrap">Assign trip:</label>
         <select id="bulk-trip-sel" style="font-size:11px;padding:3px 7px" onchange="bulkSetTrip(this.value);this.value=''">
           <option value="">— Select trip —</option>
-          ${(STATE.boatTrips||[]).sort((a,b)=>(a.departDate||a.loadDate||'').localeCompare(b.departDate||b.loadDate||'')).map(t=>`<option value="${t.id}">${esc(tripLabel(t))}</option>`).join('')}
+          ${(STATE.boatTrips||[]).sort((a,b)=>(a.departDate||a.loadDate||'').localeCompare(b.departDate||b.loadDate||'')).filter(t=>!t.departed).map(t=>`<option value="${t.id}">${esc(tripLabel(t))}</option>`).join('')}
           <option value="__clear__">✕ Clear trip</option>
         </select>
       </div>
@@ -6889,6 +6890,13 @@ function editBoatTrip(id) {
     document.getElementById('bt-notes').value=t.notes||'';
   },50);
 }
+async function toggleTripDeparted(id, checked) {
+  const t = STATE.boatTrips.find(t => t.id === id);
+  if (!t) return;
+  t.departed = checked;
+  render();
+  await updateBoatTripInAPI(t);
+}
 function shiftBtWeek(dir) {
   const d=new Date(btWeekStart+'T12:00:00');
   d.setDate(d.getDate()+dir*7);
@@ -6945,8 +6953,13 @@ function renderBoatDiary() {
   let tripRows = sorted.length===0
     ? '<div class="empty-msg">No boat trips planned yet.</div>'
     : sorted.map(t=>{
-        return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;flex-wrap:wrap">
-          <span style="font:700 13px var(--font-mono);color:var(--text-primary);min-width:100px">${esc(t.label)}</span>
+        const isDep = !!t.departed;
+        return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;flex-wrap:wrap;opacity:${isDep?0.6:1}">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;flex-shrink:0;margin:0;text-transform:none;letter-spacing:normal;font:600 11px var(--font-display);color:${isDep?'var(--green)':'var(--text-muted)'}" title="Mark boat as departed — hides this trip from assignment dropdowns">
+            <input type="checkbox" ${isDep?'checked':''} onchange="toggleTripDeparted('${t.id}',this.checked)" style="width:14px;height:14px;accent-color:var(--green);cursor:pointer"/>
+            ${isDep?'⛵ Departed':'Departed?'}
+          </label>
+          <span style="font:700 13px var(--font-mono);color:var(--text-primary);min-width:100px;${isDep?'text-decoration:line-through;color:var(--text-muted)':''}">${esc(t.label)}</span>
           ${t.loadDate?`<span style="padding:2px 8px;border-radius:10px;background:#e0f2fe;color:#075985;font-weight:600;font-size:11px">⬇ Load: ${fmt(t.loadDate)}</span>`:''}
           ${t.departDate?`<span style="padding:2px 8px;border-radius:10px;background:#dcfce7;color:#166534;font-weight:600;font-size:11px">⛵ Depart: ${fmt(t.departDate)}</span>`:''}
           ${t.unloadDate?`<span style="padding:2px 8px;border-radius:10px;background:#fff7ed;color:#9a3412;font-weight:600;font-size:11px">📦 Unload: ${fmt(t.unloadDate)}</span>`:''}
