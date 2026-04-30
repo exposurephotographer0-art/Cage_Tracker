@@ -1,4 +1,4 @@
-<!-- CT v4 patched build 20260416_simulations_v34 -->
+<!-- CT v5 patched build 20260430_autorollover_v1 -->
 <!DOCTYPE html>
 
 <html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
@@ -12657,6 +12657,93 @@ function updateUKClock() {
 }
 setInterval(updateUKClock, 1000);
 document.addEventListener("DOMContentLoaded", () => updateUKClock());
+
+// ── Auto-Rollover: move unactioned today's movements to next working day at 9 PM UK ──
+
+function nextWorkingDay(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
+  return toISO(d);
+}
+
+let _autoRolloverLastCheck = '';
+
+async function autoRolloverCheck() {
+  // Only proceed if app is unlocked/loaded
+  if (!STATE || !STATE.plannedMovements) return;
+
+  const now = new Date();
+
+  // Get current UK time components
+  const ukParts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/London',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(now);
+
+  const ukH    = parseInt(ukParts.find(p => p.type === 'hour').value, 10);
+  const ukD    = ukParts.find(p => p.type === 'day').value;
+  const ukM    = ukParts.find(p => p.type === 'month').value;
+  const ukY    = ukParts.find(p => p.type === 'year').value;
+  const ukDateStr = `${ukY}-${ukM}-${ukD}`; // YYYY-MM-DD
+
+  // Only trigger at or after 21:00 UK time
+  if (ukH < 21) return;
+
+  const checkKey = `ct_rollover_${ukDateStr}`;
+
+  // Skip if we've already handled this today (in-memory guard)
+  if (_autoRolloverLastCheck === checkKey) return;
+  _autoRolloverLastCheck = checkKey;
+
+  // Persist guard across page reloads
+  try {
+    if (localStorage.getItem(checkKey) === 'done') return;
+  } catch(e) { /* localStorage unavailable — proceed anyway */ }
+
+  // Find today's unactioned movements
+  const todayMoves = STATE.plannedMovements.filter(m => m.date === ukDateStr && !m.completed);
+  if (todayMoves.length === 0) {
+    try { localStorage.setItem(checkKey, 'done'); } catch(e) {}
+    return;
+  }
+
+  const nwd = nextWorkingDay(ukDateStr);
+  const cagesToUpdate = new Set();
+
+  for (const mv of todayMoves) {
+    mv.date = nwd;
+
+    // If this movement takes a cage OUT of the facility (into a frame), also push the departure date forward
+    if (mv.cageId && mv.typeKey === 'facility-to-frame') {
+      const cage = getCage(mv.cageId);
+      if (cage && cage.departureDate && cage.departureDate <= ukDateStr) {
+        cage.departureDate = nwd;
+        cagesToUpdate.add(cage.id);
+      }
+    }
+
+    try { await updateMovementInAPI(mv); } catch(e) { console.warn('Rollover: failed to update movement', mv.id, e); }
+  }
+
+  // Persist any departure date changes
+  for (const cageId of cagesToUpdate) {
+    const cage = getCage(cageId);
+    if (cage) { try { await saveCage(cage); } catch(e) { console.warn('Rollover: failed to save cage', cageId, e); } }
+  }
+
+  try { localStorage.setItem(checkKey, 'done'); } catch(e) {}
+
+  render();
+
+  const depCount = cagesToUpdate.size;
+  let msg = `📅 Auto-rollover: ${todayMoves.length} unactioned movement${todayMoves.length !== 1 ? 's' : ''} moved to ${fmt(nwd)}`;
+  if (depCount > 0) msg += ` · ${depCount} departure date${depCount !== 1 ? 's' : ''} updated`;
+  showSuccess(msg);
+}
+
+// Check every minute — triggers once when UK clock crosses 21:00
+setInterval(autoRolloverCheck, 60000);
 
 document.addEventListener('keydown', e => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); openGlobalSearch(); }
