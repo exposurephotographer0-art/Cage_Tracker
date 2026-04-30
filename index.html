@@ -8590,16 +8590,28 @@ function renderReport() {
   const inFrm  = STATE.cages.filter(c=>c.location==='frame').length;
   const shipped= STATE.cages.filter(c=>c.location==='shipped').length;
 
-  const movesHTML = dayMoves.length ? dayMoves.map((m,i) => `
+  const movesHTML = dayMoves.length ? dayMoves.map((m,i) => {
+    const _rc = getCage(m.cageId);
+    const dimStr = _rc ? (() => {
+      const parts = [];
+      if (_rc.height) parts.push(`H ${_rc.height}m`);
+      if (_rc.width)  parts.push(`W ${_rc.width}m`);
+      if (_rc.length) parts.push(`L ${_rc.length}m`);
+      if (_rc.weight) parts.push(`${_rc.weight}t`);
+      return parts.join(' · ');
+    })() : '';
+    return `
     <div class="report-move-row" style="opacity:${m.completed?0.55:1}">
       <span class="report-move-num">${i+1}.</span>
-      ${(()=>{ const _rc=getCage(m.cageId); return (_rc&&cageBolted(_rc)==='Yes')?`<span style="font:700 8px var(--font-mono);background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;border-radius:3px;padding:0 4px;flex-shrink:0">BOLTED</span>`:''; })()}
+      ${(_rc&&cageBolted(_rc)==='Yes')?`<span style="font:700 8px var(--font-mono);background:#fce8e8;color:var(--red);border:1px solid #e8b0b0;border-radius:3px;padding:0 4px;flex-shrink:0">BOLTED</span>`:''}
       <span class="report-move-desc">${esc(m.description)}</span>
       <span class="report-move-type">(${esc(m.type)})</span>
+      ${dimStr ? `<span style="font:600 11px var(--font-mono);color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:4px;padding:1px 6px;flex-shrink:0">${esc(dimStr)}</span>` : ''}
       <span style="color:var(--text-muted)">${m.shift==='night'?'🌙 Night':'☀ Day'}</span>
       ${m.notes ? `<span style="color:var(--text-muted);font-style:italic;font-size:11px">${esc(m.notes)}</span>` : ''}
       <span class="badge ${m.completed?'badge-green':'badge-yellow'}">${m.completed?'✓ Done':'Pending'}</span>
-    </div>`).join('')
+    </div>`;
+  }).join('')
     : '<div class="empty-msg" style="padding:16px 0">No movements planned for this day.</div>';
 
   const overLimit = pending > MAX_MOVES;
@@ -8754,14 +8766,26 @@ async function printDailyReport() {
   const done    = dayMoves.filter(m=>m.completed).length;
   const overLimit = pending > MAX_MOVES;
 
-  const movesTableRows = dayMoves.map((m,i) => `
+  const movesTableRows = dayMoves.map((m,i) => {
+    const _pc = getCage(m.cageId);
+    const dimStr = _pc ? (() => {
+      const parts = [];
+      if (_pc.height) parts.push(`H ${_pc.height}m`);
+      if (_pc.width)  parts.push(`W ${_pc.width}m`);
+      if (_pc.length) parts.push(`L ${_pc.length}m`);
+      if (_pc.weight) parts.push(`${_pc.weight}t`);
+      return parts.join(' · ');
+    })() : '';
+    return `
     <tr class="${m.completed?'done':''}">
       <td style="width:28px;text-align:center">${i+1}</td>
       <td>${esc(m.type)}</td>
       <td><strong>${esc(m.description)}</strong>${m.notes?`<br><span style="font-weight:400;color:#666;font-size:11px">${esc(m.notes)}</span>`:''}</td>
+      <td style="font-size:11px;color:#555;white-space:nowrap">${esc(dimStr)}</td>
       <td style="text-align:center">${m.shift==='night'?'🌙 Night':'☀ Day'}</td>
       <td style="text-align:center;font-weight:700;color:${m.completed?'#1a8a4a':'#9a6010'}">${m.completed?'✓ Done':'Pending'}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   const mapSection = mapImgDataUrl
     ? `<div style="margin-top:24px">
@@ -8814,7 +8838,7 @@ async function printDailyReport() {
   </h2>
   ${dayMoves.length
     ? `<table>
-        <thead><tr><th>#</th><th>Type</th><th>Description</th><th style="text-align:center">Shift</th><th style="text-align:center">Status</th></tr></thead>
+        <thead><tr><th>#</th><th>Type</th><th>Description</th><th>Dimensions</th><th style="text-align:center">Shift</th><th style="text-align:center">Status</th></tr></thead>
         <tbody>${movesTableRows}</tbody>
        </table>`
     : `<p style="color:#999;font-style:italic">No movements planned for this day.</p>`}
@@ -16627,7 +16651,7 @@ function dtExportCSV() {
     <div id="hdr-time" style="font:700 15px var(--font-mono);color:#e8a830;letter-spacing:0.05em"></div>
     <div id="hdr-date" style="font:500 10px var(--font-mono);color:#8899aa;letter-spacing:0.06em"></div>
   </div>
-  <a href="https://construction-bm0.pages.dev/" title="Open Cage Traveller" style="border:1px solid rgba(184,114,0,0.4);background:rgba(184,114,0,0.12);color:#e8a830;border-radius:6px;padding:6px 12px;font:600 11px var(--font-display);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.12s;flex-shrink:0;text-decoration:none" onmouseover="this.style.background='rgba(184,114,0,0.22)';this.style.color='#ffcc60'" onmouseout="this.style.background='rgba(184,114,0,0.12)';this.style.color='#e8a830'">
+  <a href="https://construction-bm0.pages.dev/" target="_blank" rel="noopener" title="Open Cage Traveller" style="border:1px solid rgba(184,114,0,0.4);background:rgba(184,114,0,0.12);color:#e8a830;border-radius:6px;padding:6px 12px;font:600 11px var(--font-display);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.12s;flex-shrink:0;text-decoration:none" onmouseover="this.style.background='rgba(184,114,0,0.22)';this.style.color='#ffcc60'" onmouseout="this.style.background='rgba(184,114,0,0.12)';this.style.color='#e8a830'">
     📋 <span>Cage Traveller</span>
   </a>
   <button onclick="logout()" title="Log out and switch PIN" style="border:1px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.07);color:#aabbcc;border-radius:6px;padding:6px 12px;font:600 11px var(--font-display);cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.12s;flex-shrink:0" onmouseover="this.style.background='rgba(255,255,255,0.14)';this.style.color='#fff'" onmouseout="this.style.background='rgba(255,255,255,0.07)';this.style.color='#aabbcc'">
