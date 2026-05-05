@@ -1689,9 +1689,7 @@ async function loadState() {
         boltedThreshold: PRELOAD_STATE.settings?.boltedThreshold !== undefined ? parseFloat(PRELOAD_STATE.settings.boltedThreshold) : BOLTED_THRESHOLD,
         nextShipTripId:   PRELOAD_STATE.settings?.nextShipTripId   || null,
         secondShipTripId: PRELOAD_STATE.settings?.secondShipTripId || null,
-      },
-  };
-  // If this is a sim preview window, replace planned movements with the sim snapshot
+        bdrLookbackDays:  PRELOAD_STATE.settings?.bdrLookbackDays  != null ? parseInt(PRELOAD_STATE.settings.bdrLookbackDays) : 30,
   if (window._simPreviewMovements) {
     const completed = STATE.plannedMovements.filter(m => m.completed);
     STATE.plannedMovements = [...completed, ...window._simPreviewMovements];
@@ -1737,6 +1735,7 @@ async function loadState() {
         boltedThreshold: data.settings?.boltedThreshold !== undefined ? parseFloat(data.settings.boltedThreshold) : BOLTED_THRESHOLD,
         nextShipTripId:   data.settings?.nextShipTripId   || null,
         secondShipTripId: data.settings?.secondShipTripId || null,
+        bdrLookbackDays:  data.settings?.bdrLookbackDays  != null ? parseInt(data.settings.bdrLookbackDays) : 30,
       }
     };
     STATE.customTabs     = data.customTabs     || [];
@@ -11194,11 +11193,7 @@ function liveNeedBadgeHTML(cage, extraStyle) {
   if      (days <= 21) color = '#ef4444';   // red  — within 3 weeks
   else if (days <= 35) color = '#f97316';   // orange — 3-5 weeks
   else                 color = '#22c55e';   // green — over 5 weeks
-  const cageLoc = (FACTORY_TAG_DATA[cage.id] || {}).cage_location || '';
-  const cageRefTag = cageLoc
-    ? `<span style="margin-left:5px;padding:0 4px;border-radius:3px;background:rgba(0,0,0,0.08);color:inherit;font-size:8px;font-weight:700;letter-spacing:0.03em">${esc(cageLoc.slice(0,4))}</span>`
-    : '';
-  return `<div style="font-size:8px;font-weight:700;color:${color};display:flex;align-items:center;${extraStyle||''}">📅 LND: ${fmt(cage.liveNeedDate)}${cageRefTag}</div>`;
+  return `<div style="font-size:8px;font-weight:700;color:${color};${extraStyle||''}">📅 LND: ${fmt(cage.liveNeedDate)}</div>`;
 }
 
 function renderMovementsMap(dayCtx) {
@@ -12940,6 +12935,16 @@ function renderSettings() {
       ${field('weightAddonWMax',  'Weight range maximum (t)',          s.weightAddonWMax  !== undefined ? s.weightAddonWMax  : 28,   0.5,  'The upper bound of the weight range used in the formula. Default: 28t')}
     </div>
 
+    <div class="card" style="max-width:620px">
+      <div class="card-title">📋 BDR Deliveries Rules</div>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px">
+        Controls which rows are pulled through when importing HS-BDR and NI-BDR data.<br><br>
+        <strong>Lookback window:</strong> rows with a delivery date older than this many days are hidden. Rows with no date are always shown.<br>
+        <strong>Received filter:</strong> rows where the "Received" column (col Y for NI-BDR, col AB for HS-BDR) is ticked or set to N/A are automatically excluded.
+      </p>
+      ${field('bdrLookbackDays', 'Delivery lookback (days)', s.bdrLookbackDays != null ? s.bdrLookbackDays : 30, 1, 'Rows with a delivery date older than this many days are excluded. Default: 30 days.')}
+    </div>
+
     ${!ro ? `
     <div style="max-width:620px;display:flex;gap:10px;align-items:center">
       <button class="btn btn-primary" onclick="applySettings()">&#128190; Save Settings</button>
@@ -13226,6 +13231,7 @@ async function applySettings() {
     weightAddonWMax:  Math.max(0, get('weightAddonWMax')  !== null ? get('weightAddonWMax')  : 28),
     nextShipTripId:   STATE.settings.nextShipTripId   || null,
     secondShipTripId: STATE.settings.secondShipTripId || null,
+    bdrLookbackDays:  Math.max(1, Math.round(get('bdrLookbackDays') || 30)),
   };
   if (newSettings.heightShortMax >= newSettings.heightMedMax) {
     showError('Short/Medium threshold must be less than Medium/Tall threshold.');
@@ -14787,7 +14793,7 @@ function bdr_findHeaderRow(rows) {
 function bdr_parseHs(raw) {
   // HS-BDR: user copies H3:AC3 and down
   // Hidden cols (O, Q, T, U, V, Z) are excluded from paste — use header names only.
-  // Col H = "Production no", Col AA = " Delivery date " (leading space).
+  // Col H = "Production no", Col AA = " Delivery date " (leading space), Col AB = "Received".
   if (!raw.trim()) return { rows: [], error: 'No data pasted.' };
   const rows = bdr_parseTsv(raw);
   if (rows.length < 2) return { rows: [], error: 'Need at least a header row and one data row.' };
@@ -14795,7 +14801,7 @@ function bdr_parseHs(raw) {
   const hdrIdx = bdr_findHeaderRow(rows);
   const hdr = rows[hdrIdx];
 
-  let colProd = -1, colDel = -1, colTrailer = -1;
+  let colProd = -1, colDel = -1, colTrailer = -1, colReceived = -1;
   for (let i = 0; i < hdr.length; i++) {
     const h = (hdr[i]||'').toLowerCase().replace(/\s+/g, ' ').trim();
     if (h === 'production no' || h === 'production no.') colProd = i;
@@ -14803,11 +14809,20 @@ function bdr_parseHs(raw) {
     // so it is never present in the paste — simple match is safe.
     if (h === 'delivery date') colDel = i;
     if (h === 'trailer' || h === 'trailer no' || h === 'trailer no.' || h === 'trailer number' || h === 'trailer ref') colTrailer = i;
+    // Col AB = "Received" — skip rows where this is checked or N/A
+    if (h === 'received') colReceived = i;
   }
   if (colProd < 0) colProd = 0;
   if (colDel < 0) return { rows: [], error: 'Could not find the "Delivery date" column (col AA) in the pasted data. Make sure row 3 (the header row) is included in your copy.' };
   // Fall back to last column for trailer if no named column found
   if (colTrailer < 0) colTrailer = hdr.length - 1;
+
+  // Helper: is the "Received" cell considered received (checked / TRUE / N/A / yes)?
+  function isReceived(val) {
+    const v = String(val||'').toLowerCase().trim();
+    return v === 'true' || v === '1' || v === 'yes' || v === '✓' || v === 'x'
+        || v === 'n/a' || v === 'na' || v === '☑' || v === '✔';
+  }
 
   const cutoff = bdr_cutoffDate();
   const result = [];
@@ -14817,13 +14832,19 @@ function bdr_parseHs(raw) {
     const delRaw  = r[colDel]  || '';
     if (!prodRaw.trim()) continue;
     const prodNo = String(prodRaw).trim();
+
+    // Skip if Received (col AB) is checked or N/A
+    if (colReceived >= 0 && isReceived(r[colReceived])) continue;
+
     const delDate = bdr_toISODate(delRaw);
-    if (!delDate) continue;
-    if (delDate < cutoff) continue;
+    // Allow rows with no parseable delivery date — show raw text instead
+    // Only filter out dated rows that are older than the lookback cutoff
+    if (delDate && delDate < cutoff) continue;
+
     const trailerNo = String(r[colTrailer] || '').trim();
     result.push({ prodNo, deliveryDate: delDate, deliveryDateRaw: delRaw.trim(), source: 'HS', trailerNo, rowIdx: i });
   }
-  if (!result.length) return { rows: [], error: 'No valid rows found. Rows must have a delivery date within the last 7 days or future. Check the " Delivery date " column has values and you copied from H3 down.' };
+  if (!result.length) return { rows: [], error: 'No valid rows found. Check the "Delivery date" column has values and you copied from H3 down. Rows where "Received" (col AB) is checked or N/A are excluded.' };
   return { rows: result, error: null };
 }
 
@@ -14837,17 +14858,26 @@ function bdr_parseNi(raw) {
   const hdrIdx = bdr_findHeaderRow(rows);
   const hdr = rows[hdrIdx];
 
-  let colProd = -1, colDel = -1, colTrailer = -1;
+  let colProd = -1, colDel = -1, colTrailer = -1, colReceived = -1;
   for (let i = 0; i < hdr.length; i++) {
     const h = (hdr[i]||'').toLowerCase().replace(/\s+/g,' ').trim();
     if (h === 'production no' || h === 'production no.') colProd = i;
     if (h === 'expected delivery date bylor') colDel = i;
     if (h === 'trailer' || h === 'trailer no' || h === 'trailer no.' || h === 'trailer number' || h === 'trailer ref') colTrailer = i;
+    // Col Y = "Received" — skip rows where this is checked or N/A
+    if (h === 'received') colReceived = i;
   }
   if (colProd < 0) colProd = 0;
   if (colDel < 0) return { rows: [], error: 'Could not find an "Expected Delivery Date Bylor" column header in the pasted data. Make sure row 1 (the header row) is included in your copy.' };
   // Fall back to last column for trailer if no named column found
   if (colTrailer < 0) colTrailer = hdr.length - 1;
+
+  // Helper: is the "Received" cell considered received (checked / TRUE / N/A / yes)?
+  function isReceived(val) {
+    const v = String(val||'').toLowerCase().trim();
+    return v === 'true' || v === '1' || v === 'yes' || v === '✓' || v === 'x'
+        || v === 'n/a' || v === 'na' || v === '☑' || v === '✔';
+  }
 
   const cutoff = bdr_cutoffDate();
   const result = [];
@@ -14857,13 +14887,19 @@ function bdr_parseNi(raw) {
     const delRaw  = r[colDel]  || '';
     if (!prodRaw.trim()) continue;
     const prodNo = String(prodRaw).trim();
+
+    // Skip if Received (col Y) is checked or N/A
+    if (colReceived >= 0 && isReceived(r[colReceived])) continue;
+
     const delDate = bdr_toISODate(delRaw);
-    if (!delDate) continue;
-    if (delDate < cutoff) continue;
+    // Allow rows with no parseable delivery date — show raw text instead
+    // Only filter out dated rows that are older than the lookback cutoff
+    if (delDate && delDate < cutoff) continue;
+
     const trailerNo = String(r[colTrailer] || '').trim();
     result.push({ prodNo, deliveryDate: delDate, deliveryDateRaw: delRaw.trim(), source: 'NI', trailerNo, rowIdx: i });
   }
-  if (!result.length) return { rows: [], error: 'No valid rows found. Rows must have a delivery date within the last 7 days or future. Check the "Expected Delivery Date Bylor" column has values and you copied from H1 down.' };
+  if (!result.length) return { rows: [], error: 'No valid rows found. Check the "Expected Delivery Date Bylor" column has values and you copied from H1 down. Rows where "Received" (col Y) is checked or N/A are excluded.' };
   return { rows: result, error: null };
 }
 
@@ -14908,7 +14944,7 @@ function renderBdrDeliveriesTab() {
     <div class="bdr-instructions">
       <strong>HS-BDR:</strong> Copy cells <strong>H3:AC3</strong> down to last row<br>
       <strong>NI-BDR:</strong> Copy cells <strong>H1:AC1</strong> down to last row<br><br>
-      Select the source tab below, paste the data, then click <strong>Import</strong>.
+      Deliveries are shown for the last <strong>${(STATE.settings && STATE.settings.bdrLookbackDays != null) ? STATE.settings.bdrLookbackDays : 30} days</strong> plus all future dates. Rows with no date are always included. Rows where <strong>Received</strong> is ticked or N/A are automatically excluded. The lookback window can be changed in <strong>Settings → BDR Deliveries Rules</strong>.
     </div>
 
     <div class="bdr-source-tabs">
@@ -14937,9 +14973,12 @@ function renderBdrDeliveriesTab() {
 }
 
 function bdr_cutoffDate() {
-  // Returns ISO date string for today minus 7 days
+  // Returns ISO date string for today minus the configured lookback (default 30 days)
+  const days = (STATE.settings && STATE.settings.bdrLookbackDays != null)
+    ? Math.max(1, parseInt(STATE.settings.bdrLookbackDays) || 30)
+    : 30;
   const d = new Date();
-  d.setDate(d.getDate() - 7);
+  d.setDate(d.getDate() - days);
   return d.toISOString().slice(0, 10);
 }
 
