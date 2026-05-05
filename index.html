@@ -1690,6 +1690,8 @@ async function loadState() {
         nextShipTripId:   PRELOAD_STATE.settings?.nextShipTripId   || null,
         secondShipTripId: PRELOAD_STATE.settings?.secondShipTripId || null,
         bdrLookbackDays:  PRELOAD_STATE.settings?.bdrLookbackDays  != null ? parseInt(PRELOAD_STATE.settings.bdrLookbackDays) : 30,
+      },
+  };
   if (window._simPreviewMovements) {
     const completed = STATE.plannedMovements.filter(m => m.completed);
     STATE.plannedMovements = [...completed, ...window._simPreviewMovements];
