@@ -11194,7 +11194,11 @@ function liveNeedBadgeHTML(cage, extraStyle) {
   if      (days <= 21) color = '#ef4444';   // red  — within 3 weeks
   else if (days <= 35) color = '#f97316';   // orange — 3-5 weeks
   else                 color = '#22c55e';   // green — over 5 weeks
-  return `<div style="font-size:8px;font-weight:700;color:${color};${extraStyle||''}">📅 LND: ${fmt(cage.liveNeedDate)}</div>`;
+  const cageLoc = (FACTORY_TAG_DATA[cage.id] || {}).cage_location || '';
+  const cageRefTag = cageLoc
+    ? `<span style="margin-left:5px;padding:0 4px;border-radius:3px;background:rgba(0,0,0,0.08);color:inherit;font-size:8px;font-weight:700;letter-spacing:0.03em">${esc(cageLoc.slice(0,4))}</span>`
+    : '';
+  return `<div style="font-size:8px;font-weight:700;color:${color};display:flex;align-items:center;${extraStyle||''}">📅 LND: ${fmt(cage.liveNeedDate)}${cageRefTag}</div>`;
 }
 
 function renderMovementsMap(dayCtx) {
