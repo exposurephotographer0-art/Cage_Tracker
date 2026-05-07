@@ -5626,26 +5626,37 @@ function renderPlanner() {
         <div class="card">
           <div class="card-title">🏗 Roof Slab Storage</div>
           ${(() => {
-            const rssCages = (STATE.rssCages || []).map(id => getCage(id)).filter(Boolean);
-            if (!rssCages.length) return '<div class="empty-msg">No cages in Roof Slab Storage</div>';
-            // Group by area
-            const byArea = {};
-            rssCages.forEach(c => { const a = getRSSAreaNum(c); if(!byArea[a]) byArea[a]=[]; byArea[a].push(c); });
-            return Object.keys(byArea).sort((a,b)=>Number(a)-Number(b)).map(area => {
-              const cages = byArea[area];
-              return `<div style="margin-bottom:6px"><div style="font:700 10px var(--font-mono);color:var(--blue);margin-bottom:3px">RSS-${area}</div>` +
-                cages.map(c => {
-                  const _rs = shipmentShadeClass(c, _plannerShipDays);
-                  const _rBg = _rs ? shipmentShadeBg(_rs) : '';
-                  const _rNc = shipmentShadeNameColor(_rs) || 'color:var(--text-primary)';
-                  const minFrame = FRAME_WIDTHS.find(w => w >= c.width) || FRAME_WIDTHS[FRAME_WIDTHS.length-1];
-                  const walerNote = needsWaler(c) ? ' + waler' : '';
-                  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 6px;${_rBg}background:rgba(37,99,176,0.06);border-radius:4px;margin-bottom:2px">
-                    <span style="font:600 11px var(--font-mono);${_rNc}">${hDot(c.height)}${tagDot(c)}${esc(c.name)}</span>
-                    <span style="font-size:9px;background:#fdf5dc;color:var(--yellow);border:1px solid #e0d8a0;border-radius:3px;padding:1px 5px;margin-left:4px" title="Min frame for shipping">▣ ${minFrame}m${walerNote}</span>
-                  </div>`;
-                }).join('') + '</div>';
-            }).join('');
+            const allRssCages = (STATE.rssCages || []).map(id => getCage(id)).filter(Boolean);
+            const facilityOpts = STATE.cages.filter(c => c.location === 'facility')
+              .sort((a,b) => a.name.localeCompare(b.name, undefined, {numeric:true}))
+              .map(c => `<option value="${c.id}">${esc(c.name)} · ${c.width}m · ${hCat(c.height)}</option>`)
+              .join('');
+            let html = '';
+            for (let area = 1; area <= 10; area++) {
+              const areaCages = allRssCages.filter(c => getRSSAreaNum(c) === area);
+              const cageRows = areaCages.map(c => {
+                const _rs = shipmentShadeClass(c, _plannerShipDays);
+                const _rNc = shipmentShadeNameColor(_rs) || 'color:var(--text-primary)';
+                const minFrame = FRAME_WIDTHS.find(w => w >= c.width) || FRAME_WIDTHS[FRAME_WIDTHS.length-1];
+                const walerNote = needsWaler(c) ? ' + waler' : '';
+                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:2px 5px;background:rgba(37,99,176,0.06);border-radius:4px;margin-bottom:2px">
+                  <span style="font:600 11px var(--font-mono);${_rNc}">${hDot(c.height)}${tagDot(c)}${esc(c.name)}</span>
+                  <div style="display:flex;align-items:center;gap:4px">
+                    <span style="font-size:9px;background:#fdf5dc;color:var(--yellow);border:1px solid #e0d8a0;border-radius:3px;padding:1px 4px" title="Min frame for shipping">▣ ${minFrame}m${walerNote}</span>
+                    <button onclick="removeFromRSS('${c.id}')" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:11px;padding:0 2px;line-height:1" title="Remove">×</button>
+                  </div>
+                </div>`;
+              }).join('');
+              html += `<div style="margin-bottom:8px">
+                <div style="font:700 10px var(--font-mono);color:var(--blue);margin-bottom:3px">RSS-${area} <span style="font-weight:400;color:var(--text-muted)">(${areaCages.length})</span></div>
+                ${cageRows}
+                <select style="width:100%;font-size:10px;padding:2px 5px;background:var(--bg-input);border:1px solid var(--border);border-radius:4px;color:var(--text-primary);margin-top:2px"
+                  onchange="assignToRSS(this.value,${area});this.value=''">
+                  <option value="">+ add cage to RSS-${area}…</option>${facilityOpts}
+                </select>
+              </div>`;
+            }
+            return html || '<div class="empty-msg">No cages in Roof Slab Storage</div>';
           })()}
         </div>
         <div class="card">
