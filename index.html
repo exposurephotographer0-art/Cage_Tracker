@@ -8703,6 +8703,8 @@ function renderReport() {
       if (_rc.weight) parts.push(`${_rc.weight}t`);
       return parts.join(' · ');
     })() : '';
+    const _rcRef = _rc ? ((FACTORY_TAG_DATA[_rc.id] || {}).cage_location || '') : '';
+    const _rcLnd = _rc && _rc.liveNeedDate ? fmt(_rc.liveNeedDate) : '';
     return `
     <div class="report-move-row" style="opacity:${m.completed?0.55:1}">
       <span class="report-move-num">${i+1}.</span>
@@ -8710,6 +8712,8 @@ function renderReport() {
       <span class="report-move-desc">${esc(m.description)}</span>
       <span class="report-move-type">(${esc(m.type)})</span>
       ${dimStr ? `<span style="font:600 11px var(--font-mono);color:var(--text-muted);background:var(--bg-elevated);border:1px solid var(--border);border-radius:4px;padding:1px 6px;flex-shrink:0">${esc(dimStr)}</span>` : ''}
+      ${_rcRef ? `<span style="font:700 10px var(--font-mono);color:var(--blue);background:rgba(37,99,176,0.1);border:1px solid rgba(37,99,176,0.25);border-radius:4px;padding:1px 6px;flex-shrink:0">${esc(_rcRef)}</span>` : ''}
+      ${_rcLnd ? `<span style="font:600 10px var(--font-mono);color:#22c55e;flex-shrink:0">📅 ${_rcLnd}</span>` : ''}
       <span style="color:var(--text-muted)">${m.shift==='night'?'🌙 Night':'☀ Day'}</span>
       ${m.notes ? `<span style="color:var(--text-muted);font-style:italic;font-size:11px">${esc(m.notes)}</span>` : ''}
       <span class="badge ${m.completed?'badge-green':'badge-yellow'}">${m.completed?'✓ Done':'Pending'}</span>
@@ -11285,15 +11289,28 @@ function mvCmtColor(cage) {
 // ── Live Need Date badge for movements map cage cards ──────────────────
 // Returns a small coloured date line. Red <3wk, orange 3-5wk, green >5wk.
 function liveNeedBadgeHTML(cage, extraStyle) {
-  if (!cage || !cage.liveNeedDate) return '';
-  const today = new Date(); today.setHours(0,0,0,0);
-  const need  = new Date(cage.liveNeedDate + 'T00:00:00');
-  const days  = Math.ceil((need - today) / 86400000);
-  let color;
-  if      (days <= 21) color = '#ef4444';   // red  — within 3 weeks
-  else if (days <= 35) color = '#f97316';   // orange — 3-5 weeks
-  else                 color = '#22c55e';   // green — over 5 weeks
-  return `<div style="font-size:8px;font-weight:700;color:${color};${extraStyle||''}">📅 LND: ${fmt(cage.liveNeedDate)}</div>`;
+  if (!cage) return '';
+  const ref = (FACTORY_TAG_DATA[cage.id] || {}).cage_location || '';
+  const hasLnd = !!cage.liveNeedDate;
+  if (!hasLnd && !ref) return '';
+
+  let lndPart = '';
+  if (hasLnd) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const need  = new Date(cage.liveNeedDate + 'T00:00:00');
+    const days  = Math.ceil((need - today) / 86400000);
+    let color;
+    if      (days <= 21) color = '#ef4444';
+    else if (days <= 35) color = '#f97316';
+    else                 color = '#22c55e';
+    lndPart = `<span style="color:${color}">📅 LND: ${fmt(cage.liveNeedDate)}</span>`;
+  }
+
+  const refPart = ref
+    ? `<span style="color:var(--blue);font-weight:700;background:rgba(37,99,176,0.1);border-radius:3px;padding:0 3px">${esc(ref)}</span>`
+    : '';
+
+  return `<div style="font-size:8px;font-weight:700;display:flex;align-items:center;gap:4px;${extraStyle||''}">${lndPart}${refPart}</div>`;
 }
 
 function renderMovementsMap(dayCtx) {
