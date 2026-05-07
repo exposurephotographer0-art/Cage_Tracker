@@ -5253,7 +5253,7 @@ function buildPlanFormHTML() {
   } else if (planFormType === 'rmd-to-rss') {
     cageOpts = [...STATE.cages.filter(c=>c.location==='rmd')].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(c=>`<option value="${c.id}">${esc(c.name)} (${c.locationDetail})</option>`).join('');
     showFrame = false;
-    showRmd = false;
+    showRmd = true;
   } else if (planFormType === 'rss-to-rmd') {
     cageOpts = [...STATE.cages.filter(c=>c.location==='rss')].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true})).map(c=>`<option value="${c.id}">${esc(c.name)} (${c.locationDetail || 'RSS-1'})</option>`).join('');
     showFrame = false;
@@ -5277,31 +5277,42 @@ function buildPlanFormHTML() {
 
   // Build RMD slot dropdown options for Frame-to-RMD — show ALL slots so multi-move planning works
   let rmdSlotOpts = '';
-  if (planFormType === 'frame-to-rmd' || planFormType === 'rss-to-rmd') {
-    const sortedRmd = [...STATE.rmdSlots].sort((a,b)=>a.number-b.number);
-    // Count planned frame-to-rmd moves per side key so we can show how many are already queued
-    const plannedToRmd = {};
-    STATE.plannedMovements.filter(m => !m.completed && m.typeKey === 'frame-to-rmd' && m.rmdSlot).forEach(m => {
-      const key = String(m.rmdSlot).replace(/\s/g,'');
-      plannedToRmd[key] = (plannedToRmd[key] || 0) + 1;
-    });
-    sortedRmd.forEach(r => {
-      [...SIDES].sort().forEach(side => {
-        const sideKey = r.number + side;
-        const occupiedCids = [r[side].cage1, r[side].cage2].filter(Boolean);
-        const occupiedCount = occupiedCids.length;
-        const plannedCount = plannedToRmd[sideKey] || 0;
-        const effectiveOccupied = occupiedCount + plannedCount;
-        const cageNames = occupiedCids.map(cid => { const c = getCage(cid); return c ? c.name : '?'; });
-        const occupancyNote = occupiedCount === 0 ? 'empty' : 'has: ' + cageNames.join(', ');
-        const plannedNote = plannedCount > 0 ? ' \u00b7 ' + plannedCount + ' move' + (plannedCount>1?'s':'') + ' planned' : '';
-        const fullWarning = effectiveOccupied >= 4 ? ' \u26a0 FULL' : '';
-        rmdSlotOpts += '<option value="' + sideKey + '">RMD-' + r.number + side + ' (' + occupancyNote + plannedNote + fullWarning + ')</option>';
+  if (planFormType === 'frame-to-rmd' || planFormType === 'rss-to-rmd' || planFormType === 'rmd-to-rss' || planFormType === 'frame-to-rss') {
+    // RSS-only types just show the 10 areas; RMD types also show RMD slots
+    const rssOnlyMode = planFormType === 'rmd-to-rss' || planFormType === 'frame-to-rss';
+
+    // Build RSS options (always shown)
+    const rssOpts = [1,2,3,4,5,6,7,8,9,10].map(n => {
+      const count = STATE.cages.filter(c => c.location === 'rss' && getRSSAreaNum(c) === n).length;
+      return `<option value="RSS-${n}">🏗 RSS-${n} — Roof Slab Storage (${count} cage${count!==1?'s':''})</option>`;
+    }).join('');
+
+    if (!rssOnlyMode) {
+      const sortedRmd = [...STATE.rmdSlots].sort((a,b)=>a.number-b.number);
+      const plannedToRmd = {};
+      STATE.plannedMovements.filter(m => !m.completed && m.typeKey === 'frame-to-rmd' && m.rmdSlot).forEach(m => {
+        const key = String(m.rmdSlot).replace(/\s/g,'');
+        plannedToRmd[key] = (plannedToRmd[key] || 0) + 1;
       });
-    });
-    // Add Roof Slab Storage as a special option
-    rmdSlotOpts = '<option value="RSS">🏗 Roof Slab Storage (no slot rules)</option>' + rmdSlotOpts;
-    if (!rmdSlotOpts.includes('RMD')) rmdSlotOpts = '<option value="" disabled>No RMD slots configured</option>';
+      sortedRmd.forEach(r => {
+        [...SIDES].sort().forEach(side => {
+          const sideKey = r.number + side;
+          const occupiedCids = [r[side].cage1, r[side].cage2].filter(Boolean);
+          const occupiedCount = occupiedCids.length;
+          const plannedCount = plannedToRmd[sideKey] || 0;
+          const effectiveOccupied = occupiedCount + plannedCount;
+          const cageNames = occupiedCids.map(cid => { const c = getCage(cid); return c ? c.name : '?'; });
+          const occupancyNote = occupiedCount === 0 ? 'empty' : 'has: ' + cageNames.join(', ');
+          const plannedNote = plannedCount > 0 ? ' \u00b7 ' + plannedCount + ' move' + (plannedCount>1?'s':'') + ' planned' : '';
+          const fullWarning = effectiveOccupied >= 4 ? ' \u26a0 FULL' : '';
+          rmdSlotOpts += '<option value="' + sideKey + '">RMD-' + r.number + side + ' (' + occupancyNote + plannedNote + fullWarning + ')</option>';
+        });
+      });
+      // Roof Slab areas at the top, then RMD slots
+      rmdSlotOpts = rssOpts + (rmdSlotOpts ? '<option disabled>── RMD Slots ──</option>' + rmdSlotOpts : '');
+    } else {
+      rmdSlotOpts = rssOpts;
+    }
   }
 
   // For RMD→Frame, annotate frames with suitability note + planned movements
@@ -5337,8 +5348,7 @@ function buildPlanFormHTML() {
       ${showFrame ? `<div><label>${frameLbl}</label><select id="pf-frame"><option value="">Select frame...</option>${frameOpts}</select></div>` : '<div id="pf-frame-placeholder"></div>'}
       <div><label>Date</label><input id="pf-date" type="date" value="${todayStr()}"/></div>
       <div><label>Shift</label><select id="pf-shift"><option value="day">Day Shift</option><option value="night">Night Shift</option></select></div>
-      ${showRmd ? `<div><label>RMD / Storage Slot</label><select id="pf-rmd"><option value="">Select slot...</option>${rmdSlotOpts}</select></div>` : '<div id="pf-rmd-placeholder"></div>'}
-      ${showRssArea ? `<div><label>Roof Slab Area</label><select id="pf-rss-area">${rssAreaOpts}</select></div>` : '<div id="pf-rss-area-placeholder"></div>'}
+      ${showRmd ? `<div><label>RMD / Roof Slab Slot</label><select id="pf-rmd"><option value="">Select slot...</option>${rmdSlotOpts}</select></div>` : '<div id="pf-rmd-placeholder"></div>'}
       <div style="grid-column:span 3"><label>Notes</label><input id="pf-notes"/></div>
     </div>
     <div class="form-actions">
@@ -5786,6 +5796,10 @@ async function addMovement() {
   const cage = getCage(cageId);
 
   // For fix-shipping, auto-find the frame the cage is in
+  // Helper: detect if a slot value is an RSS area (e.g. "RSS-3")
+  const isRssSlot = (s) => s && String(s).startsWith('RSS');
+  const rssAreaFromSlot = (s) => { const m = String(s||'').match(/RSS-(\d+)/); return m ? parseInt(m[1]) : 1; };
+
   let resolvedFrameId = frameId;
   if (type === 'frame-fix-shipping' && cage) {
     const autoFrame = STATE.frames.find(f=>f.cages.includes(cageId));
@@ -5793,12 +5807,17 @@ async function addMovement() {
   }
 
   // For frame-to-rmd, auto-find the frame the cage is in (or pending into)
-  // If frame-to-rmd with RSS slot, rewrite as facility-to-rss for description clarity
+  // If an RSS slot is selected, rewrite type to frame-to-rss
   let effectiveType = type;
-  if (type === 'frame-to-rmd' && rmdSlot === 'RSS') {
-    effectiveType = 'frame-to-rss'; // RSS slot selected — frame → Roof Slab
+  if ((type === 'frame-to-rmd' || type === 'frame-to-rss') && isRssSlot(rmdSlot)) {
+    effectiveType = 'frame-to-rss';
+  } else if ((type === 'rmd-to-rss') && isRssSlot(rmdSlot)) {
+    effectiveType = 'rmd-to-rss';
   }
-  if (type === 'frame-to-rmd' && cage && !resolvedFrameId) {
+  // Extract area from slot value for any RSS movement
+  const resolvedRssArea = isRssSlot(rmdSlot) ? rssAreaFromSlot(rmdSlot) : rssArea;
+
+  if ((type === 'frame-to-rmd' || type === 'frame-to-rss') && cage && !resolvedFrameId && !isRssSlot(rmdSlot)) {
     // First check: cage is currently in a frame
     const currentFrame = STATE.frames.find(f => f.cages.includes(cageId));
     if (currentFrame) {
@@ -5810,6 +5829,10 @@ async function addMovement() {
       );
       if (pendingMove) resolvedFrameId = pendingMove.frameId;
     }
+  }
+  if (effectiveType === 'frame-to-rss' && cage && !resolvedFrameId) {
+    const currentFrame = STATE.frames.find(f => f.cages.includes(cageId));
+    if (currentFrame) resolvedFrameId = currentFrame.id;
   }
 
   const frame = getFrame(resolvedFrameId);
@@ -5827,15 +5850,15 @@ async function addMovement() {
     if(cage) parts.push(cage.name);
     const srcFr = STATE.frames.find(f => f.cages.includes(cageId));
     if(srcFr) parts.push(srcFr.name);
-    parts.push('RSS-' + rssArea);
+    parts.push('RSS-' + resolvedRssArea);
   } else if (effectiveType === 'rmd-to-rss') {
     if(cage) parts.push(cage.name);
     parts.push(cage?.locationDetail || 'RMD');
-    parts.push('RSS-' + rssArea);
+    parts.push('RSS-' + resolvedRssArea);
   } else if (effectiveType === 'rss-to-rmd') {
     if(cage) parts.push(cage.name);
     parts.push(cage?.locationDetail || 'Roof Slab');
-    if(rmdSlot && rmdSlot !== 'RSS') parts.push('RMD-'+rmdSlot);
+    if(rmdSlot && !isRssSlot(rmdSlot)) parts.push('RMD-'+rmdSlot);
   } else if (effectiveType === 'rss-to-frame') {
     if(cage) parts.push(cage.name);
     parts.push(cage?.locationDetail || 'Roof Slab');
@@ -5843,19 +5866,20 @@ async function addMovement() {
   } else {
     if(cage) parts.push(cage.name);
     if(frame) parts.push(frame.name + frameWidthTag(frame));
-    if(rmdSlot && rmdSlot !== 'RSS') parts.push('RMD-'+rmdSlot);
+    if(rmdSlot && !isRssSlot(rmdSlot)) parts.push('RMD-'+rmdSlot);
   }
   const desc = parts.join(' → ') || notes || 'Movement';
   const typeLabel = MOVE_TYPES.find(t=>t.value===effectiveType)?.label || effectiveType;
 
   const move = {
-    id:uid(), type:typeLabel, typeKey:effectiveType, cageId, frameId:resolvedFrameId, rmdSlot: rmdSlot !== 'RSS' ? rmdSlot : '',
+    id:uid(), type:typeLabel, typeKey:effectiveType, cageId, frameId:resolvedFrameId,
+    rmdSlot: isRssSlot(rmdSlot) ? '' : rmdSlot,
     date, shift, notes, completed:false, description:desc, createdAt:new Date().toISOString(),
     sortOrder: STATE.plannedMovements.length
   };
   // Store RSS area for rss-destination movements
   if (effectiveType === 'frame-to-rss' || effectiveType === 'rmd-to-rss') {
-    move.rssArea = rssArea;
+    move.rssArea = resolvedRssArea;
   }
   // For frame-to-frame, also store the source frame so completeMove can clear it
   if (effectiveType === 'frame-to-frame') {
@@ -6673,10 +6697,14 @@ function openEditMove(id) {
 
   // Build RMD slot options
   const rmdSlotOpts = `<option value="">— None —</option>` +
+    [1,2,3,4,5,6,7,8,9,10].map(n => {
+      const isSelected = m.rssArea === n || m.rmdSlot === `RSS-${n}`;
+      return `<option value="RSS-${n}" ${isSelected?'selected':''}>🏗 RSS-${n} — Roof Slab Storage</option>`;
+    }).join('') +
+    '<option disabled>── RMD Slots ──</option>' +
     Array.from({length:12},(_,i)=>i+1).map(n =>
       `<option value="${n}" ${String(n) === String(m.rmdSlot) ? 'selected' : ''}>RMD-${n}</option>`
-    ).join('') +
-    `<option value="RSS" ${m.rmdSlot === 'RSS' ? 'selected' : ''}>Roof Slab Storage</option>`;
+    ).join('');
 
   const overlay = document.createElement('div');
   overlay.id = 'edit-move-overlay';
@@ -6760,7 +6788,10 @@ async function saveEditMove(id) {
   const frameId  = (document.getElementById('em-frame') || {}).value || '';
   const rmdSlot  = (document.getElementById('em-rmd') || {}).value || '';
   const rssAreaEl = document.getElementById('em-rss-area');
-  const rssArea  = rssAreaEl ? parseInt(rssAreaEl.value) || 1 : 1;
+  const rssAreaExplicit = rssAreaEl ? parseInt(rssAreaEl.value) || 1 : 1;
+  const isRssSlot = (s) => s && String(s).startsWith('RSS');
+  const rssAreaFromSlot = (s) => { const m2 = String(s||'').match(/RSS-(\d+)/); return m2 ? parseInt(m2[1]) : 1; };
+  const resolvedRssArea = isRssSlot(rmdSlot) ? rssAreaFromSlot(rmdSlot) : rssAreaExplicit;
   const date     = document.getElementById('em-date').value;
   const shift    = document.getElementById('em-shift').value;
   const notes    = document.getElementById('em-notes').value.trim();
@@ -6787,15 +6818,15 @@ async function saveEditMove(id) {
     if (cage) parts.push(cage.name);
     const srcFr = STATE.frames.find(f => f.cages.includes(cageId));
     if (srcFr) parts.push(srcFr.name);
-    parts.push('RSS-' + rssArea);
+    parts.push('RSS-' + resolvedRssArea);
   } else if (typeKey === 'rmd-to-rss') {
     if (cage) parts.push(cage.name);
     parts.push(cage?.locationDetail || 'RMD');
-    parts.push('RSS-' + rssArea);
+    parts.push('RSS-' + resolvedRssArea);
   } else if (typeKey === 'rss-to-rmd') {
     if (cage) parts.push(cage.name);
     parts.push(cage?.locationDetail || 'Roof Slab');
-    if (rmdSlot && rmdSlot !== 'RSS') parts.push('RMD-' + rmdSlot);
+    if (rmdSlot && !isRssSlot(rmdSlot)) parts.push('RMD-' + rmdSlot);
   } else if (typeKey === 'rss-to-frame') {
     if (cage) parts.push(cage.name);
     parts.push(cage?.locationDetail || 'Roof Slab');
@@ -6803,7 +6834,7 @@ async function saveEditMove(id) {
   } else {
     if (cage) parts.push(cage.name);
     if (frame) parts.push(frame.name + frameWidthTag(frame));
-    if (rmdSlot && rmdSlot !== 'RSS') parts.push('RMD-' + rmdSlot);
+    if (rmdSlot && !isRssSlot(rmdSlot)) parts.push('RMD-' + rmdSlot);
   }
   const desc      = parts.join(' → ') || notes || 'Movement';
   const typeLabel = MOVE_TYPES.find(t => t.value === typeKey)?.label || typeKey;
@@ -6813,14 +6844,14 @@ async function saveEditMove(id) {
   m.type        = typeLabel;
   m.cageId      = cageId;
   m.frameId     = frameId;
-  m.rmdSlot     = rmdSlot !== 'RSS' ? rmdSlot : rmdSlot;
+  m.rmdSlot     = isRssSlot(rmdSlot) ? '' : rmdSlot;
   m.date        = date;
   m.shift       = shift;
   m.notes       = notes;
   m.description = desc;
   // Update rssArea for rss-destination moves
   if (typeKey === 'frame-to-rss' || typeKey === 'rmd-to-rss') {
-    m.rssArea = rssArea;
+    m.rssArea = resolvedRssArea;
   }
   // Update srcFrameId for frame-to-frame moves
   if (typeKey === 'frame-to-frame') {
