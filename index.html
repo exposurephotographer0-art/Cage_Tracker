@@ -1618,10 +1618,10 @@ let _sessionLevel = null; // 'read', 'write', or 'ship'
 
 function getSessionPin() { return _sessionPin; }
 function getAccessLevel() { return _sessionLevel; }
-// isReadOnly: false for write level always; false for ship level when on the shipping tab; true otherwise for restricted levels
+// isReadOnly: false for write level always; false for ship level when on the shipping or boat planner tab; true otherwise for restricted levels
 function isReadOnly() {
   if (_sessionLevel === 'write') return false;
-  if (_sessionLevel === 'ship' && activeTab === 'shipping') return false;
+  if (_sessionLevel === 'ship' && (activeTab === 'shipping' || activeTab === 'boatplan')) return false;
   return _sessionLevel === 'read' || _sessionLevel === 'ship';
 }
 
